@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bureau IA local — Grille tarifaire PixelKréol</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --lagon: #0B5D6B;
+  --lagon-vif: #16A6B6;
+  --lagon-pale: #E4F3F5;
+  --volcan: #1B1A17;
+  --encre: #27302F;
+  --gris: #5C6866;
+  --corail: #E0562B;
+  --blanc: #FFFFFF;
+  --fh: "Outfit", system-ui, sans-serif;
+  --fb: "Source Sans 3", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+@page {
+  size: A4;
+  margin: 0;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  font-family: var(--fb);
+  font-size: 11pt;
+  line-height: 1.5;
+  color: var(--encre);
+  background: var(--blanc);
+  padding: 40px 35px;
+}
+
+h1, h2, h3 {
+  font-family: var(--fh);
+  font-weight: 700;
+  color: var(--volcan);
+  margin: 0 0 12px;
+}
+
+h1 {
+  font-size: 28pt;
+  margin-bottom: 6px;
+}
+
+h2 {
+  font-size: 18pt;
+  margin-top: 24px;
+  margin-bottom: 12px;
+  color: var(--lagon);
+}
+
+h3 {
+  font-size: 12pt;
+  margin-top: 16px;
+  margin-bottom: 8px;
+}
+
+p {
+  margin: 0 0 10px;
+  max-width: none;
+}
+
+.logo {
+  font-family: var(--fh);
+  font-size: 16pt;
+  font-weight: 700;
+  color: var(--lagon);
+  margin-bottom: 8px;
+}
+
+.logo span {
+  color: var(--corail);
+}
+
+.date {
+  color: var(--gris);
+  font-size: 9pt;
+  margin-bottom: 20px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 10pt;
+}
+
+th {
+  background: var(--lagon);
+  color: var(--blanc);
+  padding: 10px;
+  text-align: left;
+  font-family: var(--fh);
+  font-weight: 600;
+  border: none;
+}
+
+td {
+  padding: 9px 10px;
+  border-bottom: 1px solid #E0E0E0;
+  vertical-align: top;
+}
+
+tr:last-child td {
+  border-bottom: none;
+}
+
+.prix {
+  font-family: var(--fh);
+  font-weight: 700;
+  color: var(--lagon);
+  font-size: 11pt;
+}
+
+.pack-card {
+  background: var(--lagon-pale);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 14px 0;
+  page-break-inside: avoid;
+  border-left: 4px solid var(--lagon);
+}
+
+.pack-card h3 {
+  margin-top: 0;
+  color: var(--lagon);
+}
+
+.pack-card.complet {
+  background: rgba(22, 166, 182, 0.08);
+  border-left: 4px solid var(--lagon-vif);
+}
+
+.pack-card.surmesure {
+  background: #FFF6E8;
+  border-left: 4px solid var(--corail);
+}
+
+.pack-visual {
+  display: flex;
+  align-items: center;
+  margin: 16px 0;
+  page-break-inside: avoid;
+  gap: 12px;
+}
+
+.hardware-box {
+  background: #F5F5F5;
+  border-radius: 6px;
+  padding: 12px;
+  border: 1px solid #E0E0E0;
+  font-size: 9pt;
+  margin: 8px 0;
+}
+
+.hardware-box strong {
+  color: var(--lagon);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.benefits-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.benefit-item {
+  background: white;
+  border-radius: 4px;
+  padding: 8px;
+  border-left: 3px solid var(--lagon);
+  font-size: 9pt;
+}
+
+.agents {
+  margin: 8px 0;
+  font-size: 10pt;
+}
+
+.agents li {
+  margin-bottom: 4px;
+}
+
+.kap {
+  background: #FFF6E8;
+  border-left: 4px solid var(--corail);
+  padding: 12px;
+  margin: 16px 0;
+  font-size: 10pt;
+  border-radius: 4px;
+}
+
+.services {
+  background: var(--lagon-pale);
+  padding: 12px;
+  margin: 12px 0;
+  border-radius: 4px;
+  font-size: 10pt;
+}
+
+.services li {
+  margin-bottom: 3px;
+}
+
+.maintenance {
+  background: #F5F5F5;
+  padding: 10px;
+  border-radius: 4px;
+  font-size: 10pt;
+  margin: 12px 0;
+}
+
+.contact {
+  background: var(--lagon-mist);
+  padding: 12px;
+  border-radius: 4px;
+  margin: 16px 0;
+  font-size: 10pt;
+}
+
+.contact p {
+  margin: 4px 0;
+}
+
+.footer {
+  font-size: 9pt;
+  color: var(--gris);
+  margin-top: 24px;
+  padding-top: 12px;
+  border-top: 1px solid #E0E0E0;
+}
+
+.divider {
+  page-break-before: always;
+  margin-top: 40px;
+}
+
+strong {
+  font-weight: 600;
+}
+
+.note {
+  color: var(--gris);
+  font-size: 9pt;
+  font-style: italic;
+  margin: 8px 0;
+}
+</style>
+</head>
+<body>
+
+<div class="logo">Pixel<span>Kréol</span></div>
+<div class="date">Grille tarifaire — Bureau IA local — Septembre 2026</div>
+
+<h1>Bureau IA local</h1>
+<p>Des assistants IA installés chez vous, sur votre propre serveur. Zéro donnée dans le cloud. Quatre offres pour tous les besoins.</p>
+
+<h2>Grille tarifaire complète</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Pack</th>
+      <th>Matériel</th>
+      <th>Agents inclus</th>
+      <th>Prix</th>
+      <th>Maintenance</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>🏠 Assistant Maison</strong></td>
+      <td>PC reconditionné + accélérateur</td>
+      <td>3 agents</td>
+      <td class="prix">1 990€<br><small>TTC</small></td>
+      <td>49€/mois</td>
+    </tr>
+    <tr>
+      <td><strong>💼 Bureau Essentiel</strong></td>
+      <td>GEEKOM A9 Max+388 + AORUS RTX 5060 Ti</td>
+      <td>5 agents</td>
+      <td class="prix">5 500€<br><small>HT</small></td>
+      <td>300€/mois</td>
+    </tr>
+    <tr>
+      <td><strong>🚀 Bureau Complet</strong></td>
+      <td>GEEKOM A9 Max+388 + AORUS RTX 5060 Ti</td>
+      <td>9 agents + 1 service premium</td>
+      <td class="prix">13 900€<br><small>HT</small></td>
+      <td>500€/mois</td>
+    </tr>
+    <tr>
+      <td><strong>⚙️ Sur-mesure</strong></td>
+      <td>Selon vos besoins spécifiques</td>
+      <td>10+ agents + modules intégrés</td>
+      <td class="prix">À partir de<br>18 000€</td>
+      <td>À définir</td>
+    </tr>
+  </tbody>
+</table>
+
+<p class="note">✓ Installation • Configuration • Formation complète • Documentation technique • Support email/téléphone. Maintenance optionnelle et résiliable à tout moment.</p>
+
+<h2>Détail des agents & services par pack</h2>
+
+<div class="pack-card">
+  <h3>🏠 Assistant Maison — <span class="prix">1 990€ TTC</span></h3>
+  <p><strong>Idéal pour :</strong> particuliers, télétravail, professions libérales en solo.</p>
+  <p>Archivage, tri administratif, démarches officielles, gestion agenda et tâches.</p>
+
+  <div class="hardware-box">
+    <strong>Matériel</strong>
+    Mac Pro 2013 reconditionné + eGPU Blackmagic (reconditionnés) — Puissance suffisante pour 3 agents simultanés.
+  </div>
+
+  <ul class="agents">
+    <li><strong>L'Archiviste</strong> — Classe par catégorie, retrouve par le sens, indexe automatiquement. Aucune perte de document.</li>
+    <li><strong>Les Démarches</strong> — Impôts, retraite, CAF, succession, cartes vitales : documents générés et prêts à signer.</li>
+    <li><strong>Assistant secondaire</strong> — Agenda, rappels d'échéances, tâches récurrentes, suivi horaires.</li>
+  </ul>
+
+  <div class="benefits-grid">
+    <div class="benefit-item">✓ Installation incluse</div>
+    <div class="benefit-item">✓ 1h de formation</div>
+    <div class="benefit-item">✓ Documentation</div>
+    <div class="benefit-item">✓ Support email</div>
+  </div>
+
+  <p style="margin-top: 8px; font-size: 9pt; color: var(--gris);"><strong>Maintenance :</strong> optionnelle à 49€/mois (mises à jour + sauvegardes chiffrées).</p>
+</div>
+
+<div class="pack-card">
+  <h3>💼 Bureau Essentiel — <span class="prix">5 500€ HT</span></h3>
+  <p><strong>Idéal pour :</strong> indépendants, artisans, TPE, freelances avec 1-3 personnes.</p>
+  <p>Gestion administrative complète, prospection commerciale, suivi clients, comptabilité courante.</p>
+
+  <div class="hardware-box">
+    <strong>Serveur professionnel performant</strong>
+    GEEKOM A9 Max+388 (2400€) + AORUS RTX 5060 Ti AI Box (899€) — Machine dédiée, 5 agents simultanés, scalabilité jusqu'à 7.
+  </div>
+
+  <ul class="agents">
+    <li><strong>L'Archiviste</strong> — Classe, indexe et retrouve documents métier par contexte, OCR documents, scan automatique.</li>
+    <li><strong>Le Secrétaire</strong> — Tri courrier/emails, réponses modèles, gestion agenda partagé, alertes échéances.</li>
+    <li><strong>Devis &amp; factures</strong> — Rédaction automatique, suivi paiements, relances intelligentes, export compta.</li>
+    <li><strong>Le Commercial</strong> — Prospection emails, réponses prospects, gestion fichier CRM, scoring leads.</li>
+    <li><strong>Directeur de cabinet</strong> — Orchestration, vérification qualité, synthèse quotidienne, rapport activité.</li>
+  </ul>
+
+  <div class="benefits-grid">
+    <div class="benefit-item">✓ Installation 1-2 semaines</div>
+    <div class="benefit-item">✓ Formation équipe</div>
+    <div class="benefit-item">✓ Formation approfondie</div>
+    <div class="benefit-item">✓ Circuits OUI/NON</div>
+  </div>
+
+  <p style="margin-top: 8px; font-size: 9pt; color: var(--gris);"><strong>Maintenance :</strong> 300€/mois (mises à jour, sauvegardes, support prioritaire, améliorations).</p>
+</div>
+
+<div class="pack-card complet">
+  <h3>🚀 Bureau Complet — <span class="prix">13 900€ HT</span></h3>
+  <p><strong>Idéal pour :</strong> PME, cabinets (avocat, notaire, expertise-comptable), agences immobilières, holdings.</p>
+  <p>Suite complète métier : 9 agents experts + 1 service premium. La transformation RH de votre backoffice.</p>
+
+  <div class="hardware-box">
+    <strong>Serveur haute performance</strong>
+    GEEKOM A9 Max+388 + AORUS RTX 5060 Ti AI Box (configuration optimisée) — 9+ agents simultanés, scalabilité jusqu'à 12, résilience 24/7.
+  </div>
+
+  <ul class="agents">
+    <li><strong>L'Archiviste</strong> — NAS intelligent : OCR, recherche par le sens, classification multi-critères, intégration drives.</li>
+    <li><strong>Le Secrétaire</strong> — Tri intelligent des emails/courrier, réponses contextuelles, agenda partagé, alertes.</li>
+    <li><strong>Le Comptable</strong> — Écritures, rapprochements bancaires, exports pour expert-comptable, suivi budget.</li>
+    <li><strong>Devis &amp; factures</strong> — Cycle complet : rédaction, suivi trésorerie, relances, gestion retards paiement.</li>
+    <li><strong>Le Commercial</strong> — Prospection, annonces web, scoring prospects, suivi pipeline, veille concurrence.</li>
+    <li><strong>Le Gestionnaire locatif</strong> — Baux, quittances, indexation, régularisations, disputes paiements.</li>
+    <li><strong>Le Juriste</strong> — Relecture contrats, dossiers légaux, alertes jurisprudence, mise en conformité RGPD.</li>
+    <li><strong>Les Démarches</strong> — Démarches publiques complexes, dossiers subventions, procédures administratives.</li>
+    <li><strong>Le Directeur de cabinet</strong> — Orchestration globale, validation multi-niveaux, rapports executives, KPIs temps réel.</li>
+  </ul>
+
+  <p style="margin-top: 16px; margin-bottom: 8px;"><strong>+ 1 Service Premium au choix :</strong></p>
+  <div class="services">
+    <ul>
+      <li><strong>Standard téléphonique IA</strong> — Messages vocaux transcrits, triés, routés intelligemment</li>
+      <li><strong>Signature électronique</strong> — Intégration DocuSign/Yousign, workflows de validation</li>
+      <li><strong>Réseaux sociaux</strong> — Calendrier editorial, génération posts, réponses, reporting analytics</li>
+      <li><strong>Veille concurrentielle</strong> — Alertes prix, stratégie, nouveaux produits/services (hebdomadaire)</li>
+      <li><strong>Multilingue</strong> — Créole, anglais, allemand, italien, chinois (déploiement 48h)</li>
+      <li><strong>Tableau de bord direction</strong> — PDF/Excel hebdomadaire, KPIs métier, tendances</li>
+      <li><strong>Réplication site/agence</strong> — Synchronisation serveur secondaire, basculement automatique</li>
+    </ul>
+  </div>
+
+  <div class="benefits-grid">
+    <div class="benefit-item">✓ Installation 4-8 semaines</div>
+    <div class="benefit-item">✓ Formation approfondie équipe</div>
+    <div class="benefit-item">✓ Circuits de validation OUI/NON</div>
+    <div class="benefit-item">✓ Intégrations logiciels métier</div>
+  </div>
+
+  <p style="margin-top: 8px; font-size: 9pt; color: var(--gris);"><strong>Maintenance :</strong> 500€/mois (support 24/7, monitoring avancé, interventions prioritaires, optimisations continues).</p>
+</div>
+
+<h2>Exemple : Sur-mesure — Studio IA pour Production musicale &amp; podcast</h2>
+
+<div class="pack-card surmesure">
+  <h3>⚙️ Studio IA — Production musicale &amp; podcast — <span class="prix">À partir de 18 000€ HT</span></h3>
+  <p><strong>Idéal pour :</strong> maisons de disque, labels indépendants, studios de création, producteurs musicaux, créateurs de contenu podcast.</p>
+  <p>Suite complète de création, production et distribution de contenu audio. Assistants spécialisés en composition, production et marketing.</p>
+
+  <div class="hardware-box">
+    <strong>Infrastructure audio professionnelle</strong>
+    GEEKOM A9 Max+388 + RTX 5060 Ti AI Box + interfaces audio (MOTU, Focusrite) — Production temps réel, traitement multi-pistes, latence &lt; 2ms.
+  </div>
+
+  <ul class="agents">
+    <li><strong>Producteur IA</strong> — Composition, arrangements, générations de pistes, variations musicales selon brief.</li>
+    <li><strong>Ingénieur son</strong> — Mastering, normalisation LUFS, optimisation pour Spotify/Apple Music/YouTube.</li>
+    <li><strong>Compositeur IA</strong> — Création musicale originale, royalties-free, adaptation style/tempo/instrumentation.</li>
+    <li><strong>Community Manager</strong> — Distribution YouTube, Spotify, Deezer, Apple Music, TikTok, gestion engagement.</li>
+    <li><strong>Directeur de cabinet</strong> — Gestion calendrier production, analytics streaming, rapports mensuels détaillés.</li>
+    <li><strong>Juriste SACEM</strong> — Déclarations SACEM, gestion droits d'auteur, licences créatives, conformité légale.</li>
+  </ul>
+
+  <p style="margin-top: 16px; margin-bottom: 8px;"><strong>Modules spécialisés inclus :</strong></p>
+  <div class="services">
+    <ul>
+      <li><strong>Journal de création SACEM</strong> — Logs timestampés de chaque décision créative (preuve d'authorship SACEM)</li>
+      <li><strong>Déclarations automatiques</strong> — SACEM, IPPI, gestion droits, paiements royalties</li>
+      <li><strong>Distribution multi-plateforme</strong> — Agrégateurs, méta-données, artwork, scheduling</li>
+      <li><strong>Analytics avancées</strong> — Streams par plateforme, démographie auditeurs, tendances</li>
+      <li><strong>Version contrôle audio</strong> — Historique productions, versioning, archivage lossless</li>
+    </ul>
+  </div>
+
+  <div class="benefits-grid">
+    <div class="benefit-item">✓ Installation 2-4 semaines</div>
+    <div class="benefit-item">✓ Formation studio complète</div>
+    <div class="benefit-item">✓ Intégrations DAW (Logic, Ableton, Studio One)</div>
+    <div class="benefit-item">✓ Support technique dédié</div>
+  </div>
+
+  <p style="margin-top: 8px; font-size: 9pt; color: var(--gris);"><strong>Maintenance :</strong> 600€/mois (monitoring 24/7, optimisations créatives, support producteurs, mises à jour IA).</p>
+</div>
+
+<div class="divider"></div>
+
+<h2>Kap Numérik — Financement jusqu'à 80%</h2>
+
+<div class="kap">
+  <strong>À La Réunion (974) :</strong> Le dispositif Kap Numérik (Région Réunion / FEDER) peut financer une partie de votre projet Bureau IA.
+  <ul style="margin: 8px 0 0; padding-left: 20px;">
+    <li>Jusqu'à <strong>80% pour les entreprises de moins de 10 salariés</strong></li>
+    <li>50% pour les entreprises de 10 à 19 salariés</li>
+    <li>Couverture matériel + prestation + formation</li>
+  </ul>
+  <p style="margin-top: 8px; margin-bottom: 0;"><strong>PixelKréol monte le dossier avec vous.</strong> Aucun coût supplémentaire.</p>
+</div>
+
+<h2>Maintenance &amp; Support</h2>
+
+<div class="maintenance">
+  <p><strong>Inclus dans tous les packs :</strong></p>
+  <ul style="margin: 6px 0 0; padding-left: 20px;">
+    <li>Mises à jour logicielles et sécurité</li>
+    <li>Sauvegardes chiffrées (quotidiennes + copie hors site)</li>
+    <li>Support technique par mail/téléphone</li>
+    <li>Améliorations continues sur vos retours</li>
+  </ul>
+  <p style="margin-top: 8px;"><strong>Optionnel :</strong> Maintenance avancée avec monitoring 24/7, interventions prioritaires (tarifs selon pack).</p>
+</div>
+
+<h2>Pourquoi le serveur chez vous ?</h2>
+
+<p><strong>Vos données restent dans vos murs.</strong> Contrats, comptes, données de santé, photos de famille : aucun document ne transite par un prestataire externe. Conformité RGPD simple à expliquer.</p>
+
+<p><strong>Vous gardez la signature.</strong> Les assistants préparent, classent, calculent. Tout ce qui engage (contrat, paiement, courrier officiel) attend votre « OUI ».</p>
+
+<p><strong>Un coût fixe, pas un compteur.</strong> Zéro abonnement au nombre de requêtes. Vous savez ce que ça coûte avant, et ça ne bouge pas après.</p>
+
+<p><strong>Un système qui vous appartient.</strong> Documentation complète remise à la livraison. Tout prestataire peut le reprendre. Quand un meilleur cerveau IA sort, on le change en une heure.</p>
+
+<div class="contact">
+  <h3>Parlons de votre projet</h3>
+  <p><strong>Rendez-vous découverte gratuit (1h, sans engagement)</strong></p>
+  <p>Par mail : <strong>mobeeltech@gmail.com</strong></p>
+  <p>PixelKréol — La Réunion (974)<br>
+  Sites web &amp; apps • Photo &amp; vidéo • Réseaux sociaux &amp; SEO • Outils IA &amp; automatisation</p>
+</div>
+
+<div class="footer">
+  <p>PixelKréol — Bureau IA local © 2026. Grille tarifaire valable septembre 2026. Tarifs hors taxes sauf mention. Maintenance optionnelle et résiliable. Financement Kap Numérik soumis à conditions.</p>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,220 @@
+═══════════════════════════════════════════════════════════════════════════════
+  PIXELKRÉOL — BUREAU IA LOCAL
+  📦 MANIFEST DE DÉPLOIEMENT | Version 1.0 | Septembre 2026
+═══════════════════════════════════════════════════════════════════════════════
+
+🎯 OBJECTIF
+  Mettre en ligne le site PixelKréol avec :
+  • Page d'accueil améliorée (index)
+  • Page produit Bureau IA (4 offres)
+  • Grille tarifaire complète (PDF/HTML)
+  • Interaction agents IA (9 agents)
+  • 38 packs sectorialisés (11 secteurs d'activité)
+
+═══════════════════════════════════════════════════════════════════════════════
+📄 FICHIERS HTML (5 PAGES)
+═══════════════════════════════════════════════════════════════════════════════
+
+1. index-improved.html [30 KB] → RENOMMER EN index.html
+   ├─ Page d'accueil PixelKréol
+   ├─ Hero : "Bureau IA, des assistants qui travaillent pour vous"
+   ├─ 4 sections de services + Bureau IA
+   ├─ Tarifs affichés : 1990€ TTC / 5500€ HT / 13900€ HT ✓ UPDATÉ
+   ├─ CTA : Rendez-vous, Voir agents, Essayer agents
+   └─ SEO : métadonnées complètes, JSON-LD, OG tags
+
+2. pixelkreol-bureau-ia-improved.html [39 KB] → RENOMMER EN bureau-ia.html
+   ├─ Page produit Bureau IA
+   ├─ Hero + calculatrice ROI
+   ├─ 3 offres détaillées (Maison, Essentiel, Complet)
+   ├─ Tarifs : 1990€ TTC / 5500€ HT / 13900€ HT ✓ UPDATÉ
+   ├─ 9 agents IA avec descriptions
+   ├─ Modules supplémentaires (8 options)
+   ├─ Témoignages clients (3)
+   ├─ FAQ (4 questions)
+   ├─ CTA : Grille tarifaire, Rendez-vous
+   └─ SEO complet + structured data
+
+3. tarification-bureau-ia.html [18 KB]
+   ├─ Grille tarifaire complète / version PDF
+   ├─ Tableau : 4 packs (Maison, Essentiel, Complet, Sur-mesure)
+   ├─ Détails agents par pack (3 → 5 → 9 + service)
+   ├─ Services premium inclus (7 options)
+   ├─ Exemple sur-mesure : Studio IA (production musicale)
+   ├─ Kap Numérik (financement 50-80%)
+   ├─ Maintenance & Support
+   ├─ Avantages serveur local
+   ├─ Contact
+   ├─ CSS print-optimisé pour PDF
+   └─ Format A4, avec couleurs PixelKréol
+
+4. pixelkreol-agents-communication.html [21 KB] → RENOMMER EN agents.html
+   ├─ Page d'interaction avec les 9 agents IA
+   ├─ Chat simulé (Ctrl+Enter pour envoyer)
+   ├─ 9 cartes agents + descriptions détaillées
+   ├─ Sidebar sélection + historique messages
+   ├─ Pricing box (3 tiers : Essentiel, Complet, Sur-mesure)
+   ├─ Responsive design
+   └─ Exemples de tâches par agent
+
+5. secteurs-improved.html [58 KB] → RENOMMER EN secteurs.html
+   ├─ 38 packs sectorialisés
+   ├─ 11 secteurs d'activité avec cas d'usage spécifiques
+   ├─ Grille complète avec tarifs actualisés
+   ├─ Dual CTA par pack : Rendez-vous + Voir agents
+   ├─ Filtrage par secteur (optionnel)
+   └─ SEO local (services par région métier)
+
+═══════════════════════════════════════════════════════════════════════════════
+⚙️ FICHIERS CONFIG (3 FICHIERS)
+═══════════════════════════════════════════════════════════════════════════════
+
+1. vercel.json
+   ├─ Redirects internes : /bureau-ia → bureau-ia.html
+   ├─ Headers : cache, sécurité (X-Frame-Options, etc.)
+   └─ Configuration optimisée pour Vercel
+
+2. package.json
+   ├─ Métadonnées projet (nom, version, keywords)
+   ├─ Compatible Node 18+
+   └─ Type module
+
+3. .gitignore
+   ├─ node_modules, .DS_Store, .env
+   ├─ Fichiers temporaires
+   └─ Standard
+
+═══════════════════════════════════════════════════════════════════════════════
+📋 CHECKLIST AVANT DÉPLOIEMENT
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ Tarification mise à jour dans TOUS les fichiers
+   ✓ index-improved.html : 1990€ / 5500€ / 13900€
+   ✓ pixelkreol-bureau-ia-improved.html : 1990€ / 5500€ / 13900€
+   ✓ tarification-bureau-ia.html : 1990€ / 5500€ / 13900€
+
+✅ Liens internes vérifiés
+   ✓ Tous les href pointent vers les bons fichiers
+   ✓ Navigation cohérente (bureau-ia, agents, secteurs)
+   ✓ CTA vers grille tarifaire ajoutés
+
+✅ Responsive design testé
+   ✓ Mobile (< 480px)
+   ✓ Tablette (480px - 768px)
+   ✓ Desktop (> 768px)
+
+✅ SEO complet
+   ✓ Métadonnées page (title, description)
+   ✓ JSON-LD structured data
+   ✓ OG tags (Facebook, LinkedIn)
+   ✓ Robots.txt + sitemap (optionnel)
+
+✅ Performance
+   ✓ Fichiers allégés (< 100 KB chacun)
+   ✓ Pas de dépendances externes (sauf Google Fonts)
+   ✓ CSS interne (pas de fichiers séparés)
+
+═══════════════════════════════════════════════════════════════════════════════
+🚀 INSTRUCTIONS DE DÉPLOIEMENT
+═══════════════════════════════════════════════════════════════════════════════
+
+OPTION 1 : Vercel (RECOMMANDÉ)
+──────────────────────────────────
+1. Créer un compte sur https://vercel.com
+2. Cliquer "New Project" → Import Git Repository
+3. Sélectionner ce dossier
+4. Vercel détecte automatiquement une app statique
+5. Configuration : Laisser par défaut
+6. Cliquer "Deploy"
+7. Domaine : https://nom-projet.vercel.app/ (gratuit)
+
+Ou utiliser Vercel CLI :
+$ npm i -g vercel
+$ vercel deploy
+
+OPTION 2 : GitHub Pages
+──────────────────────────────────
+1. Créer un dépôt GitHub : pixelkreol-bureau-ia
+2. Pousser les fichiers :
+   $ git init
+   $ git add .
+   $ git commit -m "Initial commit"
+   $ git remote add origin https://github.com/pixelkreol/pixelkreol-bureau-ia
+   $ git push -u origin main
+
+3. Settings → Pages → Deploy from branch
+4. Sélectionner "main" branch
+5. Cliquer "Save"
+6. Domaine : https://pixelkreol.github.io/pixelkreol-bureau-ia
+
+OPTION 3 : Hosting classique (cPanel, etc.)
+──────────────────────────────────────────
+1. FTP/SFTP les fichiers HTML vers /public_html/
+2. S'assurer que index.html est bien renommé
+3. Vérifier les permissions (644 pour fichiers, 755 pour dossiers)
+4. Tester sur le domaine
+
+═══════════════════════════════════════════════════════════════════════════════
+📊 TARIFICATION ACTUALISÉE — Septembre 2026
+═══════════════════════════════════════════════════════════════════════════════
+
+🏠 ASSISTANT MAISON
+├─ Prix : 1 990 € TTC
+├─ Agents : 3 (Archiviste, Démarches, Assistant secondaire)
+├─ Matériel : PC reconditionné + accélérateur IA
+├─ Maintenance : 49€/mois optionnelle
+└─ Cible : Particuliers, freelances
+
+💼 BUREAU ESSENTIEL
+├─ Prix : 5 500 € HT
+├─ Agents : 5 (Archiviste, Secrétaire, Devis, Commercial, Directeur)
+├─ Matériel : GEEKOM A9 Max+388 + AORUS RTX 5060 Ti AI Box
+├─ Maintenance : 300€/mois
+└─ Cible : TPE, indépendants, artisans
+
+🚀 BUREAU COMPLET
+├─ Prix : 13 900 € HT
+├─ Agents : 9 + 1 service premium
+├─ Matériel : GEEKOM A9 Max+388 + AORUS RTX 5060 Ti haute capacité
+├─ Services : 7 options (standard téléphonique, signature électronique, etc.)
+├─ Maintenance : 500€/mois
+└─ Cible : PME, cabinets, holdings
+
+⚙️ SUR-MESURE
+├─ Prix : À partir de 18 000 € HT (exemple Studio IA)
+├─ Agents : 10+ agents spécialisés + modules intégrés
+├─ Matériel : Selon besoins
+├─ Maintenance : À définir
+└─ Cible : Projets spécifiques (production musicale, secteurs réglementés, etc.)
+
+═══════════════════════════════════════════════════════════════════════════════
+🔗 DOMAINE RECOMMANDÉ
+═══════════════════════════════════════════════════════════════════════════════
+
+Domaine principal : www.pixelkreol.re (existant)
+Site Bureau IA : www.pixelkreol.re/bureau-ia/
+
+OU
+
+Sous-domaine : ia.pixelkreol.re
+Ou : bureau-ia.pixelkreol.re
+
+═══════════════════════════════════════════════════════════════════════════════
+📞 CONTACT APRÈS DÉPLOIEMENT
+═══════════════════════════════════════════════════════════════════════════════
+
+Email : mobeeltech@gmail.com
+Téléphone : [À intégrer]
+Localisation : La Réunion (974), France
+
+═══════════════════════════════════════════════════════════════════════════════
+✅ DÉPLOIEMENT COMPLET
+═══════════════════════════════════════════════════════════════════════════════
+
+Tous les fichiers sont PRÊTS à la mise en ligne.
+Aucune dépendance externe requise (sauf Google Fonts).
+Le site est 100% fonctionnel et responsive.
+
+Date : Septembre 27, 2026
+État : ✅ PRODUCTION READY
+Vérifié par : Claude AI

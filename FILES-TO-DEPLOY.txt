@@ -1,0 +1,142 @@
+═══════════════════════════════════════════════════════════════════════════════
+                    FICHIERS À TÉLÉCHARGER POUR DÉPLOIEMENT
+                             PixelKréol Bureau IA
+═══════════════════════════════════════════════════════════════════════════════
+
+📥 FICHIERS ESSENTIELS À TÉLÉCHARGER (11 FICHIERS)
+
+Télécharge ces 11 fichiers depuis le scratchpad et mets-les dans un dossier
+nommé "pixelkreol-bureau-ia" :
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📄 PAGES HTML (5 FICHIERS) — RENOMMER AVANT MISE EN LIGNE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. index-improved.html (30 KB)
+   → RENOMMER EN : index.html
+   → Contenu : Page d'accueil PixelKréol
+   → Tarifs : 1990€ TTC, 5500€ HT, 13900€ HT ✓
+
+2. pixelkreol-bureau-ia-improved.html (39 KB)
+   → RENOMMER EN : bureau-ia.html
+   → Contenu : Page produit Bureau IA (4 offres, 9 agents, ROI)
+   → Tarifs : 1990€, 5500€, 13900€ ✓
+
+3. tarification-bureau-ia.html (18 KB)
+   → GARDER LE NOM (ou renommer en tarification.html)
+   → Contenu : Grille tarifaire complète
+   → Optimisé pour PDF conversion
+   → Tarifs : Tableau + détails + Kap Numérik ✓
+
+4. pixelkreol-agents-communication.html (21 KB)
+   → RENOMMER EN : agents.html
+   → Contenu : Chat interactif avec 9 agents IA
+   → Pricing box intégrée
+
+5. secteurs-improved.html (58 KB)
+   → RENOMMER EN : secteurs.html
+   → Contenu : 38 packs sectorialisés (11 secteurs)
+   → Tous tarifs à jour ✓
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚙️ FICHIERS CONFIG (3 FICHIERS) — GARDER COMME EST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+6. vercel.json (969 bytes)
+   → Configuration Vercel (redirects + cache + security headers)
+   → GARDER LE NOM
+
+7. package.json (408 bytes)
+   → Métadonnées projet (nom, version, keywords)
+   → GARDER LE NOM
+
+8. .gitignore
+   → Fichiers à ignorer pour Git
+   → GARDER LE NOM (commence par .)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📚 DOCUMENTATION (3 FICHIERS) — OPTIONNEL MAIS UTILE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+9. README-DEPLOYMENT.md (3.0 KB)
+   → Guide rapide de déploiement (3 options)
+   → GARDER LE NOM
+
+10. MANIFEST-DEPLOYMENT.txt (12 KB)
+    → Checklist détaillée avant déploiement
+    → Description complète de chaque fichier
+    → GARDER LE NOM
+
+11. CHECKLIST-FINAL.md (4.9 KB)
+    → Checklist finale à imprimer
+    → État du projet
+    → Prochaines étapes
+    → GARDER LE NOM
+
+═══════════════════════════════════════════════════════════════════════════════
+📋 RÉSUMÉ RAPIDE
+═══════════════════════════════════════════════════════════════════════════════
+
+TOTAL FICHIERS À TÉLÉCHARGER : 11
+TAILLE TOTAL : ~240 KB
+TEMPS DE MISE EN LIGNE : 2-30 minutes selon l'option
+
+STRUCTURE APRÈS TÉLÉCHARGEMENT :
+────────────────────────────────────
+pixelkreol-bureau-ia/
+├── index.html                    ← RENOMMÉ de index-improved.html
+├── bureau-ia.html                ← RENOMMÉ de pixelkreol-bureau-ia-improved.html
+├── tarification.html             ← ou tarification-bureau-ia.html
+├── agents.html                   ← RENOMMÉ de pixelkreol-agents-communication.html
+├── secteurs.html                 ← RENOMMÉ de secteurs-improved.html
+├── vercel.json
+├── package.json
+├── .gitignore
+├── README-DEPLOYMENT.md
+├── MANIFEST-DEPLOYMENT.txt
+└── CHECKLIST-FINAL.md
+
+═══════════════════════════════════════════════════════════════════════════════
+🚀 DÉPLOIEMENT RAPIDE (VERCEL)
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Télécharge les 11 fichiers ci-dessus
+2. Crée un dossier "pixelkreol-bureau-ia"
+3. Mets-y tous les fichiers (avec renommages)
+4. Va sur https://vercel.com
+5. Clique "New Project"
+6. Upload le dossier "pixelkreol-bureau-ia"
+7. Clique "Deploy"
+8. C'est fait ! URL : https://votre-projet.vercel.app ✓
+
+═══════════════════════════════════════════════════════════════════════════════
+✅ VÉRIFICATION FINALE
+═══════════════════════════════════════════════════════════════════════════════
+
+Avant de télécharger, vérifie que tu as bien ces 11 fichiers :
+
+Dans le dossier scratchpad, tu dois voir :
+□ index-improved.html (30 KB)
+□ pixelkreol-bureau-ia-improved.html (39 KB)
+□ tarification-bureau-ia.html (18 KB)
+□ pixelkreol-agents-communication.html (21 KB)
+□ secteurs-improved.html (58 KB)
+□ vercel.json (969 bytes)
+□ package.json (408 bytes)
+□ .gitignore
+□ README-DEPLOYMENT.md (3.0 KB)
+□ MANIFEST-DEPLOYMENT.txt (12 KB)
+□ CHECKLIST-FINAL.md (4.9 KB)
+
+SI TOUS LES FICHIERS SONT PRÉSENTS : ✅ PRÊT À TÉLÉCHARGER
+
+═══════════════════════════════════════════════════════════════════════════════
+📞 BESOIN D'AIDE ?
+═══════════════════════════════════════════════════════════════════════════════
+
+Pour les détails :
+→ Lire README-DEPLOYMENT.md
+→ Consulter MANIFEST-DEPLOYMENT.txt
+→ Imprimer CHECKLIST-FINAL.md
+
+═══════════════════════════════════════════════════════════════════════════════

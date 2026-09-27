@@ -1,0 +1,47 @@
+{
+  "name": "PixelKréol - Bureau IA Local",
+  "version": "1.0",
+  "buildCommand": "",
+  "framework": "html",
+  "redirects": [
+    {
+      "source": "/",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/bureau-ia",
+      "destination": "/pixelkreol-bureau-ia-improved.html"
+    },
+    {
+      "source": "/agents",
+      "destination": "/pixelkreol-agents-communication.html"
+    },
+    {
+      "source": "/secteurs",
+      "destination": "/secteurs-improved.html"
+    },
+    {
+      "source": "/tarification",
+      "destination": "/tarification-bureau-ia.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600, s-maxage=86400"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "SAMEORIGIN"
+        }
+      ]
+    }
+  ]
+}

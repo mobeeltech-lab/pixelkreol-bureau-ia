@@ -1,0 +1,20 @@
+{
+  "name": "pixelkreol-bureau-ia",
+  "version": "1.0.0",
+  "description": "PixelKréol - Bureau IA Local - Site vitrine et grille tarifaire",
+  "private": true,
+  "keywords": [
+    "IA",
+    "automatisation",
+    "bureau IA",
+    "assistant IA",
+    "La Réunion",
+    "PixelKréol"
+  ],
+  "author": "PixelKréol",
+  "license": "proprietary",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "type": "module"
+}

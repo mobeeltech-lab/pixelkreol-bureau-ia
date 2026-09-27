@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Communiquez avec les agents IA | PixelKréol Bureau IA</title>
+<meta name="description" content="Donnez une tâche à vos assistants IA spécialisés : archiviste, comptable, secrétaire, devis & factures. Interaction directe avec votre Bureau IA local.">
+<link rel="canonical" href="https://www.pixelkreol.re/agents">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="fr_FR">
+<meta property="og:title" content="Communiquez avec les agents IA — PixelKréol">
+<meta property="og:description" content="Interface pour interagir directement avec vos 9 assistants IA spécialisés.">
+<meta name="theme-color" content="#0B5D6B">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --lagon:#0B5D6B; --lagon-vif:#16A6B6; --lagon-pale:#E4F3F5; --lagon-mist:#F3F9FA;
+  --volcan:#1B1A17; --encre:#27302F; --gris:#5C6866; --ligne:#D3E2E4;
+  --veget:#2F7D4A; --veget-pale:#E6F2EA; --corail:#E0562B;
+  --blanc:#FFFFFF; --success:#27AE60;
+  --fh:"Outfit",system-ui,sans-serif; --fb:"Source Sans 3",system-ui,sans-serif;
+  --r:14px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important;animation:none!important}}
+body{margin:0;font-family:var(--fb);font-size:18px;line-height:1.55;color:var(--encre);background:var(--blanc)}
+h1,h2,h3{font-family:var(--fh);line-height:1.12;margin:0 0 .5em;color:var(--volcan);font-weight:700}
+h1{font-size:clamp(2rem,5vw,3.2rem);letter-spacing:-.02em;max-width:14ch}
+h2{font-size:clamp(1.5rem,3vw,2.2rem);letter-spacing:-.015em}
+h3{font-size:1.15rem;font-weight:500}
+p{margin:0 0 1em;max-width:62ch}
+a{color:var(--lagon);text-decoration:none}
+a:hover{text-decoration:underline}
+.wrap{width:min(1120px,92vw);margin:0 auto}
+section{padding:clamp(50px,8vw,100px) 0}
+.btn{display:inline-block;font-family:var(--fh);font-weight:500;font-size:1.05rem;padding:.85em 1.5em;border-radius:999px;text-decoration:none;border:2px solid transparent;cursor:pointer;transition:all .3s}
+.btn-p{background:var(--lagon);color:#fff}
+.btn-p:hover{background:#094B57;transform:translateY(-2px)}
+.btn-s{background:transparent;color:var(--lagon);border-color:var(--lagon)}
+.btn-s:hover{background:var(--lagon-pale)}
+
+/* nav */
+header{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.95);backdrop-filter:blur(8px);border-bottom:1px solid var(--ligne);box-shadow:0 2px 8px rgba(0,0,0,.05)}
+nav{display:flex;align-items:center;justify-content:space-between;height:68px;padding:0 4vw}
+.logo{font-family:var(--fh);font-weight:700;font-size:1.35rem;color:var(--lagon);text-decoration:none}
+.logo span{color:var(--corail)}
+nav ul{display:flex;gap:26px;list-style:none;margin:0;padding:0}
+nav ul a{text-decoration:none;color:var(--encre);font-weight:600;font-size:.98rem}
+nav ul a:hover{color:var(--lagon)}
+.burger{display:none;background:none;border:0;font-size:1.6rem;cursor:pointer;color:var(--lagon)}
+@media(max-width:820px){
+  nav{padding:0}
+  nav ul{display:none;position:absolute;left:0;right:0;top:68px;background:#fff;flex-direction:column;padding:18px 4vw 22px;border-bottom:1px solid var(--ligne);gap:16px}
+  nav ul.open{display:flex}
+  .burger{display:block;padding:0 4vw}
+}
+
+/* hero */
+.hero{background:linear-gradient(135deg,var(--lagon-mist) 0%,#fff 100%);padding:clamp(60px,8vw,100px) 0}
+.hero .wrap{display:grid;grid-template-columns:1.1fr .9fr;gap:50px;align-items:center}
+@media(max-width:900px){.hero .wrap{grid-template-columns:1fr}}
+.hero p.lead{font-size:1.2rem;color:var(--gris);margin-bottom:22px}
+.hero .cta{display:flex;gap:14px;flex-wrap:wrap;margin-top:20px}
+
+/* agents grid */
+.agents-intro{background:var(--blanc)}
+.agents-intro p{font-size:1.1rem;color:var(--gris);margin-bottom:28px}
+.agents-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:36px}
+@media(max-width:900px){.agents-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.agents-grid{grid-template-columns:1fr}}
+.agent-card{background:var(--lagon-pale);border:2px solid transparent;border-radius:var(--r);padding:28px 24px;cursor:pointer;transition:all .3s;text-decoration:none;color:inherit;display:flex;flex-direction:column}
+.agent-card:hover{border-color:var(--lagon-vif);box-shadow:0 10px 30px rgba(11,93,107,.15);transform:translateY(-4px)}
+.agent-card h3{margin:0 0 8px;color:var(--lagon);font-size:1.35rem}
+.agent-card .role{font-size:.95rem;color:var(--gris);margin-bottom:12px;font-weight:600}
+.agent-card p{font-size:.98rem;color:var(--encre);flex:1;margin:0}
+.agent-card .arrow{color:var(--lagon-vif);font-size:1.4rem;margin-top:12px}
+
+/* interface */
+.interface{background:var(--lagon-mist);padding:clamp(50px,8vw,90px) 0}
+.interface .wrap{display:grid;grid-template-columns:300px 1fr;gap:40px;min-height:500px}
+@media(max-width:900px){.interface .wrap{grid-template-columns:1fr}}
+.sidebar{background:#fff;border-radius:var(--r);padding:24px;border:1px solid var(--ligne);height:fit-content;position:sticky;top:100px}
+.sidebar h3{margin-top:0;font-size:1.1rem}
+.agent-list{list-style:none;padding:0;margin:0}
+.agent-list li{margin-bottom:8px}
+.agent-list button{width:100%;text-align:left;padding:12px 14px;background:transparent;border:2px solid transparent;border-radius:10px;font-family:var(--fb);font-size:.95rem;font-weight:600;color:var(--gris);cursor:pointer;transition:all .2s}
+.agent-list button:hover{background:var(--lagon-pale);color:var(--lagon)}
+.agent-list button.active{background:var(--lagon);color:#fff;border-color:var(--lagon)}
+
+.message-area{background:#fff;border-radius:var(--r);padding:30px;border:1px solid var(--ligne);display:flex;flex-direction:column;max-height:600px}
+.message-area h2{font-size:1.5rem;margin-bottom:8px}
+.message-area .subtitle{color:var(--gris);font-size:.95rem;margin-bottom:20px}
+.messages{flex:1;overflow-y:auto;margin-bottom:20px;padding:12px 0;border-top:1px solid var(--ligne);border-bottom:1px solid var(--ligne)}
+.message{margin-bottom:16px;padding:12px;border-radius:10px;font-size:.95rem;line-height:1.5}
+.message.user{background:var(--lagon-pale);color:var(--volcan);margin-left:20px}
+.message.agent{background:#f0f0f0;color:var(--encre);margin-right:20px}
+.input-group{display:flex;gap:12px}
+textarea{font:inherit;padding:.9em 1em;border:1.5px solid var(--ligne);border-radius:10px;width:100%;resize:vertical;min-height:80px;font-family:var(--fb);font-size:.95rem}
+textarea:focus{outline:none;border-color:var(--lagon);box-shadow:0 0 0 3px rgba(11,93,107,.1)}
+.btn-send{padding:.85em 1.5em;background:var(--lagon);color:#fff;border:none;border-radius:10px;font-family:var(--fh);font-weight:600;cursor:pointer;white-space:nowrap;transition:all .2s}
+.btn-send:hover{background:#094B57;transform:translateY(-2px)}
+.btn-send:active{transform:translateY(0)}
+
+/* cta section */
+.cta-section{background:var(--volcan);color:#fff;padding:clamp(60px,8vw,100px) 0}
+.cta-section .wrap{display:grid;grid-template-columns:1fr 1fr;gap:50px;align-items:center}
+@media(max-width:900px){.cta-section .wrap{grid-template-columns:1fr}}
+.cta-section h2{color:#fff;font-size:2rem;margin-bottom:16px}
+.cta-section p{color:#C9D6D8;font-size:1.08rem;margin-bottom:20px}
+.cta-box{background:rgba(22,166,182,.15);border-left:5px solid var(--lagon-vif);padding:24px;border-radius:10px;margin-top:20px}
+.cta-box h4{color:var(--lagon-vif);margin:0 0 10px;font-size:1.05rem;font-weight:600}
+.cta-box p{color:#C9D6D8;margin:0;font-size:.95rem}
+.cta-box ul{color:#C9D6D8;padding-left:18px;margin:10px 0 0}
+.cta-box li{margin-bottom:6px;font-size:.95rem}
+
+/* footer */
+footer{padding:40px 0;font-size:.95rem;color:var(--gris);border-top:1px solid var(--ligne)}
+footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+footer a{color:var(--gris)}
+footer a:hover{color:var(--lagon)}
+
+.sr{position:absolute;left:-9999px}
+</style>
+</head>
+<body>
+
+<header>
+ <nav class="wrap" aria-label="Navigation principale">
+  <a class="logo" href="index.html">Pixel<span>Kréol</span></a>
+  <button class="burger" aria-label="Ouvrir le menu" aria-expanded="false" onclick="const u=document.getElementById('menu');const o=u.classList.toggle('open');this.setAttribute('aria-expanded',o)">☰</button>
+  <ul id="menu">
+   <li><a href="index.html">Accueil</a></li>
+   <li><a href="pixelkreol-bureau-ia.html">Bureau IA</a></li>
+   <li><a href="secteurs.html">Par secteur</a></li>
+   <li><a href="#agents">Les agents</a></li>
+   <li><a href="#contact" class="btn btn-p" style="padding:.55em 1.2em">Rendez-vous gratuit</a></li>
+  </ul>
+ </nav>
+</header>
+
+<main id="top">
+
+<section class="hero">
+ <div class="wrap">
+  <div>
+   <h1>Parlez directement avec vos assistants IA</h1>
+   <p class="lead">Donnez une tâche simple à l'agent spécialisé : archiver, rédiger, calculer, classer, relancer. Il exécute, vous validez.</p>
+   <div class="cta">
+    <a class="btn btn-p" href="#interface">Utiliser un agent maintenant</a>
+    <a class="btn btn-s" href="pixelkreol-bureau-ia.html">En savoir plus</a>
+   </div>
+   <small style="display:block;margin-top:14px;color:var(--gris)">Disponible après installation de votre Bureau IA local</small>
+  </div>
+ </div>
+</section>
+
+<section class="agents-intro" id="agents">
+ <div class="wrap">
+  <h2>Vos 9 assistants spécialisés</h2>
+  <p>Chacun a sa fiche de poste. Sélectionnez celui dont vous avez besoin et confiez-lui une tâche concrète.</p>
+  <div class="agents-grid">
+   <a class="agent-card" href="#interface" onclick="selectAgent('archiviste');return false">
+    <h3>🗂️ L'Archiviste</h3>
+    <span class="role">Localisation &amp; classement</span>
+    <p>Retrouve n'importe quel document par le sens, classe automatiquement tout ce qui arrive, remplace le NAS.</p>
+    <span class="arrow">→</span>
+   </a>
+   <a class="agent-card" href="#interface" onclick="selectAgent('secretaire');return false">
+    <h3>📋 Le Secrétaire</h3>
+    <span class="role">Courrier &amp; calendrier</span>
+    <p>Trie le courrier, rédige les réponses courantes, tient l'agenda, rappelle les échéances.</p>
+    <span class="arrow">→</span>
+   </a>
+   <a class="agent-card" href="#interface" onclick="selectAgent('comptable');return false">
+    <h3>💰 Le Comptable</h3>
+    <span class="role">Saisie &amp; rapprochements</span>
+    <p>Prépare les écritures, rapproche les relevés, produit des exports propres pour votre expert-comptable.</p>
+    <span class="arrow">→</span>
+   </a>
+   <a class="agent-card" href="#interface" onclick="selectAgent('devis');return false">
+    <h3>📄 Devis &amp; Factures</h3>
+    <span class="role">Émission &amp; relances</span>
+    <p>Rédige les devis à partir de vos tarifs, émet les factures, suit les paiements et prépare les relances.</p>
+    <span class="arrow">→</span>
+   </a>
+   <a class="agent-card" href="#interface" onclick="selectAgent('commercial');return false">
+    <h3>🤝 Le Commercial</h3>
+    <span class="role">Annonces &amp; prospects</span>
+    <p>Rédige les annonces, répond aux prospects en quelques minutes, tient le fichier clients à jour.</p>
+    <span class="arrow">→</span>
+   </a>
+   <a class="agent-card" href="#interface" onclick="selectAgent('legal');return false">
+    <h3>⚖️ Le Juriste</h3>
+    <span class="role">Contrats &amp; veille</span>
+    <p>Relit vos contrats point par point, prépare les dossiers pour l'avocat, fait la veille réglementaire.</p>
+    <span class="arrow">→</span>
+   </a>
+   <a class="agent-card" href="#interface" onclick="selectAgent('locatif');return false">
+    <h3>🏠 Gestionnaire Locatif</h3>
+    <span class="role">Baux &amp; quittances</span>
+    <p>Baux, quittances, révisions de loyer, régularisations, relances. Pour un bien ou cent.</p>
+    <span class="arrow">→</span>
+   </a>
+   <a class="agent-card" href="#interface" onclick="selectAgent('demarches');return false">
+    <h3>📍 Les Démarches</h3>
+    <span class="role">Administratif &amp; dossiers</span>
+    <p>Impôts, CAF, retraite, succession : les bons documents, les bons courriers, dans le bon ordre.</p>
+    <span class="arrow">→</span>
+   </a>
+   <a class="agent-card" href="#interface" onclick="selectAgent('directeur');return false">
+    <h3>👨‍💼 Directeur de Cabinet</h3>
+    <span class="role">Orchestration &amp; synthèse</span>
+    <p>Répartit les demandes, vérifie, vous envoie une synthèse chaque soir. Chef d'orchestre de votre bureau.</p>
+    <span class="arrow">→</span>
+   </a>
+  </div>
+ </div>
+</section>
+
+<section class="interface" id="interface">
+ <div class="wrap">
+  <aside class="sidebar">
+   <h3>Les agents</h3>
+   <ul class="agent-list">
+    <li><button type="button" class="active" data-agent="archiviste">🗂️ Archiviste</button></li>
+    <li><button type="button" data-agent="secretaire">📋 Secrétaire</button></li>
+    <li><button type="button" data-agent="comptable">💰 Comptable</button></li>
+    <li><button type="button" data-agent="devis">📄 Devis &amp; Factures</button></li>
+    <li><button type="button" data-agent="commercial">🤝 Commercial</button></li>
+    <li><button type="button" data-agent="legal">⚖️ Juriste</button></li>
+    <li><button type="button" data-agent="locatif">🏠 Gestionnaire Locatif</button></li>
+    <li><button type="button" data-agent="demarches">📍 Démarches</button></li>
+    <li><button type="button" data-agent="directeur">👨‍💼 Directeur de Cabinet</button></li>
+   </ul>
+  </aside>
+
+  <div class="message-area">
+   <h2 id="agent-name">🗂️ L'Archiviste</h2>
+   <p class="subtitle" id="agent-desc">Localisation &amp; classement des documents</p>
+
+   <div class="messages" id="messages">
+    <div class="message agent">Bonjour, je suis L'Archiviste. Comment puis-je vous aider à retrouver ou classer un document ?</div>
+   </div>
+
+   <div class="input-group">
+    <textarea id="task-input" placeholder="Décrivez votre tâche : un document à trouver, des fichiers à classer, une question sur un dossier…"></textarea>
+    <button type="button" class="btn-send" onclick="sendTask()">Envoyer</button>
+   </div>
+  </div>
+ </div>
+</section>
+
+<section class="cta-section" id="contact">
+ <div class="wrap">
+  <div>
+   <h2>Prêt à installer votre Bureau IA ?</h2>
+   <p>Un rendez-vous découverte gratuit pour voir ces agents en action sur vos vrais documents et vos vrais tâches.</p>
+   <div style="margin-top:20px">
+    <a class="btn btn-p" href="pixelkreol-bureau-ia.html#contact">Prendre un rendez-vous</a>
+   </div>
+  </div>
+  <div>
+   <div class="cta-box">
+    <h4>Ce que vous recevez</h4>
+    <ul>
+     <li>Les 9 assistants configurés sur vos tâches réelles</li>
+     <li>Installation et intégration complètes</li>
+     <li>Formation de votre équipe</li>
+     <li>Maintenance incluse la première année</li>
+    </ul>
+   </div>
+   <div class="cta-box" style="margin-top:14px">
+    <h4>Tarifs</h4>
+    <ul>
+     <li><strong>Assistant Maison</strong> : 1 500 € TTC (particuliers)</li>
+     <li><strong>Bureau Essentiel</strong> : dès 3 900 € HT (TPE)</li>
+     <li><strong>Bureau Complet</strong> : dès 13 500 € HT (PME)</li>
+    </ul>
+   </div>
+  </div>
+ </div>
+</section>
+
+</main>
+
+<footer>
+ <div class="wrap">
+  <div>© <span id="an"></span> PixelKréol — La Réunion. <a href="index.html">Accueil</a> · <a href="pixelkreol-bureau-ia.html">Bureau IA</a> · <a href="secteurs.html">Par secteur</a></div>
+  <div><a href="mailto:mobeeltech@gmail.com">Nous contacter</a> · <a href="#">Confidentialité</a></div>
+ </div>
+</footer>
+
+<script>
+const agents = {
+  archiviste: { name: '🗂️ L\'Archiviste', desc: 'Localisation &amp; classement des documents', tasks: ['Retrouver une facture', 'Classer des documents', 'Créer une arborescence'] },
+  secretaire: { name: '📋 Le Secrétaire', desc: 'Courrier &amp; calendrier', tasks: ['Trier le courrier', 'Rédiger une réponse', 'Rappeler une échéance'] },
+  comptable: { name: '💰 Le Comptable', desc: 'Saisie &amp; rapprochements', tasks: ['Préparer les écritures', 'Rapprocher les relevés', 'Générer un export'] },
+  devis: { name: '📄 Devis &amp; Factures', desc: 'Émission &amp; relances', tasks: ['Créer un devis', 'Émettre une facture', 'Relancer un impayé'] },
+  commercial: { name: '🤝 Le Commercial', desc: 'Annonces &amp; prospects', tasks: ['Rédiger une annonce', 'Répondre à un prospect', 'Mettre à jour le fichier clients'] },
+  legal: { name: '⚖️ Le Juriste', desc: 'Contrats &amp; veille', tasks: ['Relire un contrat', 'Préparer un dossier légal', 'Faire une veille réglementaire'] },
+  locatif: { name: '🏠 Gestionnaire Locatif', desc: 'Baux &amp; quittances', tasks: ['Générer une quittance', 'Réviser un loyer', 'Régulariser les charges'] },
+  demarches: { name: '📍 Les Démarches', desc: 'Administratif &amp; dossiers', tasks: ['Préparer un dossier CAF', 'Organiser une succession', 'Gérer un déménagement'] },
+  directeur: { name: '👨‍💼 Directeur de Cabinet', desc: 'Orchestration &amp; synthèse', tasks: ['Distribuer des tâches', 'Générer une synthèse', 'Vérifier le travail'] }
+};
+
+let currentAgent = 'archiviste';
+
+function selectAgent(agent) {
+  currentAgent = agent;
+  updateInterface();
+  document.getElementById('task-input').focus();
+}
+
+function updateInterface() {
+  const agent = agents[currentAgent];
+  document.getElementById('agent-name').textContent = agent.name;
+  document.getElementById('agent-desc').textContent = agent.desc;
+
+  document.querySelectorAll('.agent-list button').forEach(btn => {
+    btn.classList.remove('active');
+    if(btn.dataset.agent === currentAgent) btn.classList.add('active');
+  });
+
+  const messagesDiv = document.getElementById('messages');
+  messagesDiv.innerHTML = `<div class="message agent">Bonjour, je suis ${agent.name.replace(/[^\w\s]/g, '')}. Comment puis-je vous aider ?</div>`;
+}
+
+function sendTask() {
+  const input = document.getElementById('task-input');
+  const task = input.value.trim();
+  if(!task) return;
+
+  const messagesDiv = document.getElementById('messages');
+  messagesDiv.innerHTML += `<div class="message user">${escapeHtml(task)}</div>`;
+
+  setTimeout(() => {
+    const agent = agents[currentAgent];
+    const responses = {
+      archiviste: 'J\'ai trouvé les documents correspondants. Pour valider et accéder à ces fichiers, veuillez prendre un rendez-vous de configuration pour activer votre Bureau IA.',
+      secretaire: 'Voici le brouillon de réponse prêt à valider. Pour l\'envoyer automatiquement, installez votre Bureau IA local.',
+      comptable: 'Les écritures sont préparées. Pour les valider et les exporter à votre expert-comptable, activez votre Bureau IA.',
+      devis: 'Le devis est généré avec vos tarifs. Pour l\'envoyer au prospect, configurez votre Bureau IA.',
+      commercial: 'Voici le brouillon rédigé. Pour une réponse automatique 24/7 aux prospects, installez votre Bureau IA.',
+      legal: 'J\'ai analysé le document. Pour une validation complète et l\'intégration à vos dossiers, activez votre Bureau IA.',
+      locatif: 'Les documents sont prêts. Pour une gestion entièrement automatisée, mettez en place votre Bureau IA.',
+      demarches: 'Les pièces à fournir sont listées. Pour une préparation automatique, configurez votre Bureau IA.',
+      directeur: 'J\'ai distributé les tâches aux agents. Pour le suivi continu, installez votre Bureau IA complet.'
+    };
+    messagesDiv.innerHTML += `<div class="message agent">${responses[currentAgent]}<br><br><em style="font-size:0.85rem">Ces fonctionnalités sont actives avec votre Bureau IA local.</em></div>`;
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+  }, 800);
+
+  input.value = '';
+}
+
+function escapeHtml(text) {
+  const map = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'};
+  return text.replace(/[&<>"']/g, m => map[m]);
+}
+
+document.querySelectorAll('.agent-list button').forEach(btn => {
+  btn.addEventListener('click', () => selectAgent(btn.dataset.agent));
+});
+
+document.getElementById('task-input').addEventListener('keydown', (e) => {
+  if(e.key === 'Enter' && e.ctrlKey) sendTask();
+});
+
+document.getElementById('an').textContent = new Date().getFullYear();
+</script>
+
+</body>
+</html>

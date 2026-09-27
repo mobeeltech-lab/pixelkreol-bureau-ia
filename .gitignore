@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Production
+.next/
+out/
+build/
+dist/
+
+# Misc
+.DS_Store
+*.pem
+.env
+.env.local
+.env.*.local
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+
+# Temporary files
+*.tmp
+.cache/
+temp/

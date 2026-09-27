@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PixelKréol — Sites web, photo, vidéo, réseaux sociaux, Bureau IA local. La Réunion</title>
+<meta name="description" content="PixelKréol, La Réunion : sites web et applications, photo et vidéo, réseaux sociaux et SEO, outils IA. Jusqu'à 80 % financés par Kap Numérik. Bureau IA local : assistants installés chez vous, sans cloud ni abonnement.">
+<link rel="canonical" href="https://www.pixelkreol.re/">
+<meta name="robots" content="index, follow">
+<meta property="og:type" content="website"><meta property="og:locale" content="fr_FR">
+<meta property="og:title" content="PixelKréol — Présence numérique et Bureau IA, La Réunion">
+<meta property="og:description" content="Sites, photo, vidéo, réseaux sociaux, SEO et Bureau IA local. Financement Kap Numérik jusqu'à 80 %.">
+<meta property="og:url" content="https://www.pixelkreol.re/">
+<meta name="theme-color" content="#0B5D6B">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"LocalBusiness","@id":"https://www.pixelkreol.re/#org","name":"PixelKréol","url":"https://www.pixelkreol.re","email":"mobeeltech@gmail.com","description":"Agence numérique à La Réunion : sites web, applications, photo, vidéo, réseaux sociaux, SEO et assistants IA installés sur serveur local.","address":{"@type":"PostalAddress","addressRegion":"La Réunion","addressCountry":"FR"},"areaServed":["La Réunion","France"],"priceRange":"€€","hasOfferCatalog":{"@type":"OfferCatalog","name":"Services PixelKréol","itemListElement":[{"@type":"Offer","itemOffered":{"@type":"Service","name":"Sites web et applications"}},{"@type":"Offer","itemOffered":{"@type":"Service","name":"Photo et vidéo"}},{"@type":"Offer","itemOffered":{"@type":"Service","name":"Réseaux sociaux et SEO"}},{"@type":"Offer","itemOffered":{"@type":"Service","name":"Bureau IA local"}}]}}
+</script>
+<style>
+:root{
+  --lagon:#0B5D6B; --lagon-vif:#16A6B6; --lagon-pale:#E4F3F5; --lagon-mist:#F3F9FA;
+  --volcan:#1B1A17; --encre:#27302F; --gris:#5C6866; --ligne:#D3E2E4;
+  --veget:#2F7D4A; --veget-pale:#E6F2EA; --corail:#E0562B;
+  --blanc:#FFFFFF;
+  --fh:"Outfit",system-ui,sans-serif; --fb:"Source Sans 3",system-ui,sans-serif;
+  --r:14px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important;animation:none!important}}
+body{margin:0;font-family:var(--fb);font-size:18px;line-height:1.55;color:var(--encre);background:var(--blanc)}
+h1,h2,h3{font-family:var(--fh);line-height:1.12;margin:0 0 .5em;color:var(--volcan);font-weight:700}
+h1{font-size:clamp(2.2rem,5.2vw,3.9rem);letter-spacing:-.02em;max-width:14ch}
+h2{font-size:clamp(1.7rem,3.4vw,2.5rem);letter-spacing:-.015em;max-width:24ch}
+h3{font-size:1.25rem;font-weight:500}
+p{margin:0 0 1em;max-width:62ch}
+a{color:var(--lagon);text-decoration:none}
+a:hover{text-decoration:underline}
+.wrap{width:min(1120px,92vw);margin:0 auto}
+section{padding:clamp(56px,8vw,110px) 0}
+.btn{display:inline-block;font-family:var(--fh);font-weight:500;font-size:1.05rem;padding:.85em 1.5em;border-radius:999px;text-decoration:none;border:2px solid transparent;cursor:pointer;transition:all .2s}
+.btn:hover{transform:translateY(-2px)}
+.btn-p{background:var(--lagon);color:#fff}
+.btn-p:hover{background:#094B57}
+.btn-s{background:transparent;color:var(--lagon);border-color:var(--lagon)}
+.btn-s:hover{background:var(--lagon-pale)}
+
+/* nav */
+header{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--ligne)}
+nav{display:flex;align-items:center;justify-content:space-between;height:68px}
+.logo{font-family:var(--fh);font-weight:700;font-size:1.35rem;color:var(--lagon);text-decoration:none}
+.logo span{color:var(--corail)}
+nav ul{display:flex;gap:26px;list-style:none;margin:0;padding:0}
+nav ul a{text-decoration:none;color:var(--encre);font-weight:600;font-size:.98rem}
+nav ul a:hover{color:var(--lagon)}
+.burger{display:none;background:none;border:0;font-size:1.6rem;cursor:pointer;color:var(--lagon)}
+@media(max-width:820px){
+  nav ul{display:none;position:absolute;left:0;right:0;top:68px;background:#fff;flex-direction:column;padding:18px 4vw 22px;border-bottom:1px solid var(--ligne);gap:16px}
+  nav ul.open{display:flex}.burger{display:block}
+}
+
+/* hero */
+.hero{background:linear-gradient(180deg,var(--lagon-mist) 0%,#fff 100%);padding-top:clamp(48px,7vw,90px)}
+.hero .wrap{display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:center}
+@media(max-width:900px){.hero .wrap{grid-template-columns:1fr}}
+.hero p.lead{font-size:1.25rem;color:var(--gris);max-width:52ch}
+.hero .cta{display:flex;gap:14px;flex-wrap:wrap;margin-top:22px}
+.hero small{display:block;margin-top:14px;color:var(--gris);font-size:.95rem}
+
+/* calculator */
+.calc{background:var(--volcan);color:#fff;border-radius:22px;padding:30px 30px 26px;box-shadow:0 30px 60px -30px rgba(11,93,107,.55)}
+.calc h2{color:#fff;font-size:1.35rem;margin-bottom:6px;max-width:none}
+.calc p{color:#B9C7C9;font-size:1rem;margin-bottom:22px}
+.calc label{display:block;font-size:.95rem;color:#DDE7E8;margin-bottom:6px}
+.calc .row{margin-bottom:18px}
+.calc output{float:right;font-family:var(--fh);font-weight:700;color:var(--lagon-vif)}
+input[type=range]{width:100%;accent-color:var(--lagon-vif);height:6px}
+.seg{display:flex;gap:6px;background:#2A2925;border-radius:999px;padding:4px;margin-bottom:22px}
+.seg button{flex:1;background:transparent;border:0;color:#DDE7E8;padding:9px 6px;border-radius:999px;font-family:var(--fb);font-size:.95rem;font-weight:600;cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--lagon-vif);color:var(--volcan)}
+.res{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:6px}
+.res div{background:#2A2925;border-radius:12px;padding:14px 12px}
+.res strong{display:block;font-family:var(--fh);font-size:1.7rem;color:#fff;line-height:1.1}
+.res span{font-size:.85rem;color:#B9C7C9}
+@media(max-width:480px){.res{grid-template-columns:1fr}.res strong{font-size:1.5rem}}
+
+/* gains */
+.gains{background:#fff}
+.gains .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:28px;margin-top:36px}
+@media(max-width:900px){.gains .grid{grid-template-columns:1fr 1fr}}
+@media(max-width:520px){.gains .grid{grid-template-columns:1fr}}
+.gain{border-top:4px solid var(--lagon-vif);padding-top:18px}
+.gain b{display:block;font-family:var(--fh);font-size:2.3rem;color:var(--lagon);line-height:1;margin-bottom:8px;font-weight:700}
+.gain p{font-size:1rem;color:var(--gris)}
+
+/* before/after */
+.ba{background:var(--lagon-mist)}
+.ba table{width:100%;border-collapse:collapse;margin-top:34px;background:#fff;border-radius:var(--r);overflow:hidden;font-size:1.02rem}
+.ba th{text-align:left;padding:16px 20px;font-family:var(--fh);font-weight:500;font-size:1.1rem}
+.ba th:first-child{background:#EFEFEC;color:var(--gris)}
+.ba th:last-child{background:var(--lagon);color:#fff}
+.ba td{padding:15px 20px;border-top:1px solid var(--ligne);vertical-align:top;width:50%}
+.ba td:first-child{color:var(--gris)}
+.ba td:last-child{font-weight:600}
+@media(max-width:640px){.ba td,.ba th{display:block;width:100%}.ba td:first-child{border-top:2px solid var(--ligne)}.ba td:last-child{border-top:0;padding-top:0}.ba thead{display:none}}
+
+/* assistants */
+.assist .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:36px}
+@media(max-width:900px){.assist .grid{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.assist .grid{grid-template-columns:1fr}}
+.assist article{background:var(--lagon-pale);border-radius:var(--r);padding:24px 22px}
+.assist article.key{background:var(--lagon);color:#fff}
+.assist article.key h3,.assist article.key p{color:#fff}
+.assist h3{margin-bottom:6px}
+.assist p{font-size:1rem;margin:0;color:var(--encre)}
+
+/* for who */
+.qui .tabs{display:flex;gap:8px;margin:28px 0 22px}
+.qui .tabs button{font-family:var(--fh);font-weight:500;font-size:1.05rem;padding:.7em 1.3em;border-radius:999px;border:2px solid var(--lagon);background:#fff;color:var(--lagon);cursor:pointer}
+.qui .tabs button[aria-selected=true]{background:var(--lagon);color:#fff}
+.qui [role=tabpanel]{display:none}
+.qui [role=tabpanel].on{display:grid;grid-template-columns:1fr 1fr;gap:16px 40px}
+@media(max-width:700px){.qui [role=tabpanel].on{grid-template-columns:1fr}}
+.qui li{margin-bottom:10px}
+.qui ul{padding-left:20px;margin:0}
+.qui strong{color:var(--lagon)}
+
+/* steps */
+.etapes{background:var(--lagon-mist)}
+.etapes ol{list-style:none;padding:0;margin:36px 0 0;display:grid;grid-template-columns:repeat(5,1fr);gap:18px;counter-reset:e}
+@media(max-width:1000px){.etapes ol{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.etapes ol{grid-template-columns:1fr}}
+.etapes li{counter-increment:e;background:#fff;border-radius:var(--r);padding:22px 20px 20px;position:relative}
+.etapes li::before{content:counter(e);font-family:var(--fh);font-weight:700;font-size:2rem;color:var(--lagon-vif);line-height:1;display:block;margin-bottom:10px}
+.etapes h3{font-size:1.1rem}
+.etapes p{font-size:.98rem;margin:0;color:var(--gris)}
+.etapes em{display:block;margin-top:10px;color:var(--lagon);font-style:normal;font-weight:600;font-size:.95rem}
+
+/* offers */
+.offres .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:36px}
+@media(max-width:900px){.offres .grid{grid-template-columns:1fr}}
+.offre{border:2px solid var(--ligne);border-radius:var(--r);padding:28px 26px;display:flex;flex-direction:column}
+.offre.pro{border-color:var(--lagon);box-shadow:0 20px 50px -30px rgba(11,93,107,.5)}
+.offre .qui2{color:var(--gris);font-size:1rem;margin-bottom:12px}
+.offre .prix{font-family:var(--fh);font-size:2rem;color:var(--lagon);margin:6px 0 4px;font-weight:700}
+.offre .prix small{font-size:1rem;color:var(--gris);font-family:var(--fb);font-weight:400}
+.offre ul{padding-left:20px;margin:14px 0 22px;font-size:1rem;flex:1}
+.offre li{margin-bottom:7px}
+.offre .btn{align-self:flex-start}
+.kap{margin-top:28px;background:#FFF6E8;border-left:5px solid var(--corail);padding:18px 22px;border-radius:0 var(--r) var(--r) 0;font-size:1.02rem}
+
+/* trust */
+.conf{background:var(--volcan);color:#fff}
+.conf h2{color:#fff}
+.conf .grid{display:grid;grid-template-columns:1fr 1fr;gap:34px 60px;margin-top:36px}
+@media(max-width:760px){.conf .grid{grid-template-columns:1fr}}
+.conf h3{color:var(--lagon-vif);font-weight:700;font-size:1.15rem}
+.conf p{color:#C9D6D8;font-size:1.02rem;margin:0}
+
+/* faq */
+details{border-bottom:1px solid var(--ligne);padding:16px 0}
+summary{cursor:pointer;font-family:var(--fh);font-weight:500;font-size:1.15rem;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:20px}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";font-size:1.6rem;color:var(--lagon-vif);flex:none}
+details[open] summary::after{content:"–"}
+details p{margin:12px 0 0;color:var(--gris)}
+
+/* contact */
+.contact{background:var(--lagon-mist)}
+.contact .wrap{display:grid;grid-template-columns:1fr 1fr;gap:50px;align-items:start}
+@media(max-width:820px){.contact .wrap{grid-template-columns:1fr}}
+form{display:grid;gap:14px;background:#fff;padding:28px;border-radius:var(--r);border:1px solid var(--ligne)}
+form label{font-weight:600;font-size:.98rem;display:grid;gap:6px}
+input,select,textarea{font:inherit;padding:.7em .9em;border:1.5px solid var(--ligne);border-radius:10px;width:100%;background:#fff}
+textarea{min-height:120px;resize:vertical}
+.ok{display:none;background:var(--veget-pale);color:var(--veget);padding:14px;border-radius:10px;font-weight:600}
+
+/* sectors */
+.sect .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:32px}
+@media(max-width:900px){.sect .grid{grid-template-columns:1fr 1fr}}
+.sect a{display:block;text-decoration:none;color:var(--volcan);background:var(--lagon-pale);border-radius:var(--r);padding:18px 18px;font-family:var(--fh);font-weight:500;font-size:1.05rem;border:2px solid transparent}
+.sect a:hover{border-color:var(--lagon-vif);background:#fff}
+.sect a span{display:block;font-family:var(--fb);font-weight:400;font-size:.92rem;color:var(--gris);margin-top:4px}
+
+/* reviews */
+.avis{background:var(--lagon-mist)}
+.avis .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:36px}
+@media(max-width:900px){.avis .grid{grid-template-columns:1fr}}
+.avis blockquote{margin:0;background:#fff;border-radius:var(--r);padding:26px 24px;border-left:5px solid var(--lagon-vif);font-size:1.02rem}
+.avis blockquote p{margin:0 0 14px;color:var(--encre)}
+.avis footer{padding:0;font-size:.95rem;color:var(--gris)}
+.avis footer b{color:var(--lagon);display:block}
+.avis .note{color:var(--corail);letter-spacing:2px;margin-bottom:10px}
+
+/* modules */
+.mods{margin-top:36px;border:2px solid var(--ligne);border-radius:var(--r);padding:26px 26px 12px}
+.mods h3{margin-bottom:14px}
+.mods ul{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:1fr 1fr;gap:6px 30px;font-size:1rem}
+@media(max-width:700px){.mods ul{grid-template-columns:1fr}}
+.mods li{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--ligne)}
+.mods li span{color:var(--lagon);font-weight:600;white-space:nowrap}
+
+footer{padding:40px 0;font-size:.95rem;color:var(--gris)}
+footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+footer a{color:var(--gris)}
+footer a:hover{color:var(--lagon)}
+
+.sr{position:absolute;left:-9999px}
+
+.hero2{background:linear-gradient(180deg,var(--lagon-mist),#fff);padding:clamp(56px,8vw,110px) 0 clamp(40px,6vw,70px)}
+.hero2 h1{max-width:16ch}
+.hero2 .lead{font-size:1.25rem;color:var(--gris);max-width:56ch}
+.poles{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:40px}
+@media(max-width:820px){.poles{grid-template-columns:1fr}}
+.pole{border-radius:22px;padding:32px 30px;display:flex;flex-direction:column;gap:10px;text-decoration:none;color:inherit;border:2px solid transparent;transition:all .2s}
+.pole.a{background:var(--lagon-pale)}.pole.b{background:var(--volcan);color:#fff}
+.pole.b h2,.pole.b p{color:#fff}.pole.b p{color:#C9D6D8}
+.pole:hover{border-color:var(--lagon-vif);transform:translateY(-4px)}
+.pole h2{font-size:1.7rem;margin:0}.pole p{margin:0;font-size:1.05rem}
+.pole .go{margin-top:auto;font-family:var(--fh);font-weight:500;color:var(--lagon)}
+.pole.b .go{color:var(--lagon-vif)}
+
+.serv{display:grid;grid-template-columns:repeat(4,1fr);gap:22px;margin-top:36px}
+@media(max-width:1000px){.serv{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.serv{grid-template-columns:1fr}}
+.serv article{border-top:4px solid var(--lagon-vif);padding-top:16px}
+.serv h3{margin-bottom:6px}.serv p{font-size:1rem;color:var(--gris);margin-bottom:8px}
+.serv .px{font-family:var(--fh);color:var(--lagon);font-weight:500}
+.serv ul{padding-left:18px;font-size:.98rem;margin:0}
+
+.kapbox{margin-top:36px;display:grid;grid-template-columns:1.2fr .8fr;gap:30px;background:#FFF6E8;border-radius:var(--r);padding:30px}
+@media(max-width:820px){.kapbox{grid-template-columns:1fr}}
+.kapbox h3{margin-bottom:8px}
+.kapbox table{width:100%;border-collapse:collapse;font-size:1rem;background:#fff;border-radius:10px;overflow:hidden}
+.kapbox td,.kapbox th{padding:10px 12px;text-align:left;border-bottom:1px solid var(--ligne)}
+.kapbox th{background:var(--lagon);color:#fff;font-family:var(--fh);font-weight:500}
+
+.real .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:36px}
+@media(max-width:900px){.real .grid{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.real .grid{grid-template-columns:1fr}}
+.real article{background:#fff;border:2px solid var(--ligne);border-radius:var(--r);padding:22px 20px}
+.real .tag{display:inline-block;font-size:.85rem;font-weight:600;color:var(--lagon);background:var(--lagon-pale);border-radius:999px;padding:3px 10px;margin-bottom:10px}
+.real h3{font-size:1.15rem;margin-bottom:6px}
+.real p{font-size:.98rem;color:var(--gris);margin:0}
+.real{background:var(--lagon-mist)}
+
+.ia .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:36px}
+@media(max-width:900px){.ia .grid{grid-template-columns:1fr}}
+.ia article{background:var(--lagon-pale);border-radius:var(--r);padding:24px 22px}
+.ia h3{margin-bottom:6px}.ia p{font-size:1rem;margin:0}
+.ia .px{display:block;margin-top:10px;font-family:var(--fh);color:var(--lagon);font-weight:500}
+.ia .links{margin-top:28px;display:flex;gap:14px;flex-wrap:wrap}
+
+.apropos{background:var(--volcan);color:#fff}
+.apropos h2{color:#fff}.apropos p{color:#C9D6D8;font-size:1.08rem}
+.apropos .grid{display:grid;grid-template-columns:1fr 1fr;gap:40px}
+@media(max-width:820px){.apropos .grid{grid-template-columns:1fr}}
+.apropos ul{padding-left:18px;color:#C9D6D8}
+</style>
+</head>
+<body>
+<header>
+ <nav class="wrap" aria-label="Navigation principale">
+  <a class="logo" href="index.html">Pixel<span>Kréol</span></a>
+  <button class="burger" aria-label="Ouvrir le menu" aria-expanded="false" onclick="const u=document.getElementById('menu');const o=u.classList.toggle('open');this.setAttribute('aria-expanded',o)">☰</button>
+  <ul id="menu">
+   <li><a href="#presence">Présence numérique</a></li>
+   <li><a href="#bureau-ia">Bureau IA</a></li>
+   <li><a href="pixelkreol-agents-communication.html">Interagir avec les agents</a></li>
+   <li><a href="#realisations">Réalisations</a></li>
+   <li><a href="#kap">Kap Numérik</a></li>
+   <li><a href="#apropos">À propos</a></li>
+   <li><a href="#contact" class="btn btn-p" style="padding:.55em 1.2em">Rendez-vous gratuit</a></li>
+  </ul>
+ </nav>
+</header>
+<main id="top">
+
+<section class="hero2">
+ <div class="wrap">
+  <h1>Votre entreprise, visible et bien organisée.</h1>
+  <p class="lead">PixelKréol fait deux choses pour les entreprises et les particuliers de La Réunion : vous rendre visible en ligne, et faire tourner votre administratif avec des assistants IA installés chez vous. Les deux peuvent être financés.</p>
+  <div class="poles">
+   <a class="pole a" href="#presence">
+    <h2>Présence numérique</h2>
+    <p>Site web, application, photo, vidéo, réseaux sociaux, référencement. Jusqu'à 80 % financé par Kap Numérik pour les TPE réunionnaises.</p>
+    <span class="go">Voir les services →</span>
+   </a>
+   <a class="pole b" href="#bureau-ia">
+    <h2>Bureau IA local</h2>
+    <p>Des assistants IA sur votre propre serveur qui trient, classent, rédigent, calculent et répondent. Sans abonnement, sans cloud.</p>
+    <span class="go">Découvrir le Bureau IA →</span>
+   </a>
+  </div>
+ </div>
+</section>
+
+<section id="presence">
+ <div class="wrap">
+  <h2>Présence numérique : être trouvé, être choisi</h2>
+  <p>De la photo de votre vitrine jusqu'à la première page de Google, tout est fait ici, à La Réunion, par une seule personne qui suit votre projet du début à la fin.</p>
+  <div class="serv">
+   <article><h3>Sites web &amp; applications</h3><p>Site vitrine, boutique en ligne, application mobile ou outil métier sur mesure. Rapide, adapté au téléphone, prêt pour Google.</p><span class="px">Site vitrine dès 1 200 € HT</span></article>
+   <article><h3>Photo &amp; vidéo</h3><p>Portraits d'équipe, produits, locaux, vidéos courtes pour les réseaux, reportage d'événement. Livraison retouchée et optimisée pour le web.</p><span class="px">Demi-journée dès 390 € HT</span></article>
+   <article><h3>Réseaux sociaux &amp; SEO</h3><p>Calendrier de publication, création des visuels, réponses aux commentaires, référencement local et fiche Google Business.</p><span class="px">Dès 290 € HT / mois</span></article>
+   <article><h3>Outils IA &amp; automatisation</h3><p>Automatiser les devis, les relances, le tri des mails, les publications. La porte d'entrée vers le Bureau IA.</p><span class="px">Premier automatisme dès 490 € HT</span></article>
+  </div>
+ </div>
+</section>
+
+<section class="ba">
+ <div class="wrap">
+  <h2>Comment ça se passe</h2>
+  <table>
+   <thead><tr><th scope="col">Étape</th><th scope="col">Ce qui se passe</th></tr></thead>
+   <tbody>
+    <tr><td>1. Rendez-vous découverte, gratuit</td><td>On regarde ce que vous avez, ce qui vous manque, et ce que Kap Numérik peut financer.</td></tr>
+    <tr><td>2. Devis et dossier d'aide</td><td>Un devis clair, et le dossier Kap Numérik monté avec vous avant de commencer.</td></tr>
+    <tr><td>3. Création</td><td>Photos, textes, site, réseaux : vous validez chaque étape, rien ne part sans votre accord.</td></tr>
+    <tr><td>4. Mise en ligne et formation</td><td>Tout est en ligne, et vous savez le faire vivre : une heure de formation, un guide simple.</td></tr>
+    <tr><td>5. Suivi</td><td>Mises à jour, statistiques, ajustements. Optionnel, sans engagement.</td></tr>
+   </tbody>
+  </table>
+ </div>
+</section>
+
+<section class="ia" id="bureau-ia">
+ <div class="wrap">
+  <h2>Bureau IA local : un bureau qui travaille pendant que vous dormez</h2>
+  <p>Un serveur installé dans vos locaux, avec une équipe d'assistants IA spécialisés : archiviste, secrétaire, comptable, devis et factures, gestionnaire locatif, juriste, commercial. Ils font seuls ce qui ne vous engage pas, et attendent votre « OUI » pour le reste. Vos données ne quittent jamais vos murs.</p>
+  <div class="grid">
+   <article><h3>Assistant Maison</h3><p>Pour les particuliers : classer des années de papiers, préparer les démarches, suivre un parent, gérer un bien.</p><span class="px">1 990 € TTC</span></article>
+   <article><h3>Bureau Essentiel</h3><p>Pour les indépendants, artisans et TPE : archiviste, secrétaire, devis et factures, tri du courrier.</p><span class="px">5 500 € HT</span></article>
+   <article><h3>Bureau Complet</h3><p>Pour les PME, cabinets et holdings : jusqu'à neuf assistants métier, circuit de validation, remplacement du NAS.</p><span class="px">13 900 € HT</span></article>
+  </div>
+  <div class="links" style="margin-top:28px;display:flex;gap:14px;flex-wrap:wrap">
+   <a class="btn btn-p" href="pixelkreol-bureau-ia.html">Tout sur le Bureau IA</a>
+   <a class="btn btn-s" href="secteurs.html">Les assistants de votre métier</a>
+   <a class="btn btn-s" href="pixelkreol-agents-communication.html">Essayer les agents</a>
+  </div>
+ </div>
+</section>
+
+<section class="real" id="realisations">
+ <div class="wrap">
+  <h2>Réalisations</h2>
+  <p>Des projets menés pour des clients de l'île et des outils conçus par PixelKréol. Chacun est fait ici, dans un fichier léger, sans dépendre d'un service extérieur.</p>
+  <div class="grid">
+   <article><span class="tag">Bureau IA</span><h3>Bureau IA — ABI Holding</h3><p>Neuf assistants IA sur serveur local pour une holding de promotion immobilière : appels de fonds, comptabilité, baux, archivage. Remplacement du NAS, zéro donnée dans le cloud.</p></article>
+   <article><span class="tag">Site &amp; outil métier</span><h3>Lagon Assur</h3><p>Comparateur d'assurance moto pour La Réunion : assureurs réellement présents sur l'île, agences vérifiées, liens directs vers les devis officiels.</p></article>
+   <article><span class="tag">Site vitrine</span><h3>Répar'O Max</h3><p>Site complet pour un atelier de réparation électronique à La Réunion : services, tarifs, prise de contact, référencement local.</p></article>
+   <article><span class="tag">Outil IA</span><h3>TurfExpert / HippoDash</h3><p>Application mobile de pronostics hippiques avec données en direct et moteur d'analyse IA.</p></article>
+   <article><span class="tag">Outil IA</span><h3>PromptForge</h3><p>Outil francophone d'aide à la rédaction de consignes pour les IA : gabarits, variables, bibliothèque réutilisable.</p></article>
+   <article><span class="tag">Logiciel</span><h3>Kréol Studio</h3><p>Créateur de sites web visuel, dans le navigateur et en application macOS : on dessine, on publie.</p></article>
+   <article><span class="tag">Logiciel</span><h3>SiteForge Studio</h3><p>Constructeur de sites par glisser-déposer, qui produit un fichier unique léger et rapide à héberger.</p></article>
+   <article><span class="tag">Analyse &amp; e-commerce</span><h3>Radar des tendances 974</h3><p>Veille des tendances réseaux sociaux à La Réunion et simulateur de marge pour l'e-commerce et le dropshipping.</p></article>
+   <article><span class="tag">Application</span><h3>PixelPlay</h3><p>Lecteur multimédia Android pour flux vidéo, conçu pour la télévision et le mobile.</p></article>
+  </div>
+ </div>
+</section>
+
+<section id="kap">
+ <div class="wrap">
+  <h2>Kap Numérik : jusqu'à 80 % de votre projet financé</h2>
+  <p>La Région Réunion, avec le FEDER, rembourse une partie de vos dépenses numériques réalisées auprès d'un prestataire. PixelKréol monte le dossier avec vous ; la Région préfinance.</p>
+  <div class="kapbox">
+   <div>
+    <h3>Qui peut en bénéficier</h3>
+    <ul>
+     <li>TPE de moins de 20 salariés dont le siège est à La Réunion, inscrites au RCS ou au Registre des métiers</li>
+     <li>Professions libérales non réglementées et associations de moins de 10 salariés</li>
+     <li>Un dossier par gérant et par an, sur un projet distinct du précédent</li>
+    </ul>
+    <p style="font-size:.95rem;color:var(--gris);margin-top:12px">Sont exclus le secteur numérique, les professions réglementées, l'agriculture et la pêche. Montants et conditions évoluent chaque année : ils sont vérifiés avec vous au rendez-vous découverte.</p>
+   </div>
+   <div>
+    <h3>Montants</h3>
+    <table>
+     <tr><th>Taille</th><th>Remboursement</th><th>Plafond</th></tr>
+     <tr><td>0 à 9 salariés</td><td>jusqu'à 80 %</td><td>3 200 €</td></tr>
+     <tr><td>10 à 19 salariés</td><td>jusqu'à 50 %</td><td>2 000 €</td></tr>
+    </table>
+    <p style="margin-top:14px;font-size:1rem"><b>Exemple :</b> un site vitrine à 1 500 € HT revient à 300 € pour une TPE de moins de 10 salariés.</p>
+   </div>
+  </div>
+ </div>
+</section>
+
+<section class="apropos" id="apropos">
+ <div class="wrap">
+  <div class="grid">
+   <div>
+    <h2>À propos</h2>
+    <p>PixelKréol est l'atelier numérique de Will, basé à La Réunion. Un seul interlocuteur du premier appel à la mise en ligne, qui conçoit, photographie, développe et installe lui-même.</p>
+    <p>Ce qui guide chaque projet : des outils légers qui vous appartiennent, des données qui restent chez vous, et un résultat que vous savez faire vivre sans nous.</p>
+   </div>
+   <div>
+    <h3 style="color:var(--lagon-vif)">Ce que vous trouvez ici et nulle part ailleurs sur l'île</h3>
+    <ul>
+     <li>Présence numérique et assistants IA chez le même prestataire, donc un site qui parle à votre bureau IA</li>
+     <li>Des serveurs IA installés sur place, sans abonnement américain</li>
+     <li>Le dossier Kap Numérik monté avec vous, pas laissé à votre charge</li>
+     <li>Intervention à distance sécurisée partout en France : premier client Bureau IA en Corse</li>
+    </ul>
+   </div>
+  </div>
+ </div>
+</section>
+
+<section class="contact" id="contact">
+ <div class="wrap">
+  <div>
+   <h2>On en parle ?</h2>
+   <p>Un rendez-vous découverte d'une heure, gratuit et sans engagement, en visio ou sur place. Vous repartez avec une liste claire de ce qu'on peut faire, un chiffrage, et ce que Kap Numérik prendra en charge.</p>
+   <p>Par mail : <a href="mailto:mobeeltech@gmail.com">mobeeltech@gmail.com</a></p>
+  </div>
+  <form id="f" onsubmit="return envoi(event)">
+   <label>Votre nom<input name="nom" required autocomplete="name"></label>
+   <label>Votre e-mail<input type="email" name="email" required autocomplete="email"></label>
+   <label>Ce qui vous intéresse<select name="sujet"><option>Site web ou application</option><option>Photo et vidéo</option><option>Réseaux sociaux et SEO</option><option>Bureau IA (entreprise)</option><option>Assistant Maison (particulier)</option><option>Interagir avec les agents</option><option>Je ne sais pas encore</option></select></label>
+   <label>Votre projet en quelques mots<textarea name="msg"></textarea></label>
+   <button class="btn btn-p" type="submit">Demander mon rendez-vous</button>
+   <div class="ok" id="ok">Merci. Votre logiciel de messagerie s'ouvre avec le message prérempli ; il ne reste qu'à l'envoyer.</div>
+  </form>
+ </div>
+</section>
+</main>
+<footer>
+ <div class="wrap">
+  <div>© <span id="an"></span> PixelKréol — La Réunion. <a href="pixelkreol-bureau-ia.html">Bureau IA</a> · <a href="secteurs.html">Par métier</a> · <a href="pixelkreol-agents-communication.html">Essayer les agents</a></div>
+  <div><a href="#" onclick="alert('Mentions légales : à compléter avec SIRET, hébergeur et responsable de publication.');return false">Mentions légales</a> · <a href="#" onclick="alert('Ce site ne dépose aucun cookie de suivi.');return false">Confidentialité</a></div>
+ </div>
+</footer>
+<script>
+function envoi(e){e.preventDefault();const f=new FormData(e.target);
+ const body=`Nom : ${f.get('nom')}\nE-mail : ${f.get('email')}\nSujet : ${f.get('sujet')}\n\n${f.get('msg')}`;
+ location.href='mailto:mobeeltech@gmail.com?subject='+encodeURIComponent('Rendez-vous découverte PixelKréol')+'&body='+encodeURIComponent(body);
+ document.getElementById('ok').style.display='block';return false;}
+document.getElementById('an').textContent=new Date().getFullYear();
+</script>
+</body>
+</html>

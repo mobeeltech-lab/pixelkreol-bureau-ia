@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bureau IA local — Assistants IA installés chez vous | PixelKréol La Réunion</title>
+<meta name="description" content="Des assistants IA sur votre propre serveur, sans abonnement ni cloud : tri du courrier, classement, comptabilité, devis, relances. Gagnez du temps et de l'argent. Entreprises et particuliers, La Réunion et toute la France.">
+<link rel="canonical" href="https://www.pixelkreol.re/bureau-ia">
+<meta name="robots" content="index, follow">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="fr_FR">
+<meta property="og:title" content="Bureau IA local — un bureau qui travaille pendant que vous dormez">
+<meta property="og:description" content="Assistants IA installés chez vous, sur votre serveur. 80 % du travail administratif absorbé, 0 donnée dans le cloud.">
+<meta property="og:url" content="https://www.pixelkreol.re/bureau-ia">
+<meta property="og:image" content="https://www.pixelkreol.re/og-bureau-ia.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#0B5D6B">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<script type="application/ld+json">
+{
+ "@context":"https://schema.org",
+ "@graph":[
+  {"@type":"LocalBusiness","@id":"https://www.pixelkreol.re/#org","name":"PixelKréol","description":"Sites web & apps, photo & vidéo, réseaux sociaux & SEO, outils IA & automatisation pour les entreprises et particuliers de La Réunion.","email":"mobeeltech@gmail.com","url":"https://www.pixelkreol.re","areaServed":["La Réunion","France"],"address":{"@type":"PostalAddress","addressRegion":"La Réunion","addressCountry":"FR"},"priceRange":"€€"},
+  {"@type":"Service","name":"Bureau IA local","provider":{"@id":"https://www.pixelkreol.re/#org"},"serviceType":"Installation d'assistants IA sur serveur local","areaServed":"FR","offers":[
+    {"@type":"Offer","name":"Assistant Maison","price":"1990","priceCurrency":"EUR","description":"Pour les particuliers : archivage et démarches"},
+    {"@type":"Offer","name":"Bureau Essentiel","price":"5500","priceCurrency":"EUR","description":"Pour les indépendants et TPE"},
+    {"@type":"Offer","name":"Bureau Complet","price":"13900","priceCurrency":"EUR","description":"Pour les PME, cabinets et holdings"}]},
+  {"@type":"FAQPage","mainEntity":[
+    {"@type":"Question","name":"Mes données partent-elles sur Internet ?","acceptedAnswer":{"@type":"Answer","text":"Non. Les assistants tournent sur un serveur installé dans vos locaux ou chez vous. Aucun document n'est envoyé à un service externe."}},
+    {"@type":"Question","name":"L'IA peut-elle se tromper ?","acceptedAnswer":{"@type":"Answer","text":"Oui, comme un collaborateur. C'est pourquoi tout ce qui vous engage (contrat, paiement, courrier officiel) attend votre validation avant d'être envoyé."}},
+    {"@type":"Question","name":"Faut-il un abonnement ?","acceptedAnswer":{"@type":"Answer","text":"Non. Vous achetez le serveur et la mise en place une fois. La maintenance est optionnelle."}},
+    {"@type":"Question","name":"Combien de temps pour être opérationnel ?","acceptedAnswer":{"@type":"Answer","text":"De deux semaines pour un particulier à deux mois pour une entreprise avec plusieurs assistants métier."}}
+  ]}
+ ]}
+</script>
+<style>
+:root{
+  --lagon:#0B5D6B; --lagon-vif:#16A6B6; --lagon-pale:#E4F3F5; --lagon-mist:#F3F9FA;
+  --volcan:#1B1A17; --encre:#27302F; --gris:#5C6866; --ligne:#D3E2E4;
+  --veget:#2F7D4A; --veget-pale:#E6F2EA; --corail:#E0562B;
+  --blanc:#FFFFFF;
+  --fh:"Outfit",system-ui,sans-serif; --fb:"Source Sans 3",system-ui,sans-serif;
+  --r:14px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important;animation:none!important}}
+body{margin:0;font-family:var(--fb);font-size:18px;line-height:1.55;color:var(--encre);background:var(--blanc)}
+h1,h2,h3{font-family:var(--fh);line-height:1.12;margin:0 0 .5em;color:var(--volcan);font-weight:700}
+h1{font-size:clamp(2.2rem,5.2vw,3.9rem);letter-spacing:-.02em;max-width:14ch}
+h2{font-size:clamp(1.7rem,3.4vw,2.5rem);letter-spacing:-.015em;max-width:24ch}
+h3{font-size:1.25rem;font-weight:500}
+p{margin:0 0 1em;max-width:62ch}
+a{color:var(--lagon)}
+a:focus-visible,button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--corail);outline-offset:3px}
+.wrap{width:min(1120px,92vw);margin:0 auto}
+section{padding:clamp(56px,8vw,110px) 0}
+.btn{display:inline-block;font-family:var(--fh);font-weight:500;font-size:1.05rem;padding:.85em 1.5em;border-radius:999px;text-decoration:none;border:2px solid transparent;cursor:pointer}
+.btn-p{background:var(--lagon);color:#fff}
+.btn-p:hover{background:#094B57}
+.btn-s{background:transparent;color:var(--lagon);border-color:var(--lagon)}
+.btn-s:hover{background:var(--lagon-pale)}
+
+/* nav */
+header{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--ligne)}
+nav{display:flex;align-items:center;justify-content:space-between;height:68px}
+.logo{font-family:var(--fh);font-weight:700;font-size:1.35rem;color:var(--lagon);text-decoration:none}
+.logo span{color:var(--corail)}
+nav ul{display:flex;gap:26px;list-style:none;margin:0;padding:0}
+nav ul a{text-decoration:none;color:var(--encre);font-weight:600;font-size:.98rem}
+nav ul a:hover{color:var(--lagon)}
+.burger{display:none;background:none;border:0;font-size:1.6rem;cursor:pointer;color:var(--lagon)}
+@media(max-width:820px){
+  nav ul{display:none;position:absolute;left:0;right:0;top:68px;background:#fff;flex-direction:column;padding:18px 4vw 22px;border-bottom:1px solid var(--ligne);gap:16px}
+  nav ul.open{display:flex}.burger{display:block}
+}
+
+/* hero */
+.hero{background:linear-gradient(180deg,var(--lagon-mist) 0%,#fff 100%);padding-top:clamp(48px,7vw,90px)}
+.hero .wrap{display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:center}
+@media(max-width:900px){.hero .wrap{grid-template-columns:1fr}}
+.hero p.lead{font-size:1.25rem;color:var(--gris);max-width:52ch}
+.hero .cta{display:flex;gap:14px;flex-wrap:wrap;margin-top:22px}
+.hero small{display:block;margin-top:14px;color:var(--gris);font-size:.95rem}
+
+/* calculator: the one bold element */
+.calc{background:var(--volcan);color:#fff;border-radius:22px;padding:30px 30px 26px;box-shadow:0 30px 60px -30px rgba(11,93,107,.55)}
+.calc h2{color:#fff;font-size:1.35rem;margin-bottom:6px;max-width:none}
+.calc p{color:#B9C7C9;font-size:1rem;margin-bottom:22px}
+.calc label{display:block;font-size:.95rem;color:#DDE7E8;margin-bottom:6px}
+.calc .row{margin-bottom:18px}
+.calc output{float:right;font-family:var(--fh);font-weight:700;color:var(--lagon-vif)}
+input[type=range]{width:100%;accent-color:var(--lagon-vif);height:6px}
+.seg{display:flex;gap:6px;background:#2A2925;border-radius:999px;padding:4px;margin-bottom:22px}
+.seg button{flex:1;background:transparent;border:0;color:#DDE7E8;padding:9px 6px;border-radius:999px;font-family:var(--fb);font-size:.95rem;font-weight:600;cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--lagon-vif);color:var(--volcan)}
+.res{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:6px}
+.res div{background:#2A2925;border-radius:12px;padding:14px 12px}
+.res strong{display:block;font-family:var(--fh);font-size:1.7rem;color:#fff;line-height:1.1}
+.res span{font-size:.85rem;color:#B9C7C9}
+@media(max-width:480px){.res{grid-template-columns:1fr}.res strong{font-size:1.5rem}}
+
+/* gains */
+.gains{background:#fff}
+.gains .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:28px;margin-top:36px}
+@media(max-width:900px){.gains .grid{grid-template-columns:1fr 1fr}}
+@media(max-width:520px){.gains .grid{grid-template-columns:1fr}}
+.gain{border-top:4px solid var(--lagon-vif);padding-top:18px}
+.gain b{display:block;font-family:var(--fh);font-size:2.3rem;color:var(--lagon);line-height:1;margin-bottom:8px;font-weight:700}
+.gain p{font-size:1rem;color:var(--gris)}
+
+/* avant / après */
+.ba{background:var(--lagon-mist)}
+.ba table{width:100%;border-collapse:collapse;margin-top:34px;background:#fff;border-radius:var(--r);overflow:hidden;font-size:1.02rem}
+.ba th{text-align:left;padding:16px 20px;font-family:var(--fh);font-weight:500;font-size:1.1rem}
+.ba th:first-child{background:#EFEFEC;color:var(--gris)}
+.ba th:last-child{background:var(--lagon);color:#fff}
+.ba td{padding:15px 20px;border-top:1px solid var(--ligne);vertical-align:top;width:50%}
+.ba td:first-child{color:var(--gris)}
+.ba td:last-child{font-weight:600}
+@media(max-width:640px){.ba td,.ba th{display:block;width:100%}.ba td:first-child{border-top:2px solid var(--ligne)}.ba td:last-child{border-top:0;padding-top:0}.ba thead{display:none}}
+
+/* assistants */
+.assist .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:36px}
+@media(max-width:900px){.assist .grid{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.assist .grid{grid-template-columns:1fr}}
+.assist article{background:var(--lagon-pale);border-radius:var(--r);padding:24px 22px}
+.assist article.key{background:var(--lagon);color:#fff;grid-column:span 1}
+.assist article.key h3,.assist article.key p{color:#fff}
+.assist h3{margin-bottom:6px}
+.assist p{font-size:1rem;margin:0;color:var(--encre)}
+
+/* pour qui */
+.qui .tabs{display:flex;gap:8px;margin:28px 0 22px}
+.qui .tabs button{font-family:var(--fh);font-weight:500;font-size:1.05rem;padding:.7em 1.3em;border-radius:999px;border:2px solid var(--lagon);background:#fff;color:var(--lagon);cursor:pointer}
+.qui .tabs button[aria-selected=true]{background:var(--lagon);color:#fff}
+.qui [role=tabpanel]{display:none}
+.qui [role=tabpanel].on{display:grid;grid-template-columns:1fr 1fr;gap:16px 40px}
+@media(max-width:700px){.qui [role=tabpanel].on{grid-template-columns:1fr}}
+.qui li{margin-bottom:10px}
+.qui ul{padding-left:20px;margin:0}
+.qui strong{color:var(--lagon)}
+
+/* étapes */
+.etapes{background:var(--lagon-mist)}
+.etapes ol{list-style:none;padding:0;margin:36px 0 0;display:grid;grid-template-columns:repeat(5,1fr);gap:18px;counter-reset:e}
+@media(max-width:1000px){.etapes ol{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.etapes ol{grid-template-columns:1fr}}
+.etapes li{counter-increment:e;background:#fff;border-radius:var(--r);padding:22px 20px 20px;position:relative}
+.etapes li::before{content:counter(e);font-family:var(--fh);font-weight:700;font-size:2rem;color:var(--lagon-vif);line-height:1;display:block;margin-bottom:10px}
+.etapes h3{font-size:1.1rem}
+.etapes p{font-size:.98rem;margin:0;color:var(--gris)}
+.etapes em{display:block;margin-top:10px;color:var(--lagon);font-style:normal;font-weight:600;font-size:.95rem}
+
+/* offres */
+.offres .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:36px}
+@media(max-width:900px){.offres .grid{grid-template-columns:1fr}}
+.offre{border:2px solid var(--ligne);border-radius:var(--r);padding:28px 26px;display:flex;flex-direction:column}
+.offre.pro{border-color:var(--lagon);box-shadow:0 20px 50px -30px rgba(11,93,107,.5)}
+.offre .qui2{color:var(--gris);font-size:1rem;margin-bottom:12px}
+.offre .prix{font-family:var(--fh);font-size:2rem;color:var(--lagon);margin:6px 0 4px;font-weight:700}
+.offre .prix small{font-size:1rem;color:var(--gris);font-family:var(--fb);font-weight:400}
+.offre ul{padding-left:20px;margin:14px 0 22px;font-size:1rem;flex:1}
+.offre li{margin-bottom:7px}
+.offre .cta-group{display:flex;gap:12px;margin-top:12px;flex-wrap:wrap}
+.offre .btn{align-self:flex-start;margin:0}
+.kap{margin-top:28px;background:#FFF6E8;border-left:5px solid var(--corail);padding:18px 22px;border-radius:0 var(--r) var(--r) 0;font-size:1.02rem}
+
+/* confiance */
+.conf{background:var(--volcan);color:#fff}
+.conf h2{color:#fff}
+.conf .grid{display:grid;grid-template-columns:1fr 1fr;gap:34px 60px;margin-top:36px}
+@media(max-width:760px){.conf .grid{grid-template-columns:1fr}}
+.conf h3{color:var(--lagon-vif);font-weight:700;font-size:1.15rem}
+.conf p{color:#C9D6D8;font-size:1.02rem;margin:0}
+
+/* faq */
+details{border-bottom:1px solid var(--ligne);padding:16px 0}
+summary{cursor:pointer;font-family:var(--fh);font-weight:500;font-size:1.15rem;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:20px}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";font-size:1.6rem;color:var(--lagon-vif);flex:none}
+details[open] summary::after{content:"–"}
+details p{margin:12px 0 0;color:var(--gris)}
+
+/* contact */
+.contact{background:var(--lagon-mist)}
+.contact .wrap{display:grid;grid-template-columns:1fr 1fr;gap:50px;align-items:start}
+@media(max-width:820px){.contact .wrap{grid-template-columns:1fr}}
+form{display:grid;gap:14px;background:#fff;padding:28px;border-radius:var(--r);border:1px solid var(--ligne)}
+form label{font-weight:600;font-size:.98rem;display:grid;gap:6px}
+input,select,textarea{font:inherit;padding:.7em .9em;border:1.5px solid var(--ligne);border-radius:10px;width:100%;background:#fff}
+textarea{min-height:120px;resize:vertical}
+.ok{display:none;background:var(--veget-pale);color:var(--veget);padding:14px;border-radius:10px;font-weight:600}
+
+/* secteurs */
+.sect .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:32px}
+@media(max-width:900px){.sect .grid{grid-template-columns:1fr 1fr}}
+.sect a{display:block;text-decoration:none;color:var(--volcan);background:var(--lagon-pale);border-radius:var(--r);padding:18px 18px;font-family:var(--fh);font-weight:500;font-size:1.05rem;border:2px solid transparent}
+.sect a:hover{border-color:var(--lagon-vif);background:#fff}
+.sect a span{display:block;font-family:var(--fb);font-weight:400;font-size:.92rem;color:var(--gris);margin-top:4px}
+/* avis */
+.avis{background:var(--lagon-mist)}
+.avis .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:36px}
+@media(max-width:900px){.avis .grid{grid-template-columns:1fr}}
+.avis blockquote{margin:0;background:#fff;border-radius:var(--r);padding:26px 24px;border-left:5px solid var(--lagon-vif);font-size:1.02rem}
+.avis blockquote p{margin:0 0 14px;color:var(--encre)}
+.avis footer{padding:0;font-size:.95rem;color:var(--gris)}
+.avis footer b{color:var(--lagon);display:block}
+.avis .note{color:var(--corail);letter-spacing:2px;margin-bottom:10px}
+/* modules */
+.mods{margin-top:36px;border:2px solid var(--ligne);border-radius:var(--r);padding:26px 26px 12px}
+.mods h3{margin-bottom:14px}
+.mods ul{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:1fr 1fr;gap:6px 30px;font-size:1rem}
+@media(max-width:700px){.mods ul{grid-template-columns:1fr}}
+.mods li{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--ligne)}
+.mods li span{color:var(--lagon);font-weight:600;white-space:nowrap}
+footer{padding:40px 0;font-size:.95rem;color:var(--gris)}
+footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+footer a{color:var(--gris)}
+.sr{position:absolute;left:-9999px}
+</style>
+</head>
+<body>
+
+<header>
+ <nav class="wrap" aria-label="Navigation principale">
+  <a class="logo" href="index.html">Pixel<span>Kréol</span></a>
+  <button class="burger" aria-label="Ouvrir le menu" aria-expanded="false" onclick="const u=document.getElementById('menu');const o=u.classList.toggle('open');this.setAttribute('aria-expanded',o)">☰</button>
+  <ul id="menu">
+   <li><a href="index.html">Accueil</a></li>
+   <li><a href="#gains">Les gains</a></li>
+   <li><a href="#assistants">Les assistants</a></li>
+   <li><a href="#pourqui">Pour qui</a></li>
+   <li><a href="secteurs.html">Votre secteur</a></li>
+   <li><a href="pixelkreol-agents-communication.html">Essayer les agents</a></li>
+   <li><a href="#offres">Offres</a></li>
+   <li><a href="#faq">Questions</a></li>
+   <li><a href="#contact" class="btn btn-p" style="padding:.55em 1.2em">Rendez-vous gratuit</a></li>
+  </ul>
+ </nav>
+</header>
+
+<main id="top">
+
+<section class="hero">
+ <div class="wrap">
+  <div>
+   <h1>Un bureau qui travaille pendant que vous dormez.</h1>
+   <p class="lead">Des assistants IA installés chez vous, sur votre propre serveur. Ils trient, classent, rédigent, calculent et répondent. Sans abonnement, et sans envoyer vos données à l'autre bout du monde.</p>
+   <div class="cta">
+    <a class="btn btn-p" href="#contact">Prendre un rendez-vous découverte</a>
+    <a class="btn btn-s" href="#assistants">Voir ce qu'ils font</a>
+    <a class="btn btn-s" href="pixelkreol-agents-communication.html">Essayer les agents</a>
+   </div>
+   <small>Entreprises, cabinets, artisans, associations et particuliers. La Réunion et toute la France, à distance.</small>
+  </div>
+
+  <div class="calc" aria-labelledby="calc-t">
+   <h2 id="calc-t">Combien de temps perdez-vous en paperasse ?</h2>
+   <p>Bougez les curseurs, le résultat se calcule sur votre situation.</p>
+   <div class="seg" role="group" aria-label="Votre profil">
+    <button type="button" aria-pressed="true" data-p="pro">Entreprise</button>
+    <button type="button" aria-pressed="false" data-p="indep">Indépendant</button>
+    <button type="button" aria-pressed="false" data-p="part">Particulier</button>
+   </div>
+   <div class="row">
+    <label for="docs">Documents, mails et courriers traités par semaine <output id="docs-o" for="docs">150</output></label>
+    <input type="range" id="docs" min="10" max="800" step="10" value="150">
+   </div>
+   <div class="row">
+    <label for="min">Minutes par document (chercher, lire, classer, répondre) <output id="min-o" for="min">6</output></label>
+    <input type="range" id="min" min="1" max="20" step="1" value="6">
+   </div>
+   <div class="row" id="row-taux">
+    <label for="taux">Coût horaire chargé du poste (€) <output id="taux-o" for="taux">28</output></label>
+    <input type="range" id="taux" min="12" max="120" step="1" value="28">
+   </div>
+   <div class="res" aria-live="polite">
+    <div><strong id="r-h">—</strong><span>heures rendues par mois</span></div>
+    <div><strong id="r-e">—</strong><span id="r-e-l">économisés par an</span></div>
+    <div><strong id="r-j">—</strong><span>jours de travail par an</span></div>
+   </div>
+  </div>
+ </div>
+</section>
+
+<section class="gains" id="gains">
+ <div class="wrap">
+  <h2>Quatre gains que vous mesurez dès le premier mois</h2>
+  <p>Un assistant IA local n'est pas un gadget de plus. C'est un collaborateur qui connaît vos dossiers par cœur et ne se fatigue jamais.</p>
+  <div class="grid">
+   <div class="gain"><b>Temps</b><p>60 à 70 % du temps administratif part en recherche, classement, ressaisie et relance. Ce temps revient à votre équipe, ou à vous.</p></div>
+   <div class="gain"><b>Traitement</b><p>Un dossier de 200 pages est lu, résumé et relié aux dossiers concernés en moins d'une minute. Un mois de relevés bancaires est rapproché en quelques secondes.</p></div>
+   <div class="gain"><b>Argent</b><p>Coût fixe, connu d'avance. Pour une entreprise, l'investissement est en général amorti en moins d'un an face à un poste ou à des heures de saisie facturées.</p></div>
+   <div class="gain"><b>Solutions</b><p>Face à un problème, l'assistant croise vos documents, la réglementation et le web, et propose plusieurs pistes argumentées avant même que vous ayez cherché.</p></div>
+  </div>
+ </div>
+</section>
+
+<section class="ba">
+ <div class="wrap">
+  <h2>Ce qui change, concrètement</h2>
+  <table>
+   <thead><tr><th scope="col">Aujourd'hui</th><th scope="col">Avec votre bureau IA</th></tr></thead>
+   <tbody>
+    <tr><td>Vous cherchez la facture de mars dans trois dossiers et deux boîtes mail.</td><td>Vous demandez « la facture du plombier de mars ». Elle s'ouvre.</td></tr>
+    <tr><td>Le courrier s'entasse, les relances partent en retard.</td><td>Chaque mail est lu, classé, résumé et signalé à la bonne personne en cinq minutes.</td></tr>
+    <tr><td>La saisie comptable prend un après-midi par semaine.</td><td>Les écritures sont préparées ; vous validez ; l'expert-comptable reçoit un export propre.</td></tr>
+    <tr><td>Une échéance oubliée, une pénalité.</td><td>Chaque date importante est rappelée sept jours avant, puis la veille.</td></tr>
+    <tr><td>Un client ou un prospect attend jusqu'au lendemain.</td><td>Il reçoit une réponse précise en quelques minutes, jour et nuit.</td></tr>
+    <tr><td>Un problème inhabituel, des heures de recherche.</td><td>Trois pistes documentées sur la table. Vous choisissez.</td></tr>
+   </tbody>
+  </table>
+ </div>
+</section>
+
+<section class="assist" id="assistants">
+ <div class="wrap">
+  <h2>Une équipe d'assistants, chacun avec sa fiche de poste</h2>
+  <p>Vous choisissez ceux dont vous avez besoin. On les règle sur vos vrais documents, vos modèles, votre façon de travailler. <a href="pixelkreol-agents-communication.html">Essayer les agents maintenant</a>.</p>
+  <div class="grid">
+   <article class="key"><h3>L'Archiviste</h3><p>Retrouve n'importe quel document par le sens, classe et nomme automatiquement tout ce qui arrive. Il remplace votre NAS ou votre disque partagé, et il répond.</p></article>
+   <article><h3>Le Secrétaire</h3><p>Trie le courrier et les mails, rédige les réponses courantes, tient l'agenda et prévient avant chaque échéance.</p></article>
+   <article><h3>Le Comptable</h3><p>Prépare les écritures, fait les rapprochements bancaires, produit des exports propres pour votre expert-comptable.</p></article>
+   <article><h3>Devis &amp; factures</h3><p>Rédige les devis à partir de vos tarifs, émet les factures, suit les paiements et prépare les relances.</p></article>
+   <article><h3>Le Commercial</h3><p>Rédige les annonces, répond aux prospects en quelques minutes, tient le fichier clients à jour.</p></article>
+   <article><h3>Le Gestionnaire locatif</h3><p>Baux, quittances, révision de loyer, régularisation de charges, relances. Pour un bien ou pour cent.</p></article>
+   <article><h3>Le Juriste</h3><p>Relit vos contrats point par point, prépare les dossiers pour l'avocat ou le notaire, fait la veille réglementaire.</p></article>
+   <article><h3>Les Démarches</h3><p>Impôts, CAF, retraite, succession, déménagement : les bons documents, les bons courriers, dans le bon ordre.</p></article>
+   <article><h3>Le Directeur de cabinet</h3><p>Répartit les demandes entre les assistants, vérifie, et vous envoie une synthèse chaque soir.</p></article>
+  </div>
+ </div>
+</section>
+
+<section class="qui" id="pourqui">
+ <div class="wrap">
+  <h2>Pour qui</h2>
+  <p>Le même principe s'adapte à une holding de vingt personnes comme à une famille noyée sous les papiers.</p>
+  <div class="tabs" role="tablist">
+   <button role="tab" aria-selected="true" aria-controls="t-pro" id="tab-pro">Professionnels</button>
+   <button role="tab" aria-selected="false" aria-controls="t-part" id="tab-part">Particuliers</button>
+  </div>
+  <div role="tabpanel" id="t-pro" aria-labelledby="tab-pro" class="on">
+   <ul>
+    <li><strong>Immobilier</strong> — promotion, gestion, syndic : appels de fonds, baux, quittances, suivi de programmes.</li>
+    <li><strong>Cabinets</strong> — juridique, comptable, architecture, conseil : lecture de dossiers, veille, pièces, courriers.</li>
+    <li><strong>Artisans et commerces</strong> — devis, factures, relances, réponses clients, planning, réseaux sociaux.</li>
+   </ul>
+   <ul>
+    <li><strong>Santé et bien-être</strong> — rendez-vous, rappels, courriers, tri du courrier administratif.</li>
+    <li><strong>Associations et collectivités</strong> — convocations, comptes rendus, subventions, adhérents.</li>
+    <li><strong>Location saisonnière et conciergerie</strong> — réponses voyageurs, plannings, ménages, avis.</li>
+   </ul>
+  </div>
+  <div role="tabpanel" id="t-part" aria-labelledby="tab-part">
+   <ul>
+    <li><strong>Des années de papiers à trier</strong> — impôts, banque, santé, assurances, école. Scannez, l'assistant classe.</li>
+    <li><strong>Une démarche à préparer</strong> — CAF, retraite, succession, déménagement : les documents et les courriers prêts.</li>
+    <li><strong>Un bien à gérer</strong> — location, copropriété, projet de construction ou de rénovation.</li>
+   </ul>
+   <ul>
+    <li><strong>Un parent à accompagner</strong> — ses courriers et rendez-vous suivis, la famille prévenue.</li>
+    <li><strong>Une maison, pas un cloud</strong> — l'assistant vit chez vous. Photos, papiers, courriers : rien ne part sur Internet.</li>
+    <li><strong>Un mini-serveur silencieux</strong> — la taille d'un livre, branché à la box, oublié dans un placard.</li>
+   </ul>
+  </div>
+ </div>
+</section>
+
+<section class="etapes">
+ <div class="wrap">
+  <h2>Comment ça se passe</h2>
+  <ol>
+   <li><h3>Rendez-vous découverte</h3><p>On liste vos tâches récurrentes, vos documents, vos outils.</p><em>1 h, gratuit</em></li>
+   <li><h3>Installation du serveur</h3><p>Un serveur dédié chez vous, sécurisé, sauvegardé. Vos documents existants sont repris et indexés.</p><em>1 à 2 semaines</em></li>
+   <li><h3>Mise en place des assistants</h3><p>Chaque assistant reçoit sa fiche de poste, testée sur vos vrais dossiers.</p><em>2 à 6 semaines</em></li>
+   <li><h3>Formation</h3><p>Une heure par personne, puis deux semaines d'observation pour affiner.</p><em>2 semaines</em></li>
+   <li><h3>Maintenance</h3><p>Mises à jour, sauvegardes surveillées, améliorations au fil de vos retours.</p><em>en continu, optionnel</em></li>
+  </ol>
+ </div>
+</section>
+
+<section class="sect" id="secteurs">
+ <div class="wrap">
+  <h2>Votre métier a son pack d'assistants</h2>
+  <p>Trente-huit packs prêts à installer, un par activité. Choisissez le vôtre pour voir les assistants qui vous seront utiles et ce qu'ils vous rapportent.</p>
+  <div class="grid">
+   <a href="secteurs.html#immobilier">Immobilier<span>promoteur, agence, syndic, conciergerie</span></a>
+   <a href="secteurs.html#batiment">Bâtiment<span>artisan, entreprise générale, architecte</span></a>
+   <a href="secteurs.html#commerce">Commerce &amp; restauration<span>boutique, restaurant, e-commerce</span></a>
+   <a href="secteurs.html#tourisme">Tourisme<span>hôtel, gîte, activités de loisirs</span></a>
+   <a href="secteurs.html#sante">Santé &amp; bien-être<span>cabinet, pharmacie, salon, coach</span></a>
+   <a href="secteurs.html#liberal">Professions libérales<span>avocat, expert-comptable, notaire, courtier</span></a>
+   <a href="secteurs.html#transport">Transport &amp; auto<span>garage, transporteur, auto-école</span></a>
+   <a href="secteurs.html#agri">Agriculture<span>exploitation, coopérative</span></a>
+   <a href="secteurs.html#industrie">Industrie &amp; services<span>atelier, agence, RH, nettoyage</span></a>
+   <a href="secteurs.html#education">Éducation &amp; associations<span>formation, association, collectivité</span></a>
+   <a href="secteurs.html#particuliers">Particuliers<span>maison, aidant, bailleur, étudiant</span></a>
+   <a href="secteurs.html">Tous les packs<span>le catalogue complet</span></a>
+  </div>
+ </div>
+</section>
+
+<section class="offres" id="offres">
+ <div class="wrap">
+  <h2>Les offres</h2>
+  <p>Le serveur vous appartient. Sans maintenance, tout continue de fonctionner.</p>
+  <div class="grid">
+   <div class="offre">
+    <h3>Assistant Maison</h3>
+    <div class="qui2">Particuliers</div>
+    <div class="prix">1 990 € <small>TTC</small></div>
+    <ul>
+     <li>PC reconditionné + accélérateur IA</li>
+     <li>3 assistants : Archiviste, Démarches, Assistant secondaire</li>
+     <li>Reprise de vos scans et fichiers existants</li>
+     <li>Formation d'une heure à la maison ou en visio</li>
+     <li>Maintenance optionnelle dès 49 €/mois</li>
+    </ul>
+    <div class="cta-group">
+     <a class="btn btn-s" href="#contact">Demander un rendez-vous</a>
+     <a class="btn btn-s" href="pixelkreol-agents-communication.html">Voir les agents</a>
+    </div>
+   </div>
+   <div class="offre pro">
+    <h3>Bureau Essentiel</h3>
+    <div class="qui2">Indépendants, artisans, TPE</div>
+    <div class="prix">5 500 € <small>HT</small></div>
+    <ul>
+     <li>GEEKOM A9 Max+388 + AORUS RTX 5060 Ti AI Box</li>
+     <li>5 assistants : Archiviste, Secrétaire, Devis &amp; factures, Commercial, Directeur</li>
+     <li>Tri automatique du courrier et des mails</li>
+     <li>Reprise et indexation de vos documents</li>
+     <li>Formation complète, maintenance dès 300 €/mois</li>
+    </ul>
+    <div class="cta-group">
+     <a class="btn btn-p" href="#contact">Demander un rendez-vous</a>
+     <a class="btn btn-s" href="pixelkreol-agents-communication.html">Voir les agents</a>
+    </div>
+   </div>
+   <div class="offre">
+    <h3>Bureau Complet</h3>
+    <div class="qui2">PME, cabinets, holdings</div>
+    <div class="prix">13 900 € <small>HT</small></div>
+    <ul>
+     <li>GEEKOM A9 Max+388 + AORUS RTX 5060 Ti haute capacité</li>
+     <li>9 assistants métier + 1 service premium au choix</li>
+     <li>Circuit de validation OUI/NON pour tout acte engageant</li>
+     <li>Intégrations complètes : signature électronique, téléphonie, logiciels métier</li>
+     <li>Formation approfondie, maintenance dès 500 €/mois</li>
+    </ul>
+    <div class="cta-group">
+     <a class="btn btn-s" href="#contact">Demander un rendez-vous</a>
+     <a class="btn btn-s" href="pixelkreol-agents-communication.html">Voir les agents</a>
+    </div>
+   </div>
+  </div>
+  <div class="kap">À La Réunion, le dispositif <strong>Kap Numérik</strong> (Région Réunion / FEDER) peut financer une partie de votre projet. On monte le dossier avec vous.</div>
+  <div class="mods">
+   <h3>Modules ajoutables à toute offre professionnelle</h3>
+   <ul>
+    <li>Standard téléphonique IA (messages vocaux transcrits et traités)<span>dès 900 €</span></li>
+    <li>Signature électronique intégrée<span>dès 600 €</span></li>
+    <li>Réseaux sociaux : calendrier, posts, réponses, reporting<span>1 200 €</span></li>
+    <li>Veille concurrentielle hebdomadaire<span>800 €</span></li>
+    <li>Multilingue : créole, anglais, allemand, italien, chinois<span>500 €</span></li>
+    <li>Tableau de bord direction hebdomadaire (PDF)<span>900 €</span></li>
+    <li>Second site ou agence synchronisé<span>2 500 €</span></li>
+    <li>Montée en puissance : accélérateur IA 16 Go<span>1 200 €</span></li>
+   </ul>
+  </div>
+  <div style="text-align:center;margin-top:32px;padding:24px;background:#F3F9FA;border-radius:8px;">
+    <h3 style="margin-top:0;">Grille tarifaire complète</h3>
+    <p>Consultez tous les packs, services inclus et exemples sur-mesure.</p>
+    <a class="btn btn-p" href="tarification-bureau-ia.html">Consulter la grille tarifaire</a>
+  </div>
+ </div>
+</section>
+
+<section class="conf">
+ <div class="wrap">
+  <h2>Pourquoi chez vous plutôt qu'en ligne</h2>
+  <div class="grid">
+   <div><h3>Vos données restent dans vos murs</h3><p>Contrats, comptes, données de santé, photos de famille : rien ne transite par un prestataire extérieur. La conformité RGPD devient simple à expliquer.</p></div>
+   <div><h3>Vous gardez la signature</h3><p>Les assistants préparent, classent, calculent, répondent aux questions courantes. Tout ce qui engage (contrat, paiement, courrier officiel) attend votre « OUI ».</p></div>
+   <div><h3>Un coût fixe, pas un compteur</h3><p>Aucun abonnement au nombre de requêtes ou d'utilisateurs. Vous savez ce que ça coûte avant, et ça ne bouge pas après.</p></div>
+   <div><h3>Un système qui vous appartient</h3><p>Documentation complète remise à la livraison. Tout prestataire peut le reprendre. Quand un meilleur cerveau IA sort, on le change en une heure.</p></div>
+  </div>
+ </div>
+</section>
+
+<!-- TÉMOIGNAGES : exemples rédigés pour la maquette. À remplacer par des avis réels et vérifiables avant mise en ligne (un faux avis est une pratique commerciale trompeuse, art. L121-1 du Code de la consommation). -->
+<section class="avis" id="avis">
+ <div class="wrap">
+  <h2>Ils ont installé leur bureau IA</h2>
+  <div class="grid">
+   <blockquote>
+    <div class="note" aria-label="5 sur 5">★★★★★</div>
+    <p>« On cherchait un document dans le NAS, ça prenait dix minutes et trois personnes. Maintenant je demande à l'Archiviste et il me sort le bon PDF avec les pièces liées. Les appels de fonds sont prêts le jour où l'architecte envoie son attestation ; je relis, je clique. »</p>
+    <footer><b>Dirigeant, promotion immobilière</b>Corse-du-Sud — Bureau Complet</footer>
+   </blockquote>
+   <blockquote>
+    <div class="note" aria-label="5 sur 5">★★★★★</div>
+    <p>« Je fais mes devis depuis le chantier : une photo, un vocal, et le devis est dans ma boîte avec mes tarifs. Les relances partent toutes seules, j'ai récupéré deux factures qui traînaient depuis six mois. »</p>
+    <footer><b>Plombier-chauffagiste</b>Saint-Pierre, La Réunion — Bureau Essentiel</footer>
+   </blockquote>
+   <blockquote>
+    <div class="note" aria-label="5 sur 5">★★★★★</div>
+    <p>« Ma mère reçoit des courriers de partout. L'assistant les classe, me prévient quand il y a une échéance, et prépare les dossiers pour la mutuelle et l'APA. Je dors mieux, et ses papiers ne quittent pas sa maison. »</p>
+    <footer><b>Aidante familiale</b>Saint-Denis, La Réunion — Assistant Maison</footer>
+   </blockquote>
+  </div>
+ </div>
+</section>
+
+<section id="faq">
+ <div class="wrap">
+  <h2>Questions fréquentes</h2>
+  <details><summary>Mes données partent-elles sur Internet ?</summary><p>Non. Les assistants tournent sur un serveur installé dans vos locaux ou chez vous. Aucun document n'est envoyé à un service externe. Seule la veille réglementaire consulte le web, sans transmettre vos fichiers.</p></details>
+  <details><summary>L'IA peut-elle se tromper ?</summary><p>Oui, comme n'importe quel collaborateur. C'est pourquoi tout ce qui vous engage attend votre validation, et pourquoi chaque action automatique est notée dans un journal que vous pouvez relire.</p></details>
+  <details><summary>Faut-il un abonnement ?</summary><p>Non. Vous achetez le serveur et la mise en place une fois. La maintenance est optionnelle et résiliable.</p></details>
+  <details><summary>Est-ce que ça remplace mon expert-comptable ou mon avocat ?</summary><p>Non, et ce n'est pas le but. Les assistants leur préparent un travail propre, ce qui réduit leurs heures de saisie et de relecture, donc leurs honoraires.</p></details>
+  <details><summary>Combien de temps pour être opérationnel ?</summary><p>Deux semaines pour un particulier, de quatre à huit semaines pour une entreprise avec plusieurs assistants métier.</p></details>
+  <details><summary>Et si le serveur tombe en panne ?</summary><p>Une sauvegarde est faite chaque nuit sur un second disque, plus une copie chiffrée hors site. Un plan de reprise d'une page est remis à la livraison.</p></details>
+  <details><summary>Intervenez-vous en dehors de La Réunion ?</summary><p>Oui. L'installation logicielle, les réglages et la formation se font à distance de façon sécurisée. Le serveur est expédié préconfiguré, ou un déplacement est organisé pour les projets d'entreprise.</p></details>
+ </div>
+</section>
+
+<section class="contact" id="contact">
+ <div class="wrap">
+  <div>
+   <h2>Parlons de vos papiers</h2>
+   <p>Un rendez-vous découverte d'une heure, gratuit et sans engagement. Vous repartez avec une liste claire de ce qu'un bureau IA ferait pour vous, et un chiffrage.</p>
+   <p>Par mail : <a href="mailto:mobeeltech@gmail.com">mobeeltech@gmail.com</a></p>
+   <p>PixelKréol — La Réunion (974). Sites web &amp; apps, photo &amp; vidéo, réseaux sociaux &amp; SEO, outils IA &amp; automatisation.</p>
+  </div>
+  <form id="f" onsubmit="return envoi(event)">
+   <label>Votre nom<input name="nom" required autocomplete="name"></label>
+   <label>Votre e-mail<input type="email" name="email" required autocomplete="email"></label>
+   <label>Vous êtes<select name="profil"><option>Une entreprise</option><option>Un indépendant / artisan</option><option>Une association</option><option>Un particulier</option></select></label>
+   <label>Sujet<select name="sujet"><option>Demander un rendez-vous</option><option>Interagir avec les agents</option><option>Poser une question</option></select></label>
+   <label>Ce qui vous prend le plus de temps<textarea name="msg" placeholder="Ex. : le courrier, les factures, retrouver les documents, les relances…"></textarea></label>
+   <button class="btn btn-p" type="submit">Demander mon rendez-vous</button>
+   <div class="ok" id="ok">Merci. Votre logiciel de messagerie s'ouvre avec le message prérempli ; il ne reste qu'à l'envoyer.</div>
+  </form>
+ </div>
+</section>
+
+</main>
+
+<footer>
+ <div class="wrap">
+  <div>© <span id="an"></span> PixelKréol — La Réunion. <a href="#top">Haut de page</a></div>
+  <div><a href="pixelkreol-agents-communication.html">Essayer les agents</a> · <a href="#" onclick="alert('Mentions légales : à compléter avec SIRET, hébergeur et responsable de publication.');return false">Mentions légales</a> · <a href="#" onclick="alert('Politique de confidentialité : ce site ne dépose aucun cookie de suivi.');return false">Confidentialité</a></div>
+ </div>
+</footer>
+
+<script>
+// Calculateur
+const P={pro:{docs:150,min:6,taux:28,rate:.7},indep:{docs:60,min:8,taux:45,rate:.7},part:{docs:15,min:12,taux:0,rate:.75}};
+let prof='pro';
+const $=id=>document.getElementById(id);
+const fmt=n=>new Intl.NumberFormat('fr-FR').format(Math.round(n));
+function calc(){
+  const d=+$('docs').value,m=+$('min').value,t=+$('taux').value,r=P[prof].rate;
+  $('docs-o').value=d;$('min-o').value=m;$('taux-o').value=t;
+  const hMois=d*m/60*4.33*r; const hAn=hMois*12;
+  $('r-h').textContent=fmt(hMois)+' h';
+  $('r-j').textContent=fmt(hAn/7);
+  if(prof==='part'){$('r-e').textContent=fmt(hAn)+' h';$('r-e-l').textContent='de soirées rendues par an';}
+  else{$('r-e').textContent=fmt(hAn*t)+' €';$('r-e-l').textContent='économisés par an';}
+}
+['docs','min','taux'].forEach(i=>$(i).addEventListener('input',calc));
+document.querySelectorAll('.seg button').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.seg button').forEach(x=>x.setAttribute('aria-pressed','false'));
+  b.setAttribute('aria-pressed','true');prof=b.dataset.p;
+  const p=P[prof];$('docs').value=p.docs;$('min').value=p.min;$('taux').value=p.taux||28;
+  $('row-taux').style.display=prof==='part'?'none':'';calc();
+}));
+calc();
+// Onglets
+document.querySelectorAll('[role=tab]').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('[role=tab]').forEach(x=>x.setAttribute('aria-selected','false'));
+  document.querySelectorAll('[role=tabpanel]').forEach(x=>x.classList.remove('on'));
+  t.setAttribute('aria-selected','true');$(t.getAttribute('aria-controls')).classList.add('on');
+}));
+// Formulaire → mailto (à remplacer par un service de formulaire ou un backend)
+function envoi(e){
+  e.preventDefault();const f=new FormData(e.target);
+  const body=`Nom : ${f.get('nom')}\nE-mail : ${f.get('email')}\nProfil : ${f.get('profil')}\nSujet : ${f.get('sujet')}\n\n${f.get('msg')}`;
+  location.href='mailto:mobeeltech@gmail.com?subject='+encodeURIComponent('Rendez-vous découverte Bureau IA')+'&body='+encodeURIComponent(body);
+  $('ok').style.display='block';return false;
+}
+$('an').textContent=new Date().getFullYear();
+</script>
+</body>
+</html>
