@@ -1,0 +1,22 @@
+PK ATELIER — les mains du Bureau IA PixelKréol
+==============================================
+
+Ce que ça ajoute aux agents (via l'outil Open WebUI « PK Atelier ») :
+  - Factures, devis, avoirs en PDF : numérotation continue F-/D-/A-AAAA-NNNN, mentions
+    obligatoires, TVA Réunion, acomptes, Factur-X (profil BASIC WL, validé XSD) dès que le SIREN est renseigné
+  - Documents PDF dans la charte PixelKréol à partir de Markdown (propositions, comptes rendus, guides)
+  - Mails avec pièces jointes : l'agent prépare, Will reçoit un lien « OUI, envoyer » (ou envoi direct
+    vers une liste d'adresses de confiance)
+  - Sites vitrine générés en une demande et hébergés sur https://demo.mebeeltech.online/<nom>/
+    (bandeau « maquette », noindex, expiration, mot de passe en option), ou publication de HTML / zip
+
+Installation (console web Hostinger, en root) :
+  1) hPanel > Domaines > mebeeltech.online > DNS : deux enregistrements A « atelier » et « demo » -> IP du VPS
+  2) curl -fsSL https://raw.githubusercontent.com/mobeeltech-lab/pixelkreol-bureau-ia/main/atelier/install-atelier.sh | bash
+  3) Open WebUI > Espace de travail > Outils > Créer : coller outils-openwebui/pk_atelier.py, ID « pk_atelier »,
+     réglage ATELIER_KEY = la clé affichée à la fin de l'installation ; activer l'outil sur les agents
+  4) Mails : renseigner SMTP_* dans /opt/pk-atelier/.env puis relancer l'étape 2
+
+Mise à jour : relancer l'étape 2 (le .env et les données sont conservés).
+Données : /opt/pk-atelier/data (base SQLite, PDF, sites) — à inclure dans les sauvegardes.
+Tests : python3 tests/test_e2e.py (36 contrôles, service + SMTP de test).

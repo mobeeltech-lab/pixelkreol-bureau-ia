@@ -1,0 +1,130 @@
+"""Tests de bout en bout de PK Atelier (service lancé + serveur SMTP de test)."""
+import base64, io, os, time, zipfile, email, glob
+import httpx
+
+URL = os.getenv("URL", "http://127.0.0.1:8000")
+K = {"Authorization": "Bearer " + os.getenv("KEY", "cle-test")}
+MAILDIR = os.getenv("MAILDIR", "/tmp/mails/new")
+DEMO = {"Host": "demo.localhost"}
+c = httpx.Client(base_url=URL, timeout=60)
+ok = 0
+def check(cond, msg):
+    global ok
+    assert cond, msg
+    ok += 1; print("✓", msg)
+
+check(c.get("/health").json()["ok"], "santé")
+check(c.post("/api/pieces", json={}).status_code == 401, "API refusée sans clé")
+f = c.post("/api/pieces", headers=K, json={"type": "facture", "client": {"nom": "Boulangerie Ti Kaz", "email": "gerant@tikaz.re"},
+    "lignes": [{"designation": "Site vitrine", "prix_unitaire_ht": 1200}, {"designation": "Photos", "prix_unitaire_ht": 390, "quantite": 1}]}).json()
+check(f["numero"].startswith("F-2026-") and f["totaux"]["ttc"] == 1725.15, f"facture {f['numero']} TTC {f['totaux']['ttc']}")
+check(f["facturx"] is True, "Factur-X intégré (SIREN renseigné)")
+pdfr = c.get(f["url_pdf"].replace("https://atelier.test", URL))
+check(pdfr.status_code == 200 and pdfr.content[:4] == b"%PDF", "PDF de facture téléchargeable")
+d = c.post("/api/pieces", headers=K, json={"type": "devis", "client": {"nom": "Garage Lagon"}, "lignes": [{"designation": "Bureau Essentiel", "prix_unitaire_ht": 5500}]}).json()
+check(d["numero"].startswith("D-") and d["validite"], "devis avec date de validité")
+f2 = c.post(f"/api/pieces/{d['numero']}/facturer", headers=K).json()
+check(f2["numero"].startswith("F-") and f2["totaux"]["ht"] == 5500, "devis transformé en facture")
+n1, n2 = int(f["numero"][-4:]), int(f2["numero"][-4:])
+check(n2 == n1 + 1, "numérotation continue")
+check(c.post(f"/api/pieces/{f['numero']}/payee", headers=K).json()["statut"] == "payé", "facture marquée payée")
+reg = c.get("/api/pieces", headers=K).json()
+check(any(r["numero"] == d["numero"] and r["statut"] == "accepté" for r in reg), "registre : devis accepté")
+av = c.post("/api/pieces", headers=K, json={"type": "avoir", "ref": f["numero"], "client": {"nom": "Boulangerie Ti Kaz"}, "lignes": [{"designation": "Remise", "prix_unitaire_ht": 100}]}).json()
+check(av["numero"].startswith("A-") and av["totaux"]["ht"] == -100, "avoir négatif")
+doc = c.post("/api/pdf", headers=K, json={"titre": "Proposition Bureau IA", "contenu": "## Contexte\n- point 1\n- point 2\n\n| a | b |\n|---|---|\n| 1 | 2 |"}).json()
+check(c.get(doc["url_pdf"].replace("https://atelier.test", URL)).content[:4] == b"%PDF", "document PDF libre")
+# mails
+before = set(glob.glob(MAILDIR + "/*"))
+m = c.post("/api/mails", headers=K, json={"a": "gerant@tikaz.re", "sujet": "Votre facture", "corps": "Bonjour,\n\nVeuillez trouver **votre facture**.", "pieces_jointes": [f["url_pdf"]], "agent": "Comptabilité"}).json()
+check(m["statut"] == "à valider" and "/valider/" in m["lien_validation"], "mail en attente de validation")
+time.sleep(1.5)
+notif = set(glob.glob(MAILDIR + "/*")) - before
+from email.header import decode_header, make_header
+sujet_notif = str(make_header(decode_header(email.message_from_string(open(list(notif)[0]).read())["Subject"]))) if len(notif) == 1 else ""
+check(sujet_notif.startswith("[À valider] Votre facture"), f"notification de validation envoyée à Will : {sujet_notif}")
+lien = m["lien_validation"].replace("https://atelier.test", URL)
+page = c.get(lien).text
+check("OUI, envoyer" in page and "Votre facture" in page, "page de validation affichée")
+check(c.get(lien.split("?")[0] + "?t=faux").text.startswith("<h1>Lien invalide"), "jeton de validation vérifié")
+before = set(glob.glob(MAILDIR + "/*"))
+r = c.post(lien.split("?")[0], data={"t": lien.split("t=")[1], "action": "envoyer"})
+check("Mail envoyé" in r.text, "validation → envoi")
+time.sleep(1.5)
+nouveaux = set(glob.glob(MAILDIR + "/*")) - before
+msg = email.message_from_string(open(list(nouveaux)[0]).read())
+pj = [p.get_filename() for p in msg.walk() if p.get_filename()]
+check(msg["To"] == "gerant@tikaz.re" and pj == [f["numero"] + ".pdf"], f"mail reçu avec la facture en pièce jointe {pj}")
+r2 = c.post(lien.split("?")[0], data={"t": lien.split("t=")[1], "action": "envoyer"})
+time.sleep(1)
+check(len(set(glob.glob(MAILDIR + "/*")) - before) == 1, "pas de double envoi")
+w = c.post("/api/mails", headers=K, json={"a": "will@test.re", "sujet": "Direct", "corps": "test"}).json()
+check(w.get("mode") == "direct" and w["statut"] == "envoyé", "liste blanche : envoi direct")
+check(c.post("/api/mails", headers=K, json={"a": "pas-une-adresse", "sujet": "x", "corps": "y"}).status_code == 400, "adresse invalide refusée")
+# sites
+s = c.post("/api/sites/generer", headers=K, json={"entreprise": "Boulangerie Ti Kaz", "activite": "Boulangerie artisanale", "ville": "Saint-Paul",
+    "slogan": "Le bon pain du matin", "services": [{"titre": "Pain au levain", "texte": "Cuit au feu de bois"}, {"titre": "Gâteaux péi", "texte": "Patate, manioc, banane"}],
+    "atouts": ["Farines locales", "Ouvert 7j/7"], "telephone": "0692 12 34 56", "email": "contact@tikaz.re", "horaires": "6h-19h", "style": "volcan"}).json()
+check(s["url"].endswith("/") and s["slug"] == "boulangerie-ti-kaz", f"site généré à l'adresse voulue : {s['slug']}")
+h = c.get(f"/{s['slug']}/", headers=DEMO)
+check(h.status_code == 200 and "Maquette de démonstration" in h.text and 'noindex' in h.text and "LocalBusiness" in h.text and "wa.me/262692123456" in h.text, "site démo servi (bandeau, noindex, SEO, WhatsApp)")
+check(c.get(f"/{s['slug']}", headers=DEMO, follow_redirects=False).status_code in (307, 302), "redirection vers la barre finale")
+p = c.post("/api/sites/publier", headers=K, json={"nom": "Maquette ABI", "html": "<html><head><title>ABI</title></head><body><h1>ABI</h1><img src='logo.svg'></body></html>",
+    "fichiers": {"logo.svg": "<svg xmlns='http://www.w3.org/2000/svg'/>"}, "mot_de_passe": "secret974"}).json()
+check(p["protege"], "site protégé publié")
+check(c.get(f"/{p['slug']}/", headers=DEMO).status_code == 401, "mot de passe demandé")
+check(c.post(f"/{p['slug']}/", headers=DEMO, data={"mdp": "mauvais"}).status_code == 401, "mauvais mot de passe refusé")
+rr = c.post(f"/{p['slug']}/", headers=DEMO, data={"mdp": "secret974"}, follow_redirects=False)
+ck = rr.cookies.get(f"pk_{p['slug']}")
+check(rr.status_code == 303 and ck, "bon mot de passe → cookie")
+check("<h1>ABI</h1>" in c.get(f"/{p['slug']}/", headers=DEMO, cookies={f"pk_{p['slug']}": ck}).text, "site protégé visible après connexion")
+check(c.get(f"/{p['slug']}/logo.svg", headers=DEMO, cookies={f"pk_{p['slug']}": ck}).headers["content-type"].startswith("image/svg"), "fichiers annexes servis")
+check(c.post("/api/sites/publier", headers=K, json={"nom": "x", "fichiers": {"index.html": "a", "../../evil": "x"}}).status_code == 400, "chemin ../ refusé")
+check(c.get(f"/{s['slug']}/../../atelier.sqlite", headers=DEMO).status_code == 404, "pas d'accès hors du site")
+buf = io.BytesIO(); z = zipfile.ZipFile(buf, "w"); z.writestr("site/index.html", "<html><body>zip ok</body></html>"); z.writestr("site/css/a.css", "body{}"); z.close()
+zz = c.post("/api/sites/publier", headers=K, json={"nom": "Zip", "zip_base64": base64.b64encode(buf.getvalue()).decode()}).json()
+check("zip ok" in c.get(f"/{zz['slug']}/", headers=DEMO).text, "publication d'un zip")
+check(len(c.get("/api/sites", headers=K).json()) >= 3, "liste des sites")
+check(c.delete(f"/api/sites/{zz['slug']}", headers=K).json()["supprime"] and c.get(f"/{zz['slug']}/", headers=DEMO).status_code == 404, "suppression d'un site")
+check(c.get("/api/mails", headers=K).json()[0]["statut"] in ("envoyé",), "suivi des mails")
+
+# ---------------------------------------------------------------- hébergement autonome
+HEB = os.getenv("HEB", "/tmp/atdata/hebergement")
+check(c.get("/health").json()["hebergement"] is True, "hébergement autonome déclaré actif")
+check(s.get("url_sous_domaine") == "http://boulangerie-ti-kaz.demo.localhost/" and s["url"] == s["url_immediate"], "sous-domaine attribué, lien immédiat donné en attendant le HTTPS")
+dem = __import__("json").load(open(f"{HEB}/demandes/boulangerie-ti-kaz.demo.localhost.json"))
+check(dem["action"] == "ajouter" and dem["type"] == "demo", "demande d'hébergement déposée pour le service hôte")
+sd = c.get("/", headers={"Host": "boulangerie-ti-kaz.demo.localhost"})
+check(sd.status_code == 200 and "Le bon pain du matin" in sd.text and "Maquette de démonstration" in sd.text, "démo servie sur son sous-domaine")
+check(c.get("/", headers={"Host": "inconnu.demo.localhost"}).status_code == 404, "sous-domaine inconnu → 404")
+s2 = c.post("/api/sites/generer", headers=K, json={"entreprise": "Boulangerie Ti Kaz", "activite": "x"}).json()
+check(s2["slug"].startswith("boulangerie-ti-kaz-") and s2["slug"] != s["slug"], "adresse déjà prise → variante unique")
+check(c.post(f"/api/sites/{s['slug']}/production", headers=K, json={"domaine": "pirate.demo.localhost"}).status_code == 400, "domaine réservé refusé")
+check(c.post(f"/api/sites/{s['slug']}/production", headers=K, json={"domaine": "pas un domaine"}).status_code == 400, "domaine invalide refusé")
+pr = c.post(f"/api/sites/{s['slug']}/production", headers=K, json={"domaine": "https://www.Boulangerie-TiKaz.re/"}).json()
+check(pr["domaine"] == "boulangerie-tikaz.re" and "/valider-site/" in pr["lien_validation"], "mise en production demandée (domaine normalisé)")
+check(pr["dns_ok"] is True, "DNS du domaine client vérifié")
+check("Maquette de démonstration" in c.get(f"/{s['slug']}/", headers=DEMO).text, "rien ne change avant le OUI de Will")
+lv = pr["lien_validation"].replace("https://atelier.test", URL)
+check("OUI, mettre en ligne" in c.get(lv).text, "page de validation du site")
+check(c.post(lv.split("?")[0], data={"t": "faux", "action": "valider"}).status_code == 403, "jeton falsifié refusé")
+rv = c.post(lv.split("?")[0], data={"t": lv.split("t=")[1], "action": "valider"})
+check("passé en production" in rv.text, "OUI de Will → production")
+prod = c.get("/", headers={"Host": "boulangerie-tikaz.re"})
+check(prod.status_code == 200 and "Maquette de démonstration" not in prod.text and "x-robots-tag" not in prod.headers, "site servi sur le domaine du client, sans bandeau, indexable")
+check(c.get("/", headers={"Host": "www.boulangerie-tikaz.re"}).status_code == 200, "www. servi aussi")
+dc = __import__("json").load(open(f"{HEB}/demandes/boulangerie-tikaz.re.json"))
+check(dc["type"] == "client" and dc["action"] == "ajouter", "branchement du domaine client demandé au service hôte")
+eh = c.get(f"/api/sites/{s['slug']}/hebergement", headers=K).json()
+check(eh["production"] and eh["expire_le"] is None and eh["domaine"] == "boulangerie-tikaz.re", "état d'hébergement : production, sans expiration")
+ex = c.post(f"/api/sites/{s['slug']}/exporter", headers=K).json()
+zb = zipfile.ZipFile(io.BytesIO(c.get(ex["url_zip"].replace("https://atelier.test", URL)).content))
+check("index.html" in zb.namelist() and b"pk-demo" not in zb.read("index.html"), "export zip propre (sans bandeau)")
+dl = c.delete(f"/api/sites/{s['slug']}", headers=K).json()
+check(dl.get("validation_requise") and c.get("/", headers={"Host": "boulangerie-tikaz.re"}).status_code == 200, "suppression d'un site en production → validation requise")
+lr = dl["lien_validation"].replace("https://atelier.test", URL)
+rr = c.post(lr.split("?")[0], data={"t": lr.split("t=")[1], "action": "valider"})
+check("retiré" in rr.text and c.get("/", headers={"Host": "boulangerie-tikaz.re"}).status_code == 404, "retrait validé par Will")
+dr = __import__("json").load(open(f"{HEB}/demandes/boulangerie-tikaz.re.json"))
+check(dr["action"] == "retirer", "retrait du domaine demandé au service hôte")
+print(f"\n{ok} contrôles réussis")

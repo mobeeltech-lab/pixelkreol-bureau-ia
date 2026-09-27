@@ -1,0 +1,9 @@
+[Unit]
+Description=PK Atelier - hebergement autonome (file d'attente DNS)
+After=network-online.target nginx.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/bin/pk-hebergeur --tout
+Nice=5
+TimeoutStartSec=1800

@@ -1,0 +1,10 @@
+[Unit]
+Description=PK Atelier - relance les domaines en attente de DNS
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=15min
+Unit=pk-hebergeur-file.service
+
+[Install]
+WantedBy=timers.target

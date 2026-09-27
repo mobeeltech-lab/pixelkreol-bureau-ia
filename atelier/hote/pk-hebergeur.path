@@ -1,0 +1,9 @@
+[Unit]
+Description=PK Atelier - surveille les demandes d'hebergement
+
+[Path]
+DirectoryNotEmpty=/opt/pk-atelier/data/hebergement/demandes
+Unit=pk-hebergeur.service
+
+[Install]
+WantedBy=multi-user.target
