@@ -1,6 +1,6 @@
 {
   "name": "PixelKréol - Bureau IA Local",
-  "version": "1.0",
+  "version": 1,
   "buildCommand": "",
   "framework": "html",
   "redirects": [
@@ -10,19 +10,19 @@
     },
     {
       "source": "/bureau-ia",
-      "destination": "/pixelkreol-bureau-ia-improved.html"
+      "destination": "/bureau-ia.html"
     },
     {
       "source": "/agents",
-      "destination": "/pixelkreol-agents-communication.html"
+      "destination": "/agents.html"
     },
     {
       "source": "/secteurs",
-      "destination": "/secteurs-improved.html"
+      "destination": "/secteurs.html"
     },
     {
       "source": "/tarification",
-      "destination": "/tarification-bureau-ia.html"
+      "destination": "/tarification.html"
     }
   ],
   "headers": [
