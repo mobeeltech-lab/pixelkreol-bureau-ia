@@ -26,6 +26,12 @@ if [ -d "$SRC/.git" ]; then git -C "$SRC" pull --ff-only -q; else git clone -q -
 APP="$SRC/atelier"
 chmod -R a+rX "$SRC"   # serveur à umask strict : le conteneur (non-root) doit pouvoir lire le code
 [ -f "$APP/Dockerfile" ] || { echo "Dossier atelier/ introuvable dans le dépôt"; exit 1; }
+# toujours exécuter la dernière version de ce script (celle du dépôt)
+if [ -z "${PK_INSTALL_A_JOUR:-}" ] && [ -f "$APP/install-atelier.sh" ] && ! cmp -s "$0" "$APP/install-atelier.sh"; then
+  cp "$APP/install-atelier.sh" /root/install-atelier.sh 2>/dev/null || true
+  vert "   installeur mis à jour depuis le dépôt : relance"
+  PK_INSTALL_A_JOUR=1 exec bash "$APP/install-atelier.sh" "$@"
+fi
 
 echo "== 2/7 Configuration (.env)"
 if [ ! -f "$DIR/.env" ]; then
