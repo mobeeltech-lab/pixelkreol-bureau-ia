@@ -1,8 +1,8 @@
 """
-title: PK Atelier — factures, PDF, mails et sites démo
+title: PK Atelier — factures, PDF, mails, sites et web
 author: PixelKréol
-description: Donne aux agents du Bureau IA de vraies mains : factures/devis/avoirs PDF (Factur-X), documents PDF dans la charte, préparation et envoi de mails (avec validation de Will), génération et hébergement autonome de sites (lien démo, sous-domaine HTTPS, domaine du client après validation de Will), export zip.
-version: 1.1.0
+description: Donne aux agents du Bureau IA de vraies mains : factures/devis/avoirs PDF (Factur-X), documents PDF dans la charte, préparation et envoi de mails (avec validation de Will), génération et hébergement autonome de sites (lien démo, sous-domaine HTTPS, domaine du client après validation de Will), export zip. Accès au web : recherche privée, lecture de pages, recherche approfondie sourcée, audit de site prospect, registre officiel des entreprises.
+version: 1.2.0
 """
 
 import json
@@ -349,3 +349,89 @@ class Tools:
         """
         r = self._call("POST", f"/api/sites/{identifiant}/exporter")
         return f"❌ {r['erreur']}" if "erreur" in r else f"✅ Zip prêt : {r['url_zip']} ({round(r['octets']/1024)} Ko)"
+
+    # ------------------------------------------------------------ web
+    def rechercher_web(self, requete: str, nombre: int = 8) -> str:
+        """
+        Cherche sur Internet (moteur privé du serveur) : actualités, concurrents, prix, fournisseurs, documentation, aides publiques.
+        Toujours citer les liens des sources dans la réponse.
+        :param requete: La recherche, précise (ex. « aide Kap Numérik 2026 Région Réunion conditions »).
+        :param nombre: Nombre de résultats (1 à 20).
+        :return: Titres, liens et extraits.
+        """
+        r = self._call("POST", "/api/web/chercher", {"requete": requete, "nombre": nombre})
+        if "erreur" in r:
+            return f"❌ {r['erreur']}"
+        if not r.get("resultats"):
+            return "Aucun résultat. Détail : " + " ; ".join(r.get("erreurs", [])) + ". Reformuler la recherche ou réessayer."
+        return f"Résultats ({r['moteur']}) :\n" + "\n".join(f"- {x['titre']}\n  {x['url']}\n  {x['extrait'][:300]}" for x in r["resultats"])
+
+    def lire_page(self, url: str, max_caracteres: int = 12000) -> str:
+        """
+        Ouvre une page web et renvoie son titre, sa description et son texte (site d'un client, d'un concurrent, article, documentation, conditions d'une aide).
+        :param url: Adresse de la page.
+        :param max_caracteres: Longueur maximale du texte (500 à 40000).
+        :return: Le contenu de la page et ses principaux liens.
+        """
+        r = self._call("POST", "/api/web/lire", {"url": url, "max_caracteres": max_caracteres})
+        if "erreur" in r:
+            return f"❌ {r['erreur']}"
+        liens = "\n".join(r.get("liens", [])[:15])
+        return (f"URL : {r['url']} (HTTP {r['statut']})\nTitre : {r.get('titre','')}\nDescription : {r.get('description') or '(aucune)'}\n\n"
+                f"{r.get('texte','')}" + ("\n[… texte tronqué]" if r.get("tronque") else "") + (f"\n\nLiens de la page :\n{liens}" if liens else ""))
+
+    def recherche_approfondie(self, question: str, pages: int = 3) -> str:
+        """
+        Répond à une question avec des sources : cherche sur le web puis lit les meilleures pages. À utiliser pour la veille,
+        les questions réglementaires, fiscales, les aides, les comparatifs. Synthétiser ensuite en citant chaque source.
+        :param question: La question complète.
+        :param pages: Nombre de pages à lire (1 à 5).
+        :return: Extraits des pages lues avec leurs liens.
+        """
+        r = self._call("POST", "/api/web/approfondir", {"question": question, "pages": pages})
+        if "erreur" in r:
+            return f"❌ {r['erreur']}"
+        if not r.get("sources"):
+            return "Aucune page lisible trouvée. Essayer rechercher_web avec une autre formulation."
+        blocs = [f"### Source {i}: {s['titre']}\n{s['url']}\n{s['texte']}" for i, s in enumerate(r["sources"], 1)]
+        autres = "\n".join(f"- {x['titre']} : {x['url']}" for x in r.get("autres_resultats", []))
+        return "\n\n".join(blocs) + (f"\n\nAutres pistes :\n{autres}" if autres else "") + "\n\nConsigne : synthétiser en citant les sources [1], [2]…"
+
+    def auditer_site(self, url: str) -> str:
+        """
+        Audite le site d'un prospect ou d'un client (HTTPS, vitesse, mobile, Google, partage réseaux, bouton appel/WhatsApp, formulaire,
+        mentions légales) avec une note sur 100 et les corrections à proposer. Idéal pour préparer un rendez-vous commercial.
+        :param url: Adresse du site.
+        :return: Note, points forts, points faibles et conseils.
+        """
+        r = self._call("POST", "/api/web/auditer", {"url": url})
+        if "erreur" in r:
+            return f"❌ {r['erreur']}"
+        l = [f"Audit de {r['url']} : {r['note']}/100 ({r['reussis']}/{r['total']} contrôles réussis, réponse en {r['duree_s']} s)"]
+        l += [f"{'✅' if c['ok'] else '❌'} {c['controle']}" + ("" if c["ok"] else f" — {c['conseil']}") for c in r["controles"]]
+        if r.get("generateur"):
+            l.append(f"Outil de création détecté : {r['generateur']}")
+        if r.get("titres"):
+            l.append("Titres : " + " | ".join(f"{t[0].upper()}: {t[1][:50]}" for t in r["titres"]))
+        return "\n".join(l)
+
+    def rechercher_entreprises(self, requete: str = "", code_postal: str = "", departement: str = "974", code_naf: str = "", nombre: int = 10) -> str:
+        """
+        Cherche des entreprises actives dans le registre officiel (API publique de l'État) : pour vérifier un client (SIREN, adresse)
+        ou trouver des prospects par activité et commune.
+        :param requete: Nom ou activité (ex. « boulangerie », « Garage du Lagon »).
+        :param code_postal: Code postal (ex. « 97460 »), facultatif.
+        :param departement: Département (974 par défaut ; vide pour toute la France).
+        :param code_naf: Code d'activité NAF (ex. « 10.71C » boulangerie), facultatif.
+        :param nombre: Nombre de résultats (1 à 25).
+        :return: Liste des entreprises (nom, SIREN, adresse, activité, taille, date de création).
+        """
+        r = self._call("POST", "/api/web/entreprises", {"requete": requete, "code_postal": code_postal, "departement": departement,
+                                                        "naf": code_naf, "nombre": nombre})
+        if "erreur" in r:
+            return f"❌ {r['erreur']}"
+        if not r.get("entreprises"):
+            return "Aucune entreprise trouvée."
+        return f"{r['total']} entreprise(s) au total, {len(r['entreprises'])} affichée(s) :\n" + "\n".join(
+            f"- {e['nom']} · SIREN {e['siren']} · {e.get('adresse') or ''} · NAF {e.get('naf')} · créée {e.get('creation') or '?'}"
+            for e in r["entreprises"])

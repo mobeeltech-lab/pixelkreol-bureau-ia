@@ -20,3 +20,12 @@ Installation (console web Hostinger, en root) :
 Mise à jour : relancer l'étape 2 (le .env et les données sont conservés).
 Données : /opt/pk-atelier/data (base SQLite, PDF, sites) — à inclure dans les sauvegardes.
 Tests : python3 tests/test_e2e.py (36 contrôles, service + SMTP de test).
+
+NOUVEAU (v1.2)
+- Web pour les agents : recherche privée (SearXNG, conteneur pk_searxng), lecture de pages,
+  recherche approfondie avec sources, audit de site prospect, registre officiel des entreprises.
+- Sauvegarde chaque nuit à 3h30 : /opt/pk-sauvegardes/pk-AAAA-MM-JJ_HHMM.tar.gz (14 jours).
+  Lancer à la main : pk-sauvegarde
+  Restaurer l'atelier : docker stop pk_atelier ; tar xzf /opt/pk-sauvegardes/<fichier> -C / opt/pk-atelier ; docker start pk_atelier
+- Gardien toutes les 5 minutes : relance l'atelier ou le moteur de recherche s'ils ne répondent plus.
+  Journal : journalctl -u pk-gardien -u pk-sauvegarde -u pk-hebergeur --since today

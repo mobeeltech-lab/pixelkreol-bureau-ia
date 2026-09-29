@@ -66,5 +66,8 @@ SOUS_DOMAINES = _b("HEBERGEMENT_SOUS_DOMAINES", "false")      # true quand *.dem
 IP_VPS = os.getenv("ATELIER_IP_VPS", "")
 HEBERG = DATA / "hebergement"
 
+# Web (recherche privée SearXNG installée par install-atelier.sh)
+SEARXNG_URL = os.getenv("SEARXNG_URL", "http://pk_searxng:8080")
+
 for d in ("fichiers", "sites", "hebergement/demandes", "hebergement/attente", "hebergement/etat"):
     (DATA / d).mkdir(parents=True, exist_ok=True)

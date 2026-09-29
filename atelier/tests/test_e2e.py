@@ -127,4 +127,14 @@ rr = c.post(lr.split("?")[0], data={"t": lr.split("t=")[1], "action": "valider"}
 check("retiré" in rr.text and c.get("/", headers={"Host": "boulangerie-tikaz.re"}).status_code == 404, "retrait validé par Will")
 dr = __import__("json").load(open(f"{HEB}/demandes/boulangerie-tikaz.re.json"))
 check(dr["action"] == "retirer", "retrait du domaine demandé au service hôte")
+
+
+# ---------------------------------------------------------------- web
+check(c.post("/api/web/lire", headers=K, json={"url": "http://127.0.0.1/"}).status_code == 400, "web : adresse locale refusée")
+check(c.post("/api/web/lire", headers=K, json={"url": "http://169.254.169.254/latest/meta-data"}).status_code == 400, "web : adresse du fournisseur cloud refusée")
+check(c.post("/api/web/auditer", headers=K, json={"url": "http://10.1.2.3"}).status_code == 400, "web : réseau privé refusé (audit)")
+check(c.post("/api/web/entreprises", headers=K, json={}).status_code == 400, "web : recherche d'entreprises sans critère refusée")
+rw = c.post("/api/web/chercher", headers=K, json={"requete": "boulangerie Saint-Paul Réunion"}, timeout=90).json()
+check("resultats" in rw and (rw["moteur"] or any(e.startswith("searxng") for e in rw.get("erreurs", []))), f"web : recherche via SearXNG ({rw.get('moteur') or rw.get('erreurs')})")
+check(c.post("/api/web/chercher", json={"requete": "x"}).status_code == 401, "web : API protégée par la clé")
 print(f"\n{ok} contrôles réussis")

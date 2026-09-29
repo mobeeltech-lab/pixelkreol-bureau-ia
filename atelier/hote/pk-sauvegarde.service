@@ -1,0 +1,8 @@
+[Unit]
+Description=PK - sauvegarde quotidienne (atelier, Open WebUI, n8n)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/pk-sauvegarde
+Nice=10
+IOSchedulingClass=idle

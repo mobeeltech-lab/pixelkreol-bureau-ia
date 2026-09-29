@@ -57,6 +57,13 @@ else
   jaune "   ⚠ Pour une adresse propre par démo, ajoute dans hPanel un enregistrement A « *.demo » → $IP_VPS, puis relance ce script."
 fi
 vert "   pk-hebergeur installé (nginx + certificats HTTPS automatiques, sous validation de Will pour les domaines clients)"
+install -m 755 "$APP/hote/pk-sauvegarde.sh" /usr/local/bin/pk-sauvegarde
+install -m 755 "$APP/hote/pk-gardien.sh" /usr/local/bin/pk-gardien
+install -m 644 "$APP/hote/pk-sauvegarde.service" "$APP/hote/pk-sauvegarde.timer" \
+               "$APP/hote/pk-gardien.service" "$APP/hote/pk-gardien.timer" /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now pk-sauvegarde.timer pk-gardien.timer >/dev/null 2>&1
+vert "   sauvegarde chaque nuit (/opt/pk-sauvegardes, 14 jours) et gardien toutes les 5 minutes"
 
 echo "== 3/7 Image Docker"
 docker build -q -t pk-atelier:latest "$APP" >/dev/null
@@ -78,6 +85,45 @@ if [ -n "$OWUI" ]; then
   vert "   relié à Open WebUI ($OWUI) : l'outil appelle http://pk_atelier:8000"
 else
   jaune "   ⚠ conteneur Open WebUI introuvable : relie-le à la main (docker network connect <réseau> pk_atelier)"
+fi
+
+echo "== 4b Moteur de recherche privé (SearXNG)"
+docker network inspect pk_outils >/dev/null 2>&1 || docker network create pk_outils >/dev/null
+docker network connect pk_outils pk_atelier 2>/dev/null || true
+mkdir -p /opt/pk-searxng
+if [ ! -f /opt/pk-searxng/settings.yml ]; then
+  cat > /opt/pk-searxng/settings.yml <<SX
+use_default_settings: true
+general:
+  instance_name: "PixelKreol recherche"
+server:
+  secret_key: "$(openssl rand -hex 32)"
+  limiter: false
+  image_proxy: false
+  public_instance: false
+search:
+  safe_search: 1
+  default_lang: "fr"
+  formats: [html, json]
+ui:
+  default_locale: fr
+SX
+fi
+chmod -R a+rX /opt/pk-searxng
+docker pull -q searxng/searxng:latest >/dev/null 2>&1 || true
+docker rm -f pk_searxng >/dev/null 2>&1 || true
+docker run -d --name pk_searxng --restart unless-stopped --network pk_outils -e GRANIAN_HOST=0.0.0.0 \
+  --memory 384m -v /opt/pk-searxng:/etc/searxng searxng/searxng:latest >/dev/null
+if [ -n "${OWUI:-}" ]; then
+  for N in $(docker inspect "$OWUI" -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}'); do
+    docker network connect "$N" pk_searxng 2>/dev/null || true
+  done
+fi
+for i in $(seq 1 20); do docker exec pk_atelier python -c "import urllib.request;urllib.request.urlopen('http://pk_searxng:8080/healthz',timeout=3)" >/dev/null 2>&1 && break; sleep 2; done
+if docker exec pk_atelier python -c "import urllib.request;urllib.request.urlopen('http://pk_searxng:8080/healthz',timeout=3)" >/dev/null 2>&1; then
+  vert "   recherche web privée prête (agents : outil PK Atelier · Open WebUI : http://pk_searxng:8080/search?q=<query>)"
+else
+  jaune "   ⚠ SearXNG ne répond pas encore : docker logs pk_searxng"
 fi
 
 echo "== 5/7 nginx"
@@ -152,4 +198,5 @@ echo "  Clé à coller dans Open WebUI (outil « PK Atelier », réglage ATELIER
 echo "      $ATELIER_KEY"
 [ -z "${SMTP_HOTE:-}" ] && jaune "  ⚠ Envoi de mails pas encore configuré : renseigne SMTP_* dans $DIR/.env puis relance le script."
 [ -z "${VENDEUR_SIREN:-}${VENDEUR_SIRET:-}" ] && jaune "  ⚠ SIREN/SIRET vide : les factures portent un bandeau « mentions à compléter » et pas de Factur-X."
+echo "  Sauvegardes : /opt/pk-sauvegardes (chaque nuit, 14 jours) · lancer tout de suite : pk-sauvegarde"
 echo "  Configuration : nano $DIR/.env   ·   Journaux : docker logs -f pk_atelier"

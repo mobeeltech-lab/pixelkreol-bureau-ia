@@ -13,6 +13,7 @@ API (réseau Docker interne, clé obligatoire) :
   GET  /api/sites · DELETE /api/sites/{slug} · POST /api/sites/{slug}/prolonger
   POST /api/sites/{slug}/production   passer en ligne pour de bon (+ domaine client) : validation par Will
   GET  /api/sites/{slug}/hebergement  état DNS / HTTPS · POST /api/sites/{slug}/exporter  zip
+  POST /api/web/chercher · /api/web/lire · /api/web/approfondir · /api/web/auditer · /api/web/entreprises
 Public :
   GET /f/{jeton}/{nom}        télécharger un fichier généré
   GET|POST /valider/{id}      page de validation d'un mail
@@ -30,9 +31,9 @@ from fastapi import Depends, FastAPI, Form, Header, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 
-from . import config, hebergement, mail, pdf, sites, store
+from . import config, hebergement, mail, pdf, sites, store, web
 
-app = FastAPI(title="PK Atelier", version="1.1.0", docs_url=None, redoc_url=None)
+app = FastAPI(title="PK Atelier", version="1.2.0", docs_url=None, redoc_url=None)
 
 
 def cle(authorization: str = Header(default="")):
@@ -142,6 +143,29 @@ class SitePub(BaseModel):
 
 class Production(BaseModel):
     domaine: str = ""
+
+
+class Recherche(BaseModel):
+    requete: str
+    nombre: int = 8
+
+
+class Lecture(BaseModel):
+    url: str
+    max_caracteres: int = 12000
+
+
+class Approfondir(BaseModel):
+    question: str
+    pages: int = 3
+
+
+class Entreprises(BaseModel):
+    requete: str = ""
+    code_postal: str = ""
+    departement: str = ""
+    naf: str = ""
+    nombre: int = 10
 
 
 # ------------------------------------------------------------------ API
@@ -296,6 +320,41 @@ def api_site_export(slug: str):
 @app.post("/api/sites/{slug}/prolonger", dependencies=[Depends(cle)])
 def api_site_prol(slug: str, jours: int = 30):
     return sites.prolonger(slug, jours)
+
+
+# ------------------------------------------------------------------ web
+def _web(f, *a):
+    try:
+        return f(*a)
+    except web.WebErreur as ex:
+        raise HTTPException(400, str(ex))
+    except Exception as ex:
+        raise HTTPException(502, f"Erreur web : {str(ex)[:200]}")
+
+
+@app.post("/api/web/chercher", dependencies=[Depends(cle)])
+def api_chercher(r: Recherche):
+    return _web(web.chercher, r.requete, r.nombre)
+
+
+@app.post("/api/web/lire", dependencies=[Depends(cle)])
+def api_lire(r: Lecture):
+    return _web(web.lire, r.url, max(500, min(r.max_caracteres, 40000)))
+
+
+@app.post("/api/web/approfondir", dependencies=[Depends(cle)])
+def api_approfondir(r: Approfondir):
+    return _web(web.recherche_approfondie, r.question, r.pages)
+
+
+@app.post("/api/web/auditer", dependencies=[Depends(cle)])
+def api_auditer(r: Lecture):
+    return _web(web.auditer, r.url)
+
+
+@app.post("/api/web/entreprises", dependencies=[Depends(cle)])
+def api_entreprises(r: Entreprises):
+    return _web(web.entreprises, r.requete, r.code_postal, r.departement, r.naf, r.nombre)
 
 
 # ------------------------------------------------------------------ public

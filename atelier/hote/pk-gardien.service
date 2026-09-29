@@ -1,0 +1,6 @@
+[Unit]
+Description=PK - gardien de sante (atelier, recherche)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/pk-gardien
