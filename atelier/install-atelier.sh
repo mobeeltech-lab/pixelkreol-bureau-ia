@@ -24,6 +24,7 @@ echo "== 1/7 Code source"
 mkdir -p "$DIR/data"
 if [ -d "$SRC/.git" ]; then git -C "$SRC" pull --ff-only -q; else git clone -q --depth 1 "$DEPOT" "$SRC"; fi
 APP="$SRC/atelier"
+chmod -R a+rX "$SRC"   # serveur à umask strict : le conteneur (non-root) doit pouvoir lire le code
 [ -f "$APP/Dockerfile" ] || { echo "Dossier atelier/ introuvable dans le dépôt"; exit 1; }
 
 echo "== 2/7 Configuration (.env)"
@@ -68,7 +69,16 @@ docker run -d --name pk_atelier --restart unless-stopped ${NET:+--network "$NET"
   -p 127.0.0.1:$PORT:8000 --env-file "$DIR/.env" -v "$DIR/data":/data pk-atelier:latest >/dev/null
 for i in $(seq 1 20); do curl -fsS "http://127.0.0.1:$PORT/health" >/dev/null 2>&1 && break; sleep 1; done
 curl -fsS "http://127.0.0.1:$PORT/health" && echo
-[ -n "$NET" ] && vert "   branché sur le réseau $NET (Open WebUI l'appelle via http://pk_atelier:8000)"
+# brancher l'atelier sur le(s) réseau(x) d'Open WebUI pour que l'outil l'appelle via http://pk_atelier:8000
+OWUI=$(docker ps --format '{{.Names}} {{.Image}}' | awk 'tolower($0) ~ /open-webui|openwebui/ {print $1; exit}')
+if [ -n "$OWUI" ]; then
+  for N in $(docker inspect "$OWUI" -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}'); do
+    docker network connect "$N" pk_atelier 2>/dev/null || true
+  done
+  vert "   relié à Open WebUI ($OWUI) : l'outil appelle http://pk_atelier:8000"
+else
+  jaune "   ⚠ conteneur Open WebUI introuvable : relie-le à la main (docker network connect <réseau> pk_atelier)"
+fi
 
 echo "== 5/7 nginx"
 for H in "$HOTE_API" "$HOTE_DEMO"; do
