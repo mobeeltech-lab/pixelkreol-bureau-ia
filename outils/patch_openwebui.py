@@ -14,12 +14,31 @@ Usage : python3 patch_openwebui.py /chemin/webui.db URL1 CLE1 [URL2 CLE2 ...]
 Code retour : 0 = modifié, 3 = rien à faire (base absente ou jamais configurée).
 """
 import json
+import os
 import sqlite3
 import sys
 import time
 from pathlib import Path
 
 NOS_HOTES = ("pk_orchestrateur", "pk_litellm", "pk_routing_proxy")
+COPIES_GARDEES = 3  # nombre de copies « avant » conservées à côté de la base (les plus anciennes sont retirées)
+
+
+def sauvegarder(db: Path) -> Path:
+    """Copie cohérente de la base AVANT toute modification (retour arrière : remettre cette copie en place)."""
+    cible = db.with_name(f"{db.name}.avant-{time.strftime('%Y%m%d-%H%M%S')}")
+    source, copie = sqlite3.connect(db), sqlite3.connect(cible)
+    try:
+        source.backup(copie)
+    finally:
+        copie.close()
+        source.close()
+    os.chmod(cible, 0o600)
+    anciennes = sorted(db.parent.glob(db.name + ".avant-*"))
+    for vieille in anciennes[:-COPIES_GARDEES]:
+        vieille.unlink()
+    print(f"Copie de sécurité de la base Open WebUI : {cible.name}")
+    return cible
 
 
 def fusion(urls, cles, configs, paires):
@@ -58,9 +77,12 @@ def main() -> int:
                 try:
                     return json.loads(lire[k]) if k in lire and lire[k] is not None else defaut
                 except (TypeError, json.JSONDecodeError):
+                    print(f"Avertissement : le réglage « {k} » est illisible, une valeur vide est utilisée à la place "
+                          "(l'ancienne valeur reste dans la copie de sécurité).", file=sys.stderr)
                     return defaut
             urls, cles, cfgs, n = fusion(j("openai.api_base_urls", []), j("openai.api_keys", []),
                                          j("openai.api_configs", {}), paires)
+            sauvegarder(db)
             maintenant = int(time.time())
             for k, v in (("openai.enable", True), ("openai.api_base_urls", urls),
                          ("openai.api_keys", cles), ("openai.api_configs", cfgs)):
@@ -74,6 +96,7 @@ def main() -> int:
                 print("Configuration vide : les variables d'environnement seront utilisées.")
                 return 3
             cid, brut = ligne
+            sauvegarder(db)
             data = json.loads(brut) if isinstance(brut, str) else brut
             o = data.setdefault("openai", {})
             o["api_base_urls"], o["api_keys"], o["api_configs"], n = fusion(

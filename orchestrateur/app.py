@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+import hmac
 import html
 import json
 import logging
@@ -47,15 +48,27 @@ def cfg(nom: str, defaut: str = "") -> str:
     return os.getenv(nom, defaut)
 
 
+def cfg_nombre(nom: str, defaut: float, mini: float, maxi: float, entier: bool = False):
+    """Lit un réglage numérique ; une valeur illisible ou absurde ne doit jamais empêcher le démarrage."""
+    try:
+        v = float(cfg(nom, str(defaut)))
+    except ValueError:
+        LOG.warning("%s illisible (« %s »), valeur par défaut %s utilisée", nom, cfg(nom), defaut)
+        v = defaut
+    v = max(mini, min(maxi, v))
+    return int(v) if entier else v
+
+
 LITELLM_URL = cfg("LITELLM_URL", "http://pk_litellm:4000").rstrip("/")
 LITELLM_KEY = cfg("LITELLM_MASTER_KEY", "")
 API_KEY = cfg("PK_API_KEY") or LITELLM_KEY
 ADMIN_KEY = cfg("PK_ADMIN_KEY") or API_KEY
 AGENTS_DIR = Path(cfg("PK_AGENTS_DIR", str(Path(__file__).resolve().parent.parent / "agents")))
-TIMEOUT = float(cfg("PK_TIMEOUT", "120"))
+TIMEOUT = cfg_nombre("PK_TIMEOUT", 120, 5, 900)
 ROUTAGE_IA = cfg("PK_ROUTAGE_IA", "true").lower() == "true"
 ANNONCE = cfg("PK_ANNONCE_AGENT", "true").lower() == "true"
-MAX_EQUIPE = int(cfg("PK_EQUIPE_MAX", "4"))
+MAX_EQUIPE = cfg_nombre("PK_EQUIPE_MAX", 4, 1, 8, entier=True)
+DELAI_AGENT = cfg_nombre("PK_EQUIPE_DELAI", 150, 1, 900)   # secondes accordées à chaque agent en mode équipe
 DATABASE_URL = cfg("DATABASE_URL", "")
 
 
@@ -65,7 +78,20 @@ DATABASE_URL = cfg("DATABASE_URL", "")
 def normaliser(texte: str) -> str:
     texte = unicodedata.normalize("NFKD", texte.lower())
     texte = "".join(c for c in texte if not unicodedata.combining(c))
-    return re.sub(r"[^a-z0-9' -]+", " ", texte.replace("’", "'"))
+    texte = re.sub(r"[^a-z0-9' -]+", " ", texte.replace("’", "'"))
+    return re.sub(r"\s+", " ", texte)
+
+
+_SECRETS = re.compile(r"(sk-[A-Za-z0-9_-]{16,}|gsk_[A-Za-z0-9]{16,}|AIza[0-9A-Za-z_-]{20,}"
+                      r"|(?i:bearer)\s+[A-Za-z0-9._~+/=-]{6,})")
+
+
+def masquer(texte: str) -> str:
+    """Retire d'un texte (message d'erreur d'un fournisseur, journal…) tout ce qui ressemble à une clé."""
+    for secret in (LITELLM_KEY, API_KEY, ADMIN_KEY):
+        if secret and len(secret) >= 4:
+            texte = texte.replace(secret, "***")
+    return _SECRETS.sub("***", texte)
 
 
 def texte_du_message(message: dict) -> str:
@@ -79,6 +105,8 @@ def texte_du_message(message: dict) -> str:
 
 def contient_image(messages: list[dict]) -> bool:
     for m in messages:
+        if not isinstance(m, dict):
+            continue
         c = m.get("content")
         if isinstance(c, list) and any(isinstance(p, dict) and p.get("type") in ("image_url", "input_image") for p in c):
             return True
@@ -87,9 +115,15 @@ def contient_image(messages: list[dict]) -> bool:
 
 def dernier_message_utilisateur(messages: list[dict]) -> str:
     for m in reversed(messages):
-        if m.get("role") == "user":
+        if isinstance(m, dict) and m.get("role") == "user":
             return texte_du_message(m)
     return ""
+
+
+def messages_valides(corps: dict) -> list[dict]:
+    """Messages exploitables (objets uniquement) ; les éléments mal formés sont écartés."""
+    brut = corps.get("messages")
+    return [m for m in brut if isinstance(m, dict)] if isinstance(brut, list) else []
 
 
 def erreur(statut: int, message: str, code: str = "erreur") -> JSONResponse:
@@ -99,7 +133,18 @@ def erreur(statut: int, message: str, code: str = "erreur") -> JSONResponse:
 # =====================================================================
 #  Registre des agents (rechargé à chaud)
 # =====================================================================
+JOURS = ("lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche")
+
+
 class Registre:
+    """Agents, socle commun et cerveaux, relus à chaud.
+
+    Règle d'or : un fichier cassé ne fait JAMAIS disparaître les agents déjà chargés. On garde la
+    dernière version valide de chaque fichier et on signale le problème dans `avertissements`.
+    """
+
+    FICHIERS_AGENTS = ("registre.yaml", "perso.yaml")
+
     def __init__(self, dossier: Path):
         self.dossier = dossier
         self._empreinte: tuple = ()
@@ -107,92 +152,153 @@ class Registre:
         self.socle = ""
         self.cerveaux: dict = {}
         self.avertissements: list[str] = []
+        self._derniers_bons: dict[str, list] = {}   # nom de fichier -> dernières entrées lues correctement
         self.recharger(force=True)
 
     def _fichiers(self) -> list[Path]:
         return [self.dossier / n for n in ("registre.yaml", "perso.yaml", "socle.txt", "cerveaux.yaml")]
 
     def _calcul_empreinte(self) -> tuple:
-        return tuple((str(p), p.stat().st_mtime_ns, p.stat().st_size) if p.exists() else (str(p), 0, 0)
-                     for p in self._fichiers())
+        sortie = []
+        for p in self._fichiers():
+            try:
+                st = p.stat()
+                sortie.append((str(p), st.st_mtime_ns, st.st_size))
+            except OSError:
+                sortie.append((str(p), 0, 0))
+        return tuple(sortie)
 
     @staticmethod
-    def valider(a: dict, ids: set[str], nums: set[int]) -> str | None:
+    def valider(a: Any, ids: set[str], nums: set[int]) -> str | None:
+        """Renvoie la raison du refus (en français), ou None si l'agent est valide."""
+        if not isinstance(a, dict):
+            return "entrée illisible (un objet est attendu)"
         for champ in ("id", "num", "nom", "cerveau", "description", "consignes"):
-            if not a.get(champ) and a.get(champ) != 0:
+            v = a.get(champ)
+            if v is None or v == "" or (isinstance(v, (list, dict, str)) and not v):
                 return f"champ « {champ} » manquant"
-        if not ID_RE.match(str(a["id"])):
+        for champ in ("id", "nom", "cerveau", "description", "consignes"):
+            if not isinstance(a[champ], str) or not a[champ].strip():
+                return f"champ « {champ} » doit être un texte"
+        if not ID_RE.fullmatch(a["id"]):
             return f"id « {a['id']} » invalide (minuscules, chiffres, tirets)"
         if a["id"] in ("auto", "equipe"):
             return f"id « {a['id']} » réservé"
         if a["id"] in ids:
             return f"id « {a['id']} » déjà utilisé"
-        try:
-            num = int(a["num"])
-        except (TypeError, ValueError):
+        n = a["num"]
+        if isinstance(n, bool) or not (isinstance(n, int) or (isinstance(n, float) and n.is_integer())
+                                       or (isinstance(n, str) and n.strip().isdigit())):
             return "num doit être un entier"
+        num = int(n)
         if not 1 <= num <= 999:
             return "num doit être entre 1 et 999"
         if num in nums:
             return f"num {num} déjà utilisé"
         if a["cerveau"] not in CERVEAUX_VALIDES:
             return f"cerveau « {a['cerveau']} » inconnu ({', '.join(sorted(CERVEAUX_VALIDES))})"
-        if a.get("famille") and a["famille"] not in FAMILLES:
-            return f"famille « {a['famille']} » inconnue"
+        fam = a.get("famille")
+        if fam is not None and (not isinstance(fam, str) or fam not in FAMILLES):
+            return f"famille « {fam} » inconnue"
+        if a.get("emoji") is not None and not isinstance(a["emoji"], str):
+            return "emoji doit être un texte"
         t = a.get("temperature", 0.4)
-        if not isinstance(t, (int, float)) or not 0 <= t <= 1.5:
+        if isinstance(t, bool) or not isinstance(t, (int, float)) or not 0 <= t <= 1.5:
             return "temperature doit être un nombre entre 0 et 1.5"
-        if not isinstance(a.get("mots_cles", []), list):
-            return "mots_cles doit être une liste"
+        mots = a.get("mots_cles")
+        if mots is not None and (not isinstance(mots, list) or not all(isinstance(m, str) for m in mots)):
+            return "mots_cles doit être une liste de textes"
         return None
+
+    # ------------------------------------------------------------------
+    def _lire_agents(self, nom: str, avert: list[str]) -> list | None:
+        """Entrées du fichier, ou None s'il est illisible (le problème est alors ajouté à `avert`)."""
+        p = self.dossier / nom
+        if not p.exists():
+            return []
+        try:
+            data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+        except (yaml.YAMLError, OSError, UnicodeDecodeError, ValueError) as e:
+            avert.append(f"{nom} illisible : {str(e)[:200]}")
+            return None
+        if not isinstance(data, dict):
+            avert.append(f"{nom} illisible : le fichier doit commencer par « agents: » suivi d'une liste")
+            return None
+        entrees = data.get("agents")
+        if entrees is None:
+            return []
+        if not isinstance(entrees, list):
+            avert.append(f"{nom} illisible : « agents » doit être une liste")
+            return None
+        return entrees
 
     def recharger(self, force: bool = False) -> None:
         empreinte = self._calcul_empreinte()
         if not force and empreinte == self._empreinte:
             return
+        try:
+            self._recharger(empreinte)
+        except Exception as e:  # noqa: BLE001 — jamais de panne générale : on garde ce qui est chargé
+            LOG.exception("Rechargement du registre impossible, version précédente conservée")
+            self._empreinte = empreinte
+            self.avertissements = [f"rechargement impossible : {str(e)[:200]}"]
+
+    def _recharger(self, empreinte: tuple) -> None:
         avert: list[str] = []
         agents: dict[str, dict] = {}
         ids: set[str] = set()
         nums: set[int] = set()
-        for nom in ("registre.yaml", "perso.yaml"):
-            p = self.dossier / nom
-            if not p.exists():
-                continue
-            try:
-                data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
-            except yaml.YAMLError as e:
-                avert.append(f"{nom} illisible : {e}")
-                if nom == "registre.yaml" and self.agents:
-                    LOG.error("registre.yaml invalide, on garde la version précédente : %s", e)
-                    self.avertissements = avert
-                    return
-                continue
-            for a in data.get("agents") or []:
-                if not isinstance(a, dict):
-                    continue
-                pb = self.valider(a, ids, nums)
+        for nom in self.FICHIERS_AGENTS:
+            entrees = self._lire_agents(nom, avert)
+            if entrees is None:  # fichier illisible : on garde sa dernière version valide
+                entrees = self._derniers_bons.get(nom, [])
+                if entrees:
+                    avert.append(f"{nom} : dernière version valide conservée")
+                    LOG.error("%s illisible, dernière version valide conservée", nom)
+            else:
+                self._derniers_bons[nom] = entrees
+            for a in entrees:
+                try:
+                    pb = self.valider(a, ids, nums)
+                except Exception as e:  # noqa: BLE001
+                    pb = f"entrée inexploitable ({type(e).__name__})"
                 if pb:
-                    avert.append(f"{nom} / {a.get('id', '?')} ignoré : {pb}")
+                    avert.append(f"{nom} / {a.get('id', '?') if isinstance(a, dict) else '?'} ignoré : {pb}")
                     continue
                 a = dict(a)
                 a["num"] = int(a["num"])
                 a.setdefault("famille", "client" if nom == "perso.yaml" else "production")
                 a.setdefault("emoji", "🤖")
                 a.setdefault("temperature", 0.4)
-                a.setdefault("mots_cles", [])
+                a["mots_cles"] = a.get("mots_cles") or []
                 a["source"] = nom
                 a["modele"] = f"pk-{a['num']:02d}-{a['id']}"
-                a["_mots"] = [normaliser(str(m)).strip() for m in a["mots_cles"] if str(m).strip()]
+                a["_mots"] = [normaliser(m).strip() for m in a["mots_cles"] if m.strip()]
                 agents[a["id"]] = a
                 ids.add(a["id"])
                 nums.add(a["num"])
+        if not agents and self.agents:
+            avert.append("aucun agent valide dans les fichiers : version précédente conservée")
+            LOG.error("aucun agent valide, version précédente conservée")
+            self._empreinte = empreinte
+            self.avertissements = avert
+            return
         socle_p = self.dossier / "socle.txt"
         cerv_p = self.dossier / "cerveaux.yaml"
-        self.socle = socle_p.read_text(encoding="utf-8").strip() if socle_p.exists() else ""
         try:
-            self.cerveaux = yaml.safe_load(cerv_p.read_text(encoding="utf-8")) if cerv_p.exists() else {}
-        except yaml.YAMLError as e:
-            avert.append(f"cerveaux.yaml illisible : {e}")
+            self.socle = socle_p.read_text(encoding="utf-8").strip() if socle_p.exists() else ""
+        except (OSError, UnicodeDecodeError) as e:
+            avert.append(f"socle.txt illisible : {e}")
+        try:
+            cerveaux = yaml.safe_load(cerv_p.read_text(encoding="utf-8")) if cerv_p.exists() else {}
+            if cerveaux is None:
+                cerveaux = {}
+            if isinstance(cerveaux, dict):
+                self.cerveaux = cerveaux
+            else:
+                avert.append("cerveaux.yaml illisible : un dictionnaire est attendu")
+        except (yaml.YAMLError, OSError, UnicodeDecodeError, ValueError) as e:
+            avert.append(f"cerveaux.yaml illisible : {str(e)[:200]}")
         if not agents:
             avert.append("aucun agent valide")
         self.agents = dict(sorted(agents.items(), key=lambda kv: kv[1]["num"]))
@@ -212,13 +318,16 @@ class Registre:
         return None
 
     def secours(self, cerveau: str) -> list[str]:
-        return list((self.cerveaux or {}).get("secours_entre_cerveaux", {}).get(cerveau, []))
+        table = self.cerveaux.get("secours_entre_cerveaux") if isinstance(self.cerveaux, dict) else None
+        suite = table.get(cerveau) if isinstance(table, dict) else None
+        return [c for c in suite if isinstance(c, str)] if isinstance(suite, list) else []
 
     def prompt_systeme(self, a: dict) -> str:
-        maintenant = dt.datetime.now(TZ).strftime("%A %d/%m/%Y %H:%M")
+        maintenant = dt.datetime.now(TZ)
+        date = f"{JOURS[maintenant.weekday()]} {maintenant.strftime('%d/%m/%Y %H:%M')}"
         parties = [self.socle,
                    f"## Ton poste : {a['emoji']} {a['nom']}\n{a['description']}\n\n{a['consignes'].strip()}",
-                   f"Date et heure à La Réunion : {maintenant}."]
+                   f"Date et heure à La Réunion : {date}."]
         if a["id"] == "orchestrateur":
             equipe = "\n".join(f"- {x['emoji']} {x['nom']} ({x['id']}) : {x['description']}"
                                for x in self.agents.values() if x["id"] != "orchestrateur")
@@ -232,6 +341,9 @@ REGISTRE = Registre(AGENTS_DIR)
 # =====================================================================
 #  Routage automatique
 # =====================================================================
+POLITESSES = re.compile(r"(?<![a-z0-9])(?:aid(?:e|ez|ons)[ -](?:moi|nous)|(?:m|nous)'aider)(?![a-z0-9])")
+
+
 def score_agent(a: dict, texte_norm: str) -> float:
     score = 0.0
     padded = f" {texte_norm} "
@@ -244,14 +356,29 @@ def score_agent(a: dict, texte_norm: str) -> float:
         elif re.search(rf"(?<![a-z0-9]){re.escape(mot)}s?(?![a-z0-9])", padded):
             score += 1.0
     if re.search(rf"(?<![a-z0-9]){re.escape(normaliser(a['nom']).strip())}(?![a-z0-9])", padded):
-        score += 1.5
+        score += 1.5  # le nom du poste est cité tel quel (« juriste », « chef de projet »…)
     return score
 
 
 def classement_mots_cles(texte: str) -> list[tuple[float, dict]]:
-    tn = normaliser(texte)
+    tn = POLITESSES.sub(" ", normaliser(texte))
     notes = [(score_agent(a, tn), a) for a in REGISTRE.agents.values()]
     return sorted(notes, key=lambda x: (-x[0], x[1]["num"]))
+
+
+def agent_cite_par_l_ia(reponse: str) -> dict | None:
+    """Agent désigné par la réponse de l'IA de routage, ou None si elle est floue.
+
+    1) la réponse entière est un identifiant (avec ou sans « pk-NN- », ponctuation tolérée) ;
+    2) sinon, un seul agent distinct est cité dans la phrase.
+    Si plusieurs agents sont cités, on ne devine pas : les mots-clés prennent le relais."""
+    nette = reponse.strip().strip("`'\"*_.,;:!() \n\t").lower()
+    if nette:
+        trouve = REGISTRE.trouver(nette)
+        if trouve:
+            return trouve
+    cites = {mot for mot in re.findall(r"[a-z0-9-]+", reponse.lower()) if mot in REGISTRE.agents}
+    return REGISTRE.agents[cites.pop()] if len(cites) == 1 else None
 
 
 async def routage_ia(client: httpx.AsyncClient, texte: str) -> dict | None:
@@ -270,17 +397,22 @@ async def routage_ia(client: httpx.AsyncClient, texte: str) -> dict | None:
         r = await client.post(f"{LITELLM_URL}/v1/chat/completions", json=corps,
                               headers=entetes_litellm(), timeout=12)
         if r.status_code != 200:
+            LOG.warning("routage IA : LiteLLM a répondu %s (mots-clés utilisés à la place)", r.status_code)
             return None
         reponse = r.json()["choices"][0]["message"]["content"] or ""
-        for mot in re.findall(r"[a-z0-9-]+", reponse.lower()):
-            if mot in REGISTRE.agents:
-                return REGISTRE.agents[mot]
+        agent = agent_cite_par_l_ia(reponse)
+        if agent is None:
+            LOG.warning("routage IA : réponse inexploitable (« %s »), mots-clés utilisés à la place",
+                        masquer(reponse.strip())[:80])
+        return agent
     except Exception as e:  # noqa: BLE001 — le routage IA est un bonus, jamais bloquant
-        LOG.info("routage IA indisponible : %s", e)
+        LOG.warning("routage IA indisponible (%s : %s), mots-clés utilisés à la place",
+                    type(e).__name__, masquer(str(e))[:120])
     return None
 
 
 async def choisir_agent(client: httpx.AsyncClient, messages: list[dict]) -> tuple[dict, str]:
+    messages = [m for m in messages if isinstance(m, dict)]
     texte = dernier_message_utilisateur(messages)
     notes = classement_mots_cles(texte)
     meilleur, a1 = notes[0] if notes else (0.0, None)
@@ -306,6 +438,18 @@ def entetes_litellm() -> dict:
     return {"Authorization": f"Bearer {LITELLM_KEY}", "Content-Type": "application/json"}
 
 
+# Options qu'un client ne doit jamais pouvoir imposer à LiteLLM (autre clé, autre serveur, autres secours…).
+OPTIONS_INTERDITES = {"api_base", "api_key", "base_url", "api_version", "custom_llm_provider", "user_config",
+                      "fallbacks", "disable_fallbacks", "mock_response", "model_list", "extra_headers", "headers",
+                      "metadata", "organization", "deployment_id", "num_retries", "context_window_fallback_dict",
+                      "caching", "cache", "proxy_server_request", "timeout", "request_timeout"}
+PREFIXES_INTERDITS = ("aws_", "vertex_", "azure_", "litellm_", "mock_", "api_", "ssl_", "oci_", "watsonx_")
+
+
+def option_autorisee(nom: str) -> bool:
+    return nom not in OPTIONS_INTERDITES and not str(nom).startswith(PREFIXES_INTERDITS)
+
+
 def preparer_corps(corps: dict, agent: dict) -> tuple[dict, list[str]]:
     messages = [m for m in corps.get("messages", []) if isinstance(m, dict)]
     systeme_client = "\n\n".join(texte_du_message(m) for m in messages if m.get("role") == "system").strip()
@@ -313,7 +457,7 @@ def preparer_corps(corps: dict, agent: dict) -> tuple[dict, list[str]]:
     if systeme_client:
         systeme += "\n\n## Consignes supplémentaires de l'utilisateur\n" + systeme_client
     nouveaux = [{"role": "system", "content": systeme}] + [m for m in messages if m.get("role") != "system"]
-    sortie = {k: v for k, v in corps.items() if k not in ("messages", "model")}
+    sortie = {k: v for k, v in corps.items() if k not in ("messages", "model") and option_autorisee(k)}
     sortie["messages"] = nouveaux
     sortie.setdefault("temperature", agent.get("temperature", 0.4))
     cerveau = "pk-vision" if contient_image(messages) else agent["cerveau"]
@@ -324,53 +468,146 @@ def preparer_corps(corps: dict, agent: dict) -> tuple[dict, list[str]]:
 
 
 class EchecCerveaux(Exception):
-    def __init__(self, statut: int, detail: str):
+    def __init__(self, statut: int, detail: str, essayes: list[str] | None = None):
         super().__init__(detail)
-        self.statut, self.detail = statut, detail
+        self.statut, self.detail, self.essayes = statut, detail, essayes or []
+
+    def message(self, nom_agent: str) -> str:
+        essais = f" (essayés : {', '.join(self.essayes)})" if self.essayes else ""
+        return f"Aucun cerveau disponible pour {nom_agent}{essais} : {self.detail}"
 
 
 def statut_rebascule(statut: int) -> bool:
     return statut in (404, 408, 429) or statut >= 500
 
 
+def reponse_vide(rep: Any) -> bool:
+    """Vrai si LiteLLM a répondu 200 mais sans aucun contenu exploitable (ni texte, ni appel d'outil)."""
+    try:
+        msg = rep["choices"][0]["message"]
+    except (KeyError, IndexError, TypeError):
+        return True
+    if not isinstance(msg, dict):
+        return True
+    contenu = msg.get("content")
+    return not (isinstance(contenu, str) and contenu.strip()) and not msg.get("tool_calls") and not msg.get("function_call")
+
+
+def texte_de_la_reponse(rep: dict) -> str:
+    try:
+        contenu = rep["choices"][0]["message"].get("content")
+    except (KeyError, IndexError, TypeError, AttributeError):
+        return ""
+    return contenu if isinstance(contenu, str) else ""
+
+
+def erreur_du_bloc(bloc: bytes) -> tuple[int, str] | None:
+    """Si le premier bloc d'un flux est une erreur envoyée par LiteLLM, renvoie (statut, message)."""
+    for ligne in bloc.decode("utf-8", "replace").splitlines():
+        if not ligne.startswith("data:"):
+            continue
+        brut = ligne[5:].strip()
+        if not brut or brut == "[DONE]":
+            return None
+        try:
+            obj = json.loads(brut)
+        except ValueError:
+            return None
+        err = obj.get("error") if isinstance(obj, dict) else None
+        if not err:
+            return None
+        code = err.get("code") if isinstance(err, dict) else None
+        statut = int(code) if str(code).isdigit() and int(code) >= 400 else 502
+        message = err.get("message") if isinstance(err, dict) else str(err)
+        return statut, str(message)[:300]
+    return None
+
+
 async def appeler(client: httpx.AsyncClient, corps: dict, chaine: list[str]) -> tuple[dict, str]:
     dernier = (502, "aucun cerveau essayé")
+    essayes: list[str] = []
     for cerveau in chaine:
+        essayes.append(cerveau)
         try:
             r = await client.post(f"{LITELLM_URL}/v1/chat/completions", json={**corps, "model": cerveau, "stream": False},
                                   headers=entetes_litellm(), timeout=TIMEOUT)
         except httpx.HTTPError as e:
-            dernier = (503, f"{cerveau} injoignable : {e}")
+            delai = isinstance(e, httpx.TimeoutException)
+            dernier = (504 if delai else 503, f"{cerveau} {'délai dépassé' if delai else 'injoignable'} ({type(e).__name__})")
+            LOG.warning("bascule : %s", dernier[1])
             continue
         if r.status_code == 200:
-            return r.json(), cerveau
-        dernier = (r.status_code, f"{cerveau} : {r.text[:300]}")
+            try:
+                rep = r.json()
+            except ValueError:
+                dernier = (502, f"{cerveau} : réponse illisible (pas du JSON)")
+                LOG.warning("bascule : %s", dernier[1])
+                continue
+            if reponse_vide(rep):
+                dernier = (502, f"{cerveau} : réponse vide")
+                LOG.warning("bascule : %s", dernier[1])
+                continue
+            return rep, cerveau
+        dernier = (r.status_code, masquer(f"{cerveau} : {r.text[:300]}"))
         if not statut_rebascule(r.status_code):
             break
         LOG.warning("bascule : %s a répondu %s", cerveau, r.status_code)
-    raise EchecCerveaux(*dernier)
+    raise EchecCerveaux(*dernier, essayes=essayes)
 
 
-async def ouvrir_flux(client: httpx.AsyncClient, corps: dict, chaine: list[str]) -> tuple[httpx.Response, str]:
+async def ouvrir_flux(client: httpx.AsyncClient, corps: dict, chaine: list[str]):
+    """Ouvre le flux du premier cerveau qui démarre vraiment. Renvoie (réponse, cerveau, 1er bloc, suite).
+
+    On lit le premier bloc AVANT de s'engager : un flux vide ou qui commence par une erreur permet encore
+    de basculer sur le cerveau suivant. Après le premier octet transmis, on ne rebascule plus
+    (sinon la réponse serait facturée deux fois)."""
     dernier = (502, "aucun cerveau essayé")
+    essayes: list[str] = []
     for cerveau in chaine:
+        essayes.append(cerveau)
         req = client.build_request("POST", f"{LITELLM_URL}/v1/chat/completions",
                                    json={**corps, "model": cerveau, "stream": True},
                                    headers=entetes_litellm(), timeout=httpx.Timeout(TIMEOUT, connect=10))
         try:
             r = await client.send(req, stream=True)
         except httpx.HTTPError as e:
-            dernier = (503, f"{cerveau} injoignable : {e}")
+            delai = isinstance(e, httpx.TimeoutException)
+            dernier = (504 if delai else 503, f"{cerveau} {'délai dépassé' if delai else 'injoignable'} ({type(e).__name__})")
+            LOG.warning("bascule (flux) : %s", dernier[1])
             continue
-        if r.status_code == 200:
-            return r, cerveau
-        texte = (await r.aread()).decode("utf-8", "replace")[:300]
-        await r.aclose()
-        dernier = (r.status_code, f"{cerveau} : {texte}")
-        if not statut_rebascule(r.status_code):
-            break
-        LOG.warning("bascule (flux) : %s a répondu %s", cerveau, r.status_code)
-    raise EchecCerveaux(*dernier)
+        if r.status_code != 200:
+            texte = (await r.aread()).decode("utf-8", "replace")[:300]
+            await r.aclose()
+            dernier = (r.status_code, masquer(f"{cerveau} : {texte}"))
+            if not statut_rebascule(r.status_code):
+                break
+            LOG.warning("bascule (flux) : %s a répondu %s", cerveau, r.status_code)
+            continue
+        suite = r.aiter_raw()
+        try:
+            premier = await suite.__anext__()
+        except StopAsyncIteration:
+            premier = b""
+        except httpx.HTTPError as e:
+            await r.aclose()
+            dernier = (503, f"{cerveau} : flux coupé avant le premier octet ({type(e).__name__})")
+            LOG.warning("bascule (flux) : %s", dernier[1])
+            continue
+        if not premier.strip():
+            await r.aclose()
+            dernier = (502, f"{cerveau} : flux vide")
+            LOG.warning("bascule (flux) : %s", dernier[1])
+            continue
+        err = erreur_du_bloc(premier)
+        if err:
+            await r.aclose()
+            dernier = (err[0], masquer(f"{cerveau} : {err[1]}"))
+            if not statut_rebascule(err[0]):
+                break
+            LOG.warning("bascule (flux) : %s a signalé l'erreur %s", cerveau, err[0])
+            continue
+        return r, cerveau, premier, suite
+    raise EchecCerveaux(*dernier, essayes=essayes)
 
 
 def morceau_sse(modele: str, contenu: str | None = None, fin: str | None = None, cid: str | None = None) -> bytes:
@@ -390,6 +627,18 @@ def completion_simple(modele: str, contenu: str, usage: dict | None = None) -> d
             "usage": usage or {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}}
 
 
+def cumuler_usage(total: dict | None, rep: Any) -> None:
+    """Additionne le champ `usage` d'une réponse LiteLLM dans `total` (sans jamais lever d'erreur)."""
+    if total is None:
+        return
+    try:
+        u = rep.get("usage") or {}
+        for k in ("prompt_tokens", "completion_tokens", "total_tokens"):
+            total[k] = total.get(k, 0) + int(u.get(k) or 0)
+    except (AttributeError, TypeError, ValueError) as e:
+        LOG.debug("usage illisible, ignoré : %s", e)
+
+
 async def flux_texte(modele: str, texte: str) -> AsyncIterator[bytes]:
     cid = f"chatcmpl-pk-{uuid.uuid4().hex[:12]}"
     for i in range(0, len(texte), 400):
@@ -405,6 +654,7 @@ class Journal:
     def __init__(self) -> None:
         self.pool = None
         self.compteurs: dict[str, dict[str, int]] = {}
+        self.echecs_ecriture = 0
 
     async def demarrer(self) -> None:
         if not DATABASE_URL:
@@ -418,7 +668,7 @@ class Journal:
                     agent TEXT, mode TEXT, cerveau TEXT, duree_ms INTEGER, ok BOOLEAN, detail TEXT)""")
             LOG.info("Journal Postgres actif")
         except Exception as e:  # noqa: BLE001
-            LOG.warning("Journal Postgres indisponible (%s) — journal en mémoire seulement", e)
+            LOG.warning("Journal Postgres indisponible (%s) — journal en mémoire seulement", masquer(str(e))[:200])
             self.pool = None
 
     async def ecrire(self, agent: str, mode: str, cerveau: str, debut: float, ok: bool, detail: str = "") -> None:
@@ -429,9 +679,13 @@ class Journal:
         try:
             async with self.pool.acquire() as con:
                 await con.execute("INSERT INTO pk_journal(agent,mode,cerveau,duree_ms,ok,detail) VALUES($1,$2,$3,$4,$5,$6)",
-                                  agent, mode, cerveau, int((time.monotonic() - debut) * 1000), ok, detail[:500])
-        except Exception as e:  # noqa: BLE001
-            LOG.debug("journal : %s", e)
+                                  agent, mode, cerveau, int((time.monotonic() - debut) * 1000), ok, masquer(detail)[:500])
+            self.echecs_ecriture = 0
+        except Exception as e:  # noqa: BLE001 — le journal ne doit jamais bloquer une réponse
+            self.echecs_ecriture += 1
+            if self.echecs_ecriture == 1 or self.echecs_ecriture % 100 == 0:   # pas une ligne par requête
+                LOG.warning("journal Postgres : écriture impossible (%s) — %d échec(s) de suite",
+                            masquer(str(e))[:200], self.echecs_ecriture)
 
     async def arreter(self) -> None:
         if self.pool is not None:
@@ -439,6 +693,7 @@ class Journal:
 
 
 JOURNAL = Journal()
+ETAT = {"litellm": None}   # dernier état connu de LiteLLM, pour ne journaliser que les changements
 
 
 # =====================================================================
@@ -447,21 +702,31 @@ JOURNAL = Journal()
 @asynccontextmanager
 async def cycle_de_vie(app: FastAPI):
     app.state.client = httpx.AsyncClient(timeout=httpx.Timeout(TIMEOUT, connect=10))
+    if not API_KEY:
+        LOG.error("Aucune clé (PK_API_KEY / LITELLM_MASTER_KEY) : l'API reste FERMÉE tant qu'elle n'est pas définie")
     await JOURNAL.demarrer()
     yield
     await app.state.client.aclose()
     await JOURNAL.arreter()
 
 
-app = FastAPI(title="Bureau IA PixelKréol — Orchestrateur", version=VERSION, lifespan=cycle_de_vie)
+app = FastAPI(title="Bureau IA PixelKréol — Orchestrateur", version=VERSION, lifespan=cycle_de_vie,
+              docs_url=None, redoc_url=None, openapi_url=None)
+
+
+@app.exception_handler(Exception)
+async def erreur_inattendue(request: Request, exc: Exception):
+    LOG.error("Erreur interne sur %s %s", request.method, request.url.path, exc_info=exc)
+    return erreur(500, "Erreur interne de l'orchestrateur (détails dans les journaux du serveur)", "interne")
 
 
 def autorise(request: Request, cle: str) -> bool:
+    """Clé exigée (jamais d'accès libre), comparée à temps constant."""
     if not cle:
-        return True
+        return False
     auth = request.headers.get("authorization", "")
     fourni = auth[7:].strip() if auth.lower().startswith("bearer ") else request.headers.get("x-api-key", "").strip()
-    return bool(fourni) and fourni == cle
+    return bool(fourni) and hmac.compare_digest(fourni.encode("utf-8"), cle.encode("utf-8"))
 
 
 @app.get("/health")
@@ -471,8 +736,14 @@ async def sante(request: Request):
     try:
         r = await request.app.state.client.get(f"{LITELLM_URL}/health/liveliness", timeout=5)
         litellm_ok = r.status_code == 200
-    except httpx.HTTPError:
-        pass
+        if not litellm_ok and ETAT["litellm"] is not False:
+            LOG.warning("LiteLLM injoignable depuis /health : HTTP %s", r.status_code)
+    except httpx.HTTPError as e:
+        if ETAT["litellm"] is not False:   # une seule ligne par panne, pas une toutes les 15 s
+            LOG.warning("LiteLLM injoignable depuis /health (%s)", type(e).__name__)
+    if litellm_ok and ETAT["litellm"] is False:
+        LOG.info("LiteLLM de nouveau joignable")
+    ETAT["litellm"] = litellm_ok
     return {"ok": bool(REGISTRE.agents), "version": VERSION, "agents": len(REGISTRE.agents),
             "litellm": litellm_ok, "avertissements": REGISTRE.avertissements}
 
@@ -517,8 +788,14 @@ async def tester_routage(request: Request):
     """Dit quel agent pk-auto choisirait, sans appeler de modèle (sauf routage IA en cas de doute)."""
     if not autorise(request, API_KEY):
         return erreur(401, "Clé API invalide", "auth")
-    corps = await request.json()
-    messages = corps.get("messages") or [{"role": "user", "content": corps.get("texte", "")}]
+    try:
+        corps = await request.json()
+    except ValueError:
+        return erreur(400, "Corps JSON invalide", "requete")
+    if not isinstance(corps, dict):
+        return erreur(400, "Un objet JSON est attendu", "requete")
+    messages = messages_valides(corps) or [{"role": "user", "content": str(corps.get("texte", ""))}]
+    REGISTRE.recharger()
     agent, methode = await choisir_agent(request.app.state.client, messages)
     return {"agent": agent["id"], "modele": agent["modele"], "nom": agent["nom"], "methode": methode}
 
@@ -529,10 +806,11 @@ async def chat(request: Request):
         return erreur(401, "Clé API invalide", "auth")
     try:
         corps = await request.json()
-    except json.JSONDecodeError:
+    except ValueError:  # JSON invalide ou octets illisibles
         return erreur(400, "Corps JSON invalide", "requete")
-    if not isinstance(corps, dict) or not isinstance(corps.get("messages"), list) or not corps["messages"]:
-        return erreur(400, "Le champ « messages » (liste non vide) est obligatoire", "requete")
+    if (not isinstance(corps, dict) or not isinstance(corps.get("messages"), list) or not corps["messages"]
+            or not all(isinstance(m, dict) for m in corps["messages"])):
+        return erreur(400, "Le champ « messages » (liste non vide d'objets) est obligatoire", "requete")
     client: httpx.AsyncClient = request.app.state.client
     modele = str(corps.get("model", "pk-auto"))
     flux = bool(corps.get("stream"))
@@ -561,8 +839,7 @@ async def chat(request: Request):
             reponse, cerveau = await appeler(client, corps_final, chaine)
         except EchecCerveaux as e:
             await JOURNAL.ecrire(agent["id"], mode, "-", debut, False, e.detail)
-            return erreur(e.statut if e.statut >= 400 else 502, f"Aucun cerveau disponible pour {agent['nom']} : {e.detail}",
-                          "cerveaux_indisponibles")
+            return erreur(e.statut if e.statut >= 400 else 502, e.message(agent["nom"]), "cerveaux_indisponibles")
         reponse["model"] = agent["modele"]
         if annonce and reponse.get("choices"):
             msg = reponse["choices"][0].setdefault("message", {})
@@ -571,25 +848,38 @@ async def chat(request: Request):
         return JSONResponse(reponse, headers={"X-PK-Agent": agent["id"], "X-PK-Cerveau": cerveau})
 
     try:
-        amont, cerveau = await ouvrir_flux(client, corps_final, chaine)
+        amont, cerveau, premier, suite = await ouvrir_flux(client, corps_final, chaine)
     except EchecCerveaux as e:
         await JOURNAL.ecrire(agent["id"], mode, "-", debut, False, e.detail)
-        return erreur(e.statut if e.statut >= 400 else 502, f"Aucun cerveau disponible pour {agent['nom']} : {e.detail}",
-                      "cerveaux_indisponibles")
+        return erreur(e.statut if e.statut >= 400 else 502, e.message(agent["nom"]), "cerveaux_indisponibles")
 
     async def relais() -> AsyncIterator[bytes]:
         ok = True
+        detail = ""
         try:
             if annonce:
                 yield morceau_sse(agent["modele"], annonce)
-            async for bloc in amont.aiter_raw():
-                yield bloc
-        except httpx.HTTPError as e:
-            ok = False
-            LOG.warning("flux interrompu : %s", e)
+            fin_vue = b""
+            try:
+                yield premier
+                fin_vue = premier[-32:]
+                async for bloc in suite:
+                    fin_vue = (fin_vue + bloc)[-32:]
+                    yield bloc
+                if b"[DONE]" not in fin_vue:
+                    ok, detail = False, "flux terminé sans [DONE]"
+            except httpx.HTTPError as e:
+                ok, detail = False, f"flux coupé ({type(e).__name__})"
+            if not ok:
+                LOG.warning("flux interrompu (agent %s, cerveau %s) : %s", agent["id"], cerveau, detail)
+                cid = f"chatcmpl-pk-{uuid.uuid4().hex[:12]}"
+                yield morceau_sse(agent["modele"], "\n\n⚠️ *Réponse interrompue : la connexion avec le cerveau "
+                                  f"({cerveau}) s'est coupée. Relance ta demande pour obtenir la suite.*", cid=cid)
+                yield morceau_sse(agent["modele"], fin="stop", cid=cid)
+                yield b"data: [DONE]\n\n"
         finally:
             await amont.aclose()
-            await JOURNAL.ecrire(agent["id"], mode, cerveau, debut, ok)
+            await JOURNAL.ecrire(agent["id"], mode, cerveau, debut, ok, detail)
 
     return StreamingResponse(relais(), media_type="text/event-stream",
                              headers={"X-PK-Agent": agent["id"], "X-PK-Cerveau": cerveau,
@@ -618,109 +908,200 @@ def extraire_json(texte: str) -> dict | None:
     return None
 
 
-async def executer_agent(client: httpx.AsyncClient, agent: dict, messages: list[dict]) -> tuple[str, bool]:
+async def executer_agent(client: httpx.AsyncClient, agent: dict, messages: list[dict],
+                         usage: dict | None = None) -> tuple[str, bool]:
+    """Fait travailler un agent. Ne lève jamais d'exception : renvoie (texte, réussi)."""
     corps, chaine = preparer_corps({"messages": messages, "max_tokens": 1200}, agent)
     debut = time.monotonic()
     try:
-        rep, cerveau = await appeler(client, corps, chaine)
-        await JOURNAL.ecrire(agent["id"], "equipe", cerveau, debut, True)
-        return rep["choices"][0]["message"].get("content") or "", True
+        rep, cerveau = await asyncio.wait_for(appeler(client, corps, chaine), DELAI_AGENT)
+        cumuler_usage(usage, rep)
+        texte = texte_de_la_reponse(rep)
+        await JOURNAL.ecrire(agent["id"], "equipe", cerveau, debut, bool(texte.strip()))
+        return (texte, True) if texte.strip() else ("(indisponible : réponse sans texte)", False)
     except EchecCerveaux as e:
         await JOURNAL.ecrire(agent["id"], "equipe", "-", debut, False, e.detail)
         return f"(indisponible : {e.detail[:120]})", False
+    except asyncio.TimeoutError:
+        LOG.warning("pk-equipe : %s n'a pas répondu en %s s", agent["id"], DELAI_AGENT)
+        await JOURNAL.ecrire(agent["id"], "equipe", "-", debut, False, f"délai de {DELAI_AGENT} s dépassé")
+        return f"(indisponible : délai de {DELAI_AGENT:.0f} s dépassé)", False
+    except Exception as e:  # noqa: BLE001 — un agent en difficulté ne doit pas faire perdre le travail des autres
+        LOG.exception("pk-equipe : erreur inattendue avec l'agent %s", agent["id"])
+        await JOURNAL.ecrire(agent["id"], "equipe", "-", debut, False, type(e).__name__)
+        return "(indisponible : erreur interne)", False
+
+
+def choisir_taches(plan: Any, demande: str, ids: list[str]) -> list[tuple[dict, str]]:
+    """Tâches du plan du directeur (agents connus, sans doublon, au plus MAX_EQUIPE)."""
+    brutes = plan.get("taches") if isinstance(plan, dict) else None
+    taches: list[tuple[dict, str]] = []
+    vus: set[str] = set()
+    for t in brutes if isinstance(brutes, list) else []:
+        if len(taches) >= MAX_EQUIPE:
+            break
+        ident = t.get("agent") if isinstance(t, dict) else None
+        if not isinstance(ident, str) or ident in vus or ident == "orchestrateur" or ident not in REGISTRE.agents:
+            continue
+        vus.add(ident)
+        taches.append((REGISTRE.agents[ident], str(t.get("consigne") or demande)))
+    if not taches:  # plan illisible : on se rabat sur les meilleurs agents par mots-clés
+        notes = [n for n in classement_mots_cles(demande) if n[1]["id"] != "orchestrateur"]
+        taches = [(a, demande) for s, a in notes[:2] if s > 0] or [(REGISTRE.agents[ids[0]], demande)]
+    return taches
 
 
 async def mode_equipe(client: httpx.AsyncClient, corps: dict, flux: bool):
     messages = [m for m in corps["messages"] if isinstance(m, dict) and m.get("role") != "system"]
     demande = dernier_message_utilisateur(messages)
     directeur = REGISTRE.agents.get("orchestrateur")
-    if not directeur:
-        return erreur(500, "L'agent « orchestrateur » est requis pour le mode équipe", "config")
-
     ids = [a for a in REGISTRE.agents if a != "orchestrateur"]
+    if not directeur or not ids:
+        return erreur(500, "Le mode équipe demande l'agent « orchestrateur » et au moins un autre agent", "config")
+
+    usage: dict[str, int] = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
     consigne_plan = (
         "PLANIFICATION_JSON. Découpe la demande en 1 à "
         f"{MAX_EQUIPE} tâches confiées aux agents les plus adaptés. Réponds UNIQUEMENT avec un objet JSON "
         '{"taches":[{"agent":"<id>","consigne":"<ce que cet agent doit produire>"}]}. '
         f"Identifiants autorisés : {', '.join(ids)}.\n\nDemande : {demande}")
-    plan_txt, ok = await executer_agent(client, directeur, [{"role": "user", "content": consigne_plan}])
+    plan_txt, ok = await executer_agent(client, directeur, [{"role": "user", "content": consigne_plan}], usage)
     plan = extraire_json(plan_txt) if ok else None
-    taches: list[tuple[dict, str]] = []
-    for t in (plan or {}).get("taches", [])[:MAX_EQUIPE]:
-        if isinstance(t, dict) and t.get("agent") in REGISTRE.agents and t["agent"] != "orchestrateur":
-            taches.append((REGISTRE.agents[t["agent"]], str(t.get("consigne") or demande)))
-    if not taches:  # plan illisible : on se rabat sur les meilleurs agents par mots-clés
-        notes = [n for n in classement_mots_cles(demande) if n[1]["id"] != "orchestrateur"]
-        taches = [(a, demande) for s, a in notes[:2] if s > 0] or [(REGISTRE.agents[ids[0]], demande)]
+    taches = choisir_taches(plan, demande, ids)
+    notes: list[str] = []
+    if plan is None:
+        notes.append("Le découpage automatique n'a pas fonctionné : agents choisis d'après les mots-clés de ta demande.")
+        LOG.warning("pk-equipe : plan du directeur inutilisable (%s)", "directeur en panne" if not ok else "JSON illisible")
 
     historique = messages[:-1][-6:]
     resultats = await asyncio.gather(*[
-        executer_agent(client, a, historique + [{"role": "user", "content": f"{c}\n\n(Demande d'origine : {demande})"}])
+        executer_agent(client, a, historique + [{"role": "user", "content": f"{c}\n\n(Demande d'origine : {demande})"}], usage)
         for a, c in taches])
 
+    muets = [a for (a, _), (_, reussi) in zip(taches, resultats) if not reussi]
+    if len(muets) == len(taches):
+        return erreur(502, "Aucun agent de l'équipe n'a pu répondre (" + ", ".join(a["nom"] for a in muets)
+                      + "). Réessaie dans quelques minutes.", "cerveaux_indisponibles")
+
     contributions = "\n\n".join(f"### {a['emoji']} {a['nom']}\n{txt}" for (a, _), (txt, _) in zip(taches, resultats))
-    synthese_txt, ok_s = await executer_agent(client, directeur, [{
-        "role": "user",
-        "content": f"Demande de Will : {demande}\n\nVoici les contributions de l'équipe :\n\n{contributions}\n\n"
-                   "Fais la synthèse finale : réponse directe et exploitable, puis les actions et qui s'en charge."}])
-    entete = "*👥 Équipe mobilisée : " + ", ".join(f"{a['emoji']} {a['nom']}" for a, _ in taches) + "*\n\n"
-    final = entete + (synthese_txt if ok_s else "La synthèse n'a pas pu être faite. Contributions brutes :\n\n" + contributions)
-    if not ok_s and not any(ok for _, ok in resultats):
-        return erreur(502, "Aucun cerveau disponible pour le mode équipe", "cerveaux_indisponibles")
-    final += "\n\n<details><summary>Contributions détaillées</summary>\n\n" + contributions + "\n\n</details>"
+    prompt_synthese = (f"Demande de Will : {demande}\n\nVoici les contributions de l'équipe :\n\n{contributions}\n\n")
+    if muets:
+        prompt_synthese += ("ATTENTION : " + ", ".join(a["nom"] for a in muets) + " n'a pas pu répondre (indisponible). "
+                            "N'invente pas leur partie : dis clairement ce qui manque et ce qu'il faudra redemander.\n\n")
+    prompt_synthese += "Fais la synthèse finale : réponse directe et exploitable, puis les actions et qui s'en charge."
+    synthese_txt, ok_s = await executer_agent(client, directeur, [{"role": "user", "content": prompt_synthese}], usage)
+
+    entete = "*👥 Équipe mobilisée : " + ", ".join(
+        f"{a['emoji']} {a['nom']}" + (" ⚠️" if a in muets else "") for a, _ in taches) + "*\n\n"
+    if muets:
+        entete += ("⚠️ **Réponse incomplète** — sans réponse de : " + ", ".join(a["nom"] for a in muets)
+                   + " (panne ou délai dépassé). La synthèse ne couvre pas leur partie.\n\n")
+    for n in notes:
+        entete += f"*{n}*\n\n"
+    if ok_s:
+        final = entete + synthese_txt + "\n\n<details><summary>Contributions détaillées</summary>\n\n" + contributions + "\n\n</details>"
+    else:
+        final = entete + "La synthèse n'a pas pu être faite. Contributions brutes :\n\n" + contributions
     if flux:
         return StreamingResponse(flux_texte("pk-equipe", final), media_type="text/event-stream",
                                  headers={"X-PK-Agent": "equipe"})
-    return JSONResponse(completion_simple("pk-equipe", final), headers={"X-PK-Agent": "equipe"})
+    return JSONResponse(completion_simple("pk-equipe", final, usage), headers={"X-PK-Agent": "equipe"})
 
 
 # =====================================================================
 #  Administration : ajouter / retirer un agent personnalisé à chaud
 # =====================================================================
+TAILLE_MAX_ADMIN = 64 * 1024
+
+
+class PersoIllisible(Exception):
+    """perso.yaml existe mais n'est pas lisible : on refuse d'y écrire pour ne rien écraser."""
+
+
 def ecrire_perso(agents: list[dict]) -> None:
     chemin = AGENTS_DIR / "perso.yaml"
     contenu = ("# Agents personnalisés (créés via /admin/agents ou la Fabrique d'agents).\n"
                "# Même format que registre.yaml. Rechargé à chaud.\n"
                + yaml.safe_dump({"agents": agents}, sort_keys=False, allow_unicode=True))
     fd, tmp = tempfile.mkstemp(dir=str(AGENTS_DIR), prefix=".perso-", suffix=".yaml")
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        f.write(contenu)
-    os.replace(tmp, chemin)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(contenu)
+            f.flush()
+            os.fsync(f.fileno())
+        os.chmod(tmp, 0o644)
+        os.replace(tmp, chemin)  # remplacement atomique : on voit l'ancien fichier ou le nouveau, jamais un demi-fichier
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError as e:
+            LOG.warning("fichier temporaire %s non supprimé : %s", tmp, e)
+        raise
 
 
 def lire_perso() -> list[dict]:
     chemin = AGENTS_DIR / "perso.yaml"
     if not chemin.exists():
         return []
-    return (yaml.safe_load(chemin.read_text(encoding="utf-8")) or {}).get("agents") or []
+    try:
+        data = yaml.safe_load(chemin.read_text(encoding="utf-8")) or {}
+    except (yaml.YAMLError, OSError, UnicodeDecodeError, ValueError) as e:
+        raise PersoIllisible(str(e)[:200]) from e
+    if not isinstance(data, dict):
+        raise PersoIllisible("le fichier doit commencer par « agents: »")
+    agents = data.get("agents") or []
+    if not isinstance(agents, list):
+        raise PersoIllisible("« agents » doit être une liste")
+    return agents
+
+
+def msg_perso_illisible(e: PersoIllisible) -> str:
+    return ("Le fichier agents/perso.yaml est illisible (" + str(e) + "). Rien n'a été modifié : "
+            "corrigez-le (ou renommez-le) puis recommencez.")
 
 
 @app.post("/admin/agents")
 async def ajouter_agent(request: Request):
     if not autorise(request, ADMIN_KEY):
         return erreur(401, "Clé admin invalide", "auth")
-    brut = (await request.body()).decode("utf-8")
+    octets = await request.body()
+    if len(octets) > TAILLE_MAX_ADMIN:
+        return erreur(413, f"Corps trop gros (maximum {TAILLE_MAX_ADMIN // 1024} Ko)", "requete")
+    try:
+        brut = octets.decode("utf-8")
+    except UnicodeDecodeError:
+        return erreur(400, "Le corps doit être du texte UTF-8", "requete")
     try:
         data = json.loads(brut)
-    except json.JSONDecodeError:
+    except ValueError:
         try:
             data = yaml.safe_load(re.sub(r"```(?:yaml)?", "", brut))
         except yaml.YAMLError as e:
-            return erreur(400, f"Ni JSON ni YAML valide : {e}", "requete")
-    if isinstance(data, list):
-        data = data[0] if data else {}
+            return erreur(400, f"Ni JSON ni YAML valide : {str(e)[:200]}", "requete")
     if isinstance(data, dict) and "agents" in data:
-        data = (data["agents"] or [{}])[0]
+        data = data["agents"] if data["agents"] is not None else []
+    if isinstance(data, list):
+        if len(data) > 1:
+            return erreur(422, "Un seul agent à la fois (plusieurs reçus) : envoyez-les un par un", "validation")
+        data = data[0] if data else {}
     if not isinstance(data, dict):
         return erreur(400, "Un agent (objet) est attendu", "requete")
     REGISTRE.recharger()
-    if not data.get("num"):  # numérotation automatique à partir de 101 pour les agents perso
+    try:
+        existants = lire_perso()
+    except PersoIllisible as e:
+        return erreur(409, msg_perso_illisible(e), "conflit")
+    if data.get("num") in (None, ""):  # numérotation automatique à partir de 101 pour les agents perso
         data["num"] = max([a["num"] for a in REGISTRE.agents.values()] + [100]) + 1
     pb = Registre.valider(data, set(REGISTRE.agents), {a["num"] for a in REGISTRE.agents.values()})
     if pb:
         return erreur(422, f"Agent refusé : {pb}", "validation")
     propre = {k: v for k, v in data.items() if not str(k).startswith("_") and k not in ("source", "modele")}
-    ecrire_perso(lire_perso() + [propre])
+    try:
+        ecrire_perso(existants + [propre])
+    except OSError as e:
+        LOG.error("Écriture de perso.yaml impossible : %s", e)
+        return erreur(500, "Écriture de perso.yaml impossible (disque plein ou droits). Rien n'a été modifié.", "config")
     REGISTRE.recharger(force=True)
     a = REGISTRE.agents.get(propre["id"])
     if not a:
@@ -732,11 +1113,18 @@ async def ajouter_agent(request: Request):
 async def retirer_agent(agent_id: str, request: Request):
     if not autorise(request, ADMIN_KEY):
         return erreur(401, "Clé admin invalide", "auth")
-    perso = lire_perso()
-    restants = [a for a in perso if a.get("id") != agent_id]
+    try:
+        perso = lire_perso()
+    except PersoIllisible as e:
+        return erreur(409, msg_perso_illisible(e), "conflit")
+    restants = [a for a in perso if not (isinstance(a, dict) and a.get("id") == agent_id)]
     if len(restants) == len(perso):
         return erreur(404, "Seuls les agents de perso.yaml peuvent être retirés par l'API", "introuvable")
-    ecrire_perso(restants)
+    try:
+        ecrire_perso(restants)
+    except OSError as e:
+        LOG.error("Écriture de perso.yaml impossible : %s", e)
+        return erreur(500, "Écriture de perso.yaml impossible. Rien n'a été modifié.", "config")
     REGISTRE.recharger(force=True)
     return {"ok": True, "retire": agent_id}
 
