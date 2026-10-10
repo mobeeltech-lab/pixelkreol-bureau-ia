@@ -35,5 +35,16 @@ Utiliser les agents depuis n8n
 
 Sécurité
   .env contient les clés : droits 600, ne jamais le copier dans un chat.
-  Les ports internes (4000, 4001, 8081, 8082) n'écoutent que sur 127.0.0.1.
+  Les ports internes (4000, 4001, 3010, 5678) n'écoutent que sur 127.0.0.1 ; seul Caddy ouvre 80 et 443.
   Sauvegardes et journaux d'installation : /opt/pk-sauvegardes (droits 700).
+
+Réglages facultatifs (dans .env, puis bash install.sh)
+  PK_API_KEY / PK_ADMIN_KEY   clés distinctes pour l'API et pour /admin (par défaut = LITELLM_MASTER_KEY)
+  PK_EQUIPE_MAX               nombre maximum d'agents en mode pk-equipe (défaut 4, de 1 à 8)
+  PK_EQUIPE_DELAI             secondes accordées à chaque agent en mode équipe (défaut 150)
+  PK_ANNONCE_AGENT=false      ne plus écrire « ➜ Agent choisi » au début des réponses de pk-auto
+
+Tests (pour le développeur ; aucun appel aux vrais fournisseurs, aucune clé nécessaire)
+  pip install -r orchestrateur/requirements.txt pytest && python -m pytest
+  python tests/mesure_routage.py --detail     taux de bonnes réponses de pk-auto
+Audit du 10/10/2026 : voir AUDIT-BUREAU-IA.md

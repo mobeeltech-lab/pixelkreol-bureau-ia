@@ -17,8 +17,9 @@ echo -e "${B}━━ Agents et cerveaux${N}"
 docker exec -i pk_orchestrateur python - "$@" < outils/verifier.py || KO=$((KO+1))
 if [[ " $* " != *" --rapide "* ]]; then
   echo -e "${B}━━ Accès publics${N}"
-  set -a; source .env 2>/dev/null; set +a
-  for d in "${PK_DOMAINE_AGENTS:-}" "${PK_DOMAINE_N8N:-}"; do
+  # .env est LU (jamais exécuté) : une ligne inattendue ne doit pas pouvoir lancer une commande
+  lire_env() { grep -m1 -E "^$1=" .env 2>/dev/null | cut -d= -f2- | sed -e "s/^[\"']//" -e "s/[\"']\$//" || true; }
+  for d in "$(lire_env PK_DOMAINE_AGENTS)" "$(lire_env PK_DOMAINE_N8N)"; do
     [[ -z "$d" ]] && continue
     code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "https://$d/" 2>/dev/null)"
     if [[ "$code" =~ ^(200|301|302|307|308)$ ]]; then echo -e "  ${V}✔${N} https://$d → HTTP $code"

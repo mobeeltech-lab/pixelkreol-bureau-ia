@@ -45,7 +45,7 @@ agents:
     cerveau: pk-costaud
     temperature: 0.5
     description: Qualifie les prospects, argumente, prépare les offres et les relances.
-    mots_cles: [prospect, client potentiel, vendre, argumentaire, offre, relance, rendez-vous commercial, objection, kap numerik, closing]
+    mots_cles: [prospect, client potentiel, vendre, argumentaire, offre, relance, rendez-vous commercial, objection, closing]
     consignes: |
       Tu vends les 4 lignes de service PixelKréol et l'offre Bureau IA local.
       Grille Bureau IA (site, 27/09/2026) : Assistant Maison 1 990 € TTC ; Bureau Essentiel
@@ -188,7 +188,7 @@ agents:
     cerveau: pk-costaud
     temperature: 0.1
     description: Suit factures, encaissements, trésorerie et prépare les déclarations.
-    mots_cles: [facture, comptabilite, tresorerie, encaissement, impaye, urssaf, tva, declaration, charges, marge, rentabilite, bilan comptable]
+    mots_cles: [facture, comptabilite, tresorerie, encaissement, impaye, impayee, urssaf, tva, declaration, charges, marge, rentabilite, bilan comptable]
     consignes: |
       Tu tiens les comptes simplement : factures émises/reçues, relances d'impayés, tableau
       de trésorerie, marge par projet. Tu connais les spécificités Réunion (TVA 8,5 % / 2,1 %,
@@ -204,7 +204,7 @@ agents:
     cerveau: pk-rapide
     temperature: 0.3
     description: Gère mails, courriers, agenda, comptes rendus et échéances.
-    mots_cles: [mail, email, courrier, agenda, rendez-vous, rappel, compte rendu, repondre a, lettre, relance administrative, echeance]
+    mots_cles: [mail, email, courrier, agenda, rendez-vous, rappel, compte rendu, lettre, relance administrative, echeance, remerciement]
     consignes: |
       Tu rédiges mails et courriers prêts à envoyer (objet + corps), tu tries une boîte de
       réception en « à traiter / en attente / classé », tu proposes des créneaux de rendez-vous
@@ -263,7 +263,7 @@ agents:
     cerveau: pk-rapide
     temperature: 0.3
     description: Répond aux clients, diagnostique les problèmes et suit les tickets.
-    mots_cles: [support, probleme, ne marche pas, panne, ticket, client mecontent, assistance, sav, reclamation, aide client]
+    mots_cles: [support, probleme, ne marche pas, panne, ticket, client mecontent, mecontent, ne marche plus, assistance, sav, reclamation, aide client]
     consignes: |
       Tu réponds avec empathie et méthode : reformuler, diagnostiquer par questions simples,
       proposer la solution pas à pas, confirmer. Tu classes le ticket (P1 bloquant à P4 confort)
@@ -320,7 +320,7 @@ agents:
     cerveau: pk-code
     temperature: 0.1
     description: Administre le VPS, Docker, nom de domaine, sauvegardes et sécurité.
-    mots_cles: [serveur, vps, docker, nginx, caddy, dns, ssl, certificat, sauvegarde, backup, linux, deploiement, hostinger, pare-feu]
+    mots_cles: [serveur, vps, docker, nginx, caddy, dns, nom de domaine, ssl, certificat, sauvegarde, backup, linux, deploiement, hostinger, pare-feu]
     consignes: |
       Tu administres le VPS Hostinger (Debian 13) et les serveurs clients (Ubuntu + Docker).
       Tu donnes des commandes sûres, expliquées, idempotentes, avec vérification après chaque
@@ -334,7 +334,7 @@ agents:
     cerveau: pk-code
     temperature: 0.1
     description: Relit livrables et code, écrit les tests, vérifie avant livraison.
-    mots_cles: [relire, verifier, tester, test, recette, qualite, revue de code, checklist, avant livraison, audit]
+    mots_cles: [relire, verifier, tester, test, recette, qualite, revue de code, checklist, avant livraison, avant la livraison, relecture, audit]
     consignes: |
       Tu es le dernier regard avant livraison : tu listes les défauts par gravité (bloquant,
       majeur, mineur), tu proposes les correctifs et tu écris les tests ou la checklist de
@@ -348,7 +348,7 @@ agents:
     cerveau: pk-long
     temperature: 0.3
     description: Surveille outils IA, concurrents, tendances du marché réunionnais.
-    mots_cles: [veille, tendance, nouveaute, concurrent, marche, benchmark, outil ia, github, comparer des outils, actualite]
+    mots_cles: [veille, tendance, nouveaute, concurrent, etude de marche, marche reunionnais, marche local, benchmark, outil ia, github, comparer des outils, compare, comparer, comparatif, actualite]
     consignes: |
       Tu produis des notes de veille : quoi de neuf, pourquoi ça compte pour PixelKréol, action
       recommandée (adopter / tester / surveiller / ignorer). Tu dates chaque information et tu
@@ -377,7 +377,7 @@ agents:
     cerveau: pk-costaud
     temperature: 0.3
     description: Conçoit les packs d'agents IA pour les clients (matériel, agents, installation).
-    mots_cles: [bureau ia, pack agents, agents pour un client, serveur client, ollama, installation client, pack metier, abi holding]
+    mots_cles: [bureau ia, pack agents, pack d'agents, agents pour un client, serveur client, ollama, installation client, pack metier, abi holding]
     consignes: |
       Tu conçois l'offre Bureau IA pour un client : questionnaire découverte, liste des agents
       (fiche de poste, feux, outils), matériel (Mac Pro 2013 + eGPU RX 580 en config de
