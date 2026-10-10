@@ -1,0 +1,87 @@
+# =====================================================================
+#  Bureau IA PixelKréol — les CERVEAUX (modèles de langage)
+#
+#  Les agents ne connaissent jamais le nom d'un modèle : ils demandent un
+#  cerveau (pk-rapide, pk-costaud…). Chaque cerveau est une chaîne de
+#  fournisseurs GRATUITS essayés dans l'ordre. Si l'un est saturé (429),
+#  en panne ou sans clé, on passe au suivant — automatiquement.
+#
+#  Un fournisseur n'est activé QUE si sa clé est présente dans .env.
+#  Ajouter un fournisseur = ajouter une ligne ici, puis `bash install.sh`.
+#
+#  Modèles vérifiés le 26/09/2026 par appel réel depuis le VPS (Groq n'offre plus Llama).
+#  « openrouter/free » est le filet de sécurité final : il choisit tout
+#  seul un modèle gratuit disponible chez OpenRouter.
+# =====================================================================
+
+fournisseurs:
+  groq:       {prefixe: groq,       cle: GROQ_API_KEY}
+  gemini:     {prefixe: gemini,     cle: GEMINI_API_KEY}
+  mistral:    {prefixe: mistral,    cle: MISTRAL_API_KEY}
+  cerebras:   {prefixe: cerebras,   cle: CEREBRAS_API_KEY}
+  openrouter: {prefixe: openrouter, cle: OPENROUTER_API_KEY}
+  deepseek:   {prefixe: deepseek,   cle: DEEPSEEK_API_KEY}   # payant (quelques centimes) : toujours en fin de chaîne
+
+cerveaux:
+  pk-rapide:
+    role: "Réponses courtes et rapides : secrétariat, support, réseaux sociaux, tri"
+    chaine:
+      - {f: groq,       modele: openai/gpt-oss-20b}
+      - {f: groq,       modele: qwen/qwen3.8-27b}
+      - {f: gemini,     modele: gemini-flash-lite-latest}
+      - {f: mistral,    modele: mistral-small-latest}
+      - {f: openrouter, modele: nvidia/nemotron-3.5-lightning:free}
+      - {f: openrouter, modele: google/gemma-4-31b-it:free}
+      - {f: cerebras,   modele: gpt-oss-120b}
+      - {f: openrouter, modele: openrouter/free}
+
+  pk-costaud:
+    role: "Réflexion, stratégie, synthèses, devis complexes, juridique"
+    chaine:
+      - {f: gemini,     modele: gemini-flash-latest}
+      - {f: groq,       modele: openai/gpt-oss-120b}
+      - {f: mistral,    modele: mistral-medium-latest}
+      - {f: openrouter, modele: nvidia/nemotron-3-ultra-550b-a55b:free}
+      - {f: openrouter, modele: qwen/qwen3.8-27b:free}
+      - {f: groq,       modele: qwen/qwen3.8-27b}
+      - {f: cerebras,   modele: gpt-oss-120b}
+      - {f: deepseek,   modele: deepseek-chat}
+      - {f: openrouter, modele: openrouter/free}
+
+  pk-code:
+    role: "Développement, scripts, revue de code, DevOps"
+    chaine:
+      - {f: mistral,    modele: codestral-latest}
+      - {f: groq,       modele: qwen/qwen3.8-27b}
+      - {f: openrouter, modele: qwen/qwen3.8-27b:free}
+      - {f: groq,       modele: openai/gpt-oss-120b}
+      - {f: openrouter, modele: cohere/north-mini-code:free}
+      - {f: openrouter, modele: poolside/laguna-s-2.1:free}
+      - {f: cerebras,   modele: gpt-oss-120b}
+      - {f: openrouter, modele: openrouter/free}
+
+  pk-vision:
+    role: "Lecture d'images, captures, factures scannées, direction artistique"
+    chaine:
+      - {f: gemini,     modele: gemini-flash-latest}
+      - {f: openrouter, modele: google/gemma-4-31b-it:free}
+      - {f: openrouter, modele: qwen/qwen3.8-27b:free}
+      - {f: mistral,    modele: mistral-small-latest}
+      - {f: openrouter, modele: openrouter/free}
+
+  pk-long:
+    role: "Documents très longs (contrats, cahiers des charges, veille massive)"
+    chaine:
+      - {f: gemini,     modele: gemini-flash-latest}
+      - {f: openrouter, modele: nvidia/nemotron-3-ultra-550b-a55b:free}
+      - {f: openrouter, modele: google/gemma-4-31b-it:free}
+      - {f: mistral,    modele: mistral-medium-latest}
+      - {f: openrouter, modele: openrouter/free}
+
+# Si un cerveau entier est indisponible, l'orchestrateur essaie ceux-ci.
+secours_entre_cerveaux:
+  pk-rapide:  [pk-costaud]
+  pk-costaud: [pk-rapide, pk-long]
+  pk-code:    [pk-costaud]
+  pk-vision:  [pk-costaud]
+  pk-long:    [pk-costaud]

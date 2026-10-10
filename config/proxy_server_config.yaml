@@ -1,0 +1,99 @@
+model_list:
+  # 9 Specialized Agents
+  - model_name: "02-photography-specialist"
+    litellm_params:
+      model: "openrouter/openai/gpt-4-vision"
+    router_settings:
+      num_retries: 3
+      fallbacks: ["pk-vision", "pk-costaud"]
+  
+  - model_name: "03-restaurant-hotel-specialist"
+    litellm_params:
+      model: "openrouter/anthropic/claude-opus"
+    router_settings:
+      num_retries: 3
+      fallbacks: ["pk-costaud", "pk-rapide"]
+  
+  - model_name: "04-real-estate-specialist"
+    litellm_params:
+      model: "openrouter/anthropic/claude-opus"
+    router_settings:
+      num_retries: 3
+      fallbacks: ["pk-costaud", "pk-rapide"]
+  
+  - model_name: "05-software-dev-specialist"
+    litellm_params:
+      model: "openrouter/openai/gpt-4"
+    router_settings:
+      num_retries: 3
+      fallbacks: ["pk-code", "pk-costaud"]
+  
+  - model_name: "06-accounting-specialist"
+    litellm_params:
+      model: "openrouter/anthropic/claude-opus"
+    router_settings:
+      num_retries: 3
+      fallbacks: ["pk-costaud", "pk-rapide"]
+  
+  - model_name: "07-marketing-specialist"
+    litellm_params:
+      model: "openrouter/anthropic/claude-opus"
+    router_settings:
+      num_retries: 3
+      fallbacks: ["pk-costaud", "pk-rapide"]
+  
+  - model_name: "08-support-specialist"
+    litellm_params:
+      model: "openrouter/anthropic/claude-opus"
+    router_settings:
+      num_retries: 3
+      fallbacks: ["pk-rapide", "pk-costaud"]
+  
+  - model_name: "01-orchestration-agent"
+    litellm_params:
+      model: "openrouter/anthropic/claude-opus"
+    router_settings:
+      num_retries: 3
+      fallbacks: ["pk-costaud", "pk-rapide"]
+  
+  - model_name: "09-generic-sme-specialist"
+    litellm_params:
+      model: "openrouter/anthropic/claude-opus"
+    router_settings:
+      num_retries: 3
+      fallbacks: ["pk-costaud", "pk-rapide"]
+
+  # 4 Legacy Models
+  - model_name: "pk-rapide"
+    litellm_params:
+      model: "openrouter/gwen/gwen-3.8-27b:free"
+    router_settings:
+      num_retries: 2
+      fallbacks: ["pk-costaud"]
+  
+  - model_name: "pk-costaud"
+    litellm_params:
+      model: "openrouter/anthropic/claude-opus"
+    router_settings:
+      num_retries: 3
+  
+  - model_name: "pk-code"
+    litellm_params:
+      model: "openrouter/openai/gpt-4"
+    router_settings:
+      num_retries: 3
+      fallbacks: ["pk-costaud"]
+  
+  - model_name: "pk-vision"
+    litellm_params:
+      model: "openrouter/openai/gpt-4-vision"
+    router_settings:
+      num_retries: 2
+      fallbacks: ["pk-costaud"]
+
+router_settings:
+  routing_strategy: "usage_based_routing_v2"
+
+litellm_settings:
+  drop_params: true
+  set_verbose: true

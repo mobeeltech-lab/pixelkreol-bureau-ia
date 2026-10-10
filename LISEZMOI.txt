@@ -1,0 +1,39 @@
+BUREAU IA PIXELKRÉOL — v2 (26/09/2026)
+======================================
+
+Ce qui tourne
+  pk_postgres       base de données (n8n, CRM, journal des agents)
+  pk_litellm        aiguilleur de modèles : 5 cerveaux (pk-rapide, pk-costaud, pk-code,
+                    pk-vision, pk-long), chacun = une chaîne de LLM gratuits avec bascule
+  pk_orchestrateur  les 25 agents (API compatible OpenAI) + pk-auto + pk-equipe
+  pk_openwebui      le chat : https://agents.mebeeltech.online
+  pk_n8n            les automatisations : https://agents-n8n.mebeeltech.online
+
+Commandes utiles (dans /opt/pixelkreol-bureau-ia)
+  bash verifier.sh              état complet + test réel de chaque fournisseur
+  bash verifier.sh --rapide     état sans appeler les modèles
+  bash install.sh               réinstaller / mettre à jour (rejouable, garde tout)
+  docker compose logs -f pk_orchestrateur
+  bash scripts/restaurer.sh     lister les sauvegardes / revenir en arrière
+
+Ajouter un agent (sans redémarrer)
+  1) éditer agents/perso.yaml (même format que agents/registre.yaml), ou
+  2) demander à l'agent « Fabrique d'agents » dans le chat, puis envoyer son bloc YAML :
+     curl -X POST http://127.0.0.1:4001/admin/agents -H "Authorization: Bearer $LITELLM_MASTER_KEY" \
+          --data-binary @nouvel-agent.yaml
+  L'agent apparaît dans Open WebUI sous le nom pk-1NN-son-id.
+
+Ajouter / changer un fournisseur de LLM
+  1) mettre la clé dans .env (ex. MISTRAL_API_KEY=...)
+  2) bash install.sh   (la config LiteLLM est régénérée ; seuls les fournisseurs avec clé sont actifs)
+
+Utiliser les agents depuis n8n
+  Nœud « OpenAI Chat Model » ou « HTTP Request » :
+    URL de base : http://pk_orchestrateur:4001/v1
+    Clé         : la valeur de LITELLM_MASTER_KEY (fichier .env)
+    Modèle      : pk-auto, pk-equipe ou pk-02-commercial, pk-12-secretariat, etc.
+
+Sécurité
+  .env contient les clés : droits 600, ne jamais le copier dans un chat.
+  Les ports internes (4000, 4001, 8081, 8082) n'écoutent que sur 127.0.0.1.
+  Sauvegardes et journaux d'installation : /opt/pk-sauvegardes (droits 700).

@@ -1,0 +1,175 @@
+# =====================================================================
+#  Bureau IA PixelKréol — v2
+#  Tout se règle dans .env (généré/complété par install.sh).
+#  Démarrage manuel :  docker compose up -d --build
+#  Les ports ne sont ouverts QUE sur 127.0.0.1 : l'accès public passe par
+#  le reverse proxy (Caddy fourni, ou nginx déjà présent sur le VPS).
+# =====================================================================
+name: pixelkreol-bureau-ia
+
+x-journaux: &journaux
+  logging:
+    driver: json-file
+    options: {max-size: "10m", max-file: "3"}
+
+networks:
+  pixelkreol_net:
+    name: pixelkreol_net
+
+volumes:
+  pk_postgres_data:
+    name: ${PK_VOL_POSTGRES:-pixelkreol-bureau-ia_pk_postgres_data}
+  pk_n8n_data:
+    name: ${PK_VOL_N8N:-pixelkreol-bureau-ia_pk_n8n_data}
+  pk_openwebui_data:
+    name: ${PK_VOL_OPENWEBUI:-pixelkreol-bureau-ia_pk_openwebui_data}
+
+services:
+  # ---------------------------------------------------------------- base de données
+  pk_postgres:
+    image: ${PK_PG_IMAGE:-postgres:17-alpine}
+    container_name: pk_postgres
+    restart: unless-stopped
+    <<: *journaux
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pixelkreol}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD manquant dans .env}
+      POSTGRES_DB: ${POSTGRES_DB:-pixelkreol}
+    volumes:
+      - pk_postgres_data:/var/lib/postgresql/data
+      - ./scripts/initdb:/docker-entrypoint-initdb.d:ro
+    networks: [pixelkreol_net]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pixelkreol} -d ${POSTGRES_DB:-pixelkreol}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    mem_limit: 512m
+
+  # ---------------------------------------------------------------- aiguilleur de modèles
+  pk_litellm:
+    image: ${PK_LITELLM_IMAGE:-ghcr.io/berriai/litellm:main-stable}
+    container_name: pk_litellm
+    restart: unless-stopped
+    <<: *journaux
+    # L'image a déjà `litellm` comme point d'entrée : on ne passe QUE les arguments.
+    command: ["--config", "/app/config.yaml", "--port", "4000", "--num_workers", "1"]
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?LITELLM_MASTER_KEY manquant dans .env}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
+      CEREBRAS_API_KEY: ${CEREBRAS_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      MOCK_API_KEY: ${MOCK_API_KEY:-}
+      LITELLM_LOG: ${LITELLM_LOG:-WARNING}
+      LITELLM_TELEMETRY: "False"
+    volumes:
+      - ./config/litellm_config.yaml:/app/config.yaml:ro
+    ports:
+      - "127.0.0.1:${PK_PORT_LITELLM:-4000}:4000"
+    networks: [pixelkreol_net]
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request;urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness',timeout=4)\""]
+      interval: 15s
+      timeout: 6s
+      retries: 10
+      start_period: 40s
+    mem_limit: 900m
+
+  # ---------------------------------------------------------------- orchestrateur des agents
+  pk_orchestrateur:
+    build: ./orchestrateur
+    image: pixelkreol/orchestrateur:2
+    container_name: pk_orchestrateur
+    restart: unless-stopped
+    <<: *journaux
+    depends_on:
+      pk_litellm: {condition: service_healthy}
+      pk_postgres: {condition: service_healthy}
+    environment:
+      LITELLM_URL: http://pk_litellm:4000
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      PK_API_KEY: ${PK_API_KEY:-${LITELLM_MASTER_KEY}}
+      PK_ADMIN_KEY: ${PK_ADMIN_KEY:-${LITELLM_MASTER_KEY}}
+      PK_ROUTAGE_IA: ${PK_ROUTAGE_IA:-true}
+      PK_ANNONCE_AGENT: ${PK_ANNONCE_AGENT:-true}
+      PK_AGENTS_DIR: /app/agents
+      DATABASE_URL: postgresql://${POSTGRES_USER:-pixelkreol}:${POSTGRES_PASSWORD}@pk_postgres:5432/${PK_DB_BUREAU:-pk_bureau}
+    volumes:
+      - ./agents:/app/agents
+    ports:
+      - "127.0.0.1:${PK_PORT_ORCH:-4001}:4001"
+    networks: [pixelkreol_net]
+    mem_limit: 256m
+
+  # ---------------------------------------------------------------- interface de chat
+  pk_openwebui:
+    image: ${PK_OPENWEBUI_IMAGE:-ghcr.io/open-webui/open-webui:main}
+    container_name: pk_openwebui
+    restart: unless-stopped
+    <<: *journaux
+    depends_on:
+      pk_orchestrateur: {condition: service_healthy}
+    environment:
+      # 1re connexion = les agents (orchestrateur), 2e = les cerveaux bruts (LiteLLM)
+      OPENAI_API_BASE_URLS: "http://pk_orchestrateur:4001/v1;http://pk_litellm:4000/v1"
+      OPENAI_API_KEYS: "${PK_API_KEY:-${LITELLM_MASTER_KEY}};${LITELLM_MASTER_KEY}"
+      ENABLE_OLLAMA_API: "false"
+      WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY:?WEBUI_SECRET_KEY manquant dans .env}
+      WEBUI_NAME: "PixelKréol — Bureau IA"
+      WEBUI_URL: https://${PK_DOMAINE_AGENTS:-agents.mebeeltech.online}
+      ENABLE_SIGNUP: ${OPENWEBUI_SIGNUP:-false}
+      DEFAULT_MODELS: pk-auto
+      DEFAULT_LOCALE: fr-FR
+      ENABLE_COMMUNITY_SHARING: "false"
+      ANONYMIZED_TELEMETRY: "false"
+      SCARF_NO_ANALYTICS: "true"
+      DO_NOT_TRACK: "true"
+      # Tâches internes d'Open WebUI (titres, tags) sur le cerveau rapide
+      TASK_MODEL_EXTERNAL: pk-rapide
+    volumes:
+      - pk_openwebui_data:/app/backend/data
+    ports:
+      - "127.0.0.1:${PK_PORT_OPENWEBUI:-3010}:8080"
+    networks: [pixelkreol_net]
+    mem_limit: 1200m
+
+  # ---------------------------------------------------------------- automatisations
+  pk_n8n:
+    image: ${PK_N8N_IMAGE:-docker.n8n.io/n8nio/n8n:latest}
+    container_name: pk_n8n
+    restart: unless-stopped
+    <<: *journaux
+    depends_on:
+      pk_postgres: {condition: service_healthy}
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: pk_postgres
+      DB_POSTGRESDB_DATABASE: ${N8N_DB:-n8n}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER:-pixelkreol}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      N8N_HOST: ${PK_DOMAINE_N8N:-agents-n8n.mebeeltech.online}
+      N8N_PROTOCOL: https
+      N8N_PORT: 5678
+      N8N_LISTEN_ADDRESS: 0.0.0.0
+      WEBHOOK_URL: https://${PK_DOMAINE_N8N:-agents-n8n.mebeeltech.online}/
+      N8N_EDITOR_BASE_URL: https://${PK_DOMAINE_N8N:-agents-n8n.mebeeltech.online}/
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?N8N_ENCRYPTION_KEY manquant dans .env}
+      N8N_PROXY_HOPS: 1
+      GENERIC_TIMEZONE: Indian/Reunion
+      TZ: Indian/Reunion
+      N8N_DEFAULT_LOCALE: fr
+      N8N_RUNNERS_ENABLED: "true"
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+      # Dans les workflows : URL des agents = http://pk_orchestrateur:4001/v1
+      PK_AGENTS_URL: http://pk_orchestrateur:4001/v1
+    volumes:
+      - pk_n8n_data:/home/node/.n8n
+    ports:
+      - "127.0.0.1:${PK_PORT_N8N:-5678}:5678"
+    networks: [pixelkreol_net]
+    mem_limit: 900m

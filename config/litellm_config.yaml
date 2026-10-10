@@ -1,0 +1,262 @@
+# FICHIER GÉNÉRÉ par outils/generer_litellm.py — ne pas modifier à la main.
+# Pour changer les modèles : éditer agents/cerveaux.yaml puis relancer install.sh
+model_list:
+- model_name: pk-rapide
+  litellm_params:
+    model: groq/openai/gpt-oss-20b
+    api_key: os.environ/GROQ_API_KEY
+  model_info:
+    description: pk-rapide via groq
+- model_name: pk-rapide--2
+  litellm_params:
+    model: groq/qwen/qwen3.8-27b
+    api_key: os.environ/GROQ_API_KEY
+  model_info:
+    description: pk-rapide via groq
+- model_name: pk-rapide--3
+  litellm_params:
+    model: gemini/gemini-flash-lite-latest
+    api_key: os.environ/GEMINI_API_KEY
+  model_info:
+    description: pk-rapide via gemini
+- model_name: pk-rapide--4
+  litellm_params:
+    model: mistral/mistral-small-latest
+    api_key: os.environ/MISTRAL_API_KEY
+  model_info:
+    description: pk-rapide via mistral
+- model_name: pk-rapide--5
+  litellm_params:
+    model: openrouter/nvidia/nemotron-3.5-lightning:free
+    api_key: os.environ/OPENROUTER_API_KEY
+  model_info:
+    description: pk-rapide via openrouter
+- model_name: pk-rapide--6
+  litellm_params:
+    model: openrouter/google/gemma-4-31b-it:free
+    api_key: os.environ/OPENROUTER_API_KEY
+  model_info:
+    description: pk-rapide via openrouter
+- model_name: pk-rapide--7
+  litellm_params:
+    model: cerebras/gpt-oss-120b
+    api_key: os.environ/CEREBRAS_API_KEY
+  model_info:
+    description: pk-rapide via cerebras
+- model_name: pk-rapide--8
+  litellm_params:
+    model: openrouter/openrouter/free
+    api_key: os.environ/OPENROUTER_API_KEY
+  model_info:
+    description: pk-rapide via openrouter
+- model_name: pk-costaud
+  litellm_params:
+    model: gemini/gemini-flash-latest
+    api_key: os.environ/GEMINI_API_KEY
+  model_info:
+    description: pk-costaud via gemini
+- model_name: pk-costaud--2
+  litellm_params:
+    model: groq/openai/gpt-oss-120b
+    api_key: os.environ/GROQ_API_KEY
+  model_info:
+    description: pk-costaud via groq
+- model_name: pk-costaud--3
+  litellm_params:
+    model: mistral/mistral-medium-latest
+    api_key: os.environ/MISTRAL_API_KEY
+  model_info:
+    description: pk-costaud via mistral
+- model_name: pk-costaud--4
+  litellm_params:
+    model: openrouter/nvidia/nemotron-3-ultra-550b-a55b:free
+    api_key: os.environ/OPENROUTER_API_KEY
+  model_info:
+    description: pk-costaud via openrouter
+- model_name: pk-costaud--5
+  litellm_params:
+    model: openrouter/qwen/qwen3.8-27b:free
+    api_key: os.environ/OPENROUTER_API_KEY
+  model_info:
+    description: pk-costaud via openrouter
+- model_name: pk-costaud--6
+  litellm_params:
+    model: groq/qwen/qwen3.8-27b
+    api_key: os.environ/GROQ_API_KEY
+  model_info:
+    description: pk-costaud via groq
+- model_name: pk-costaud--7
+  litellm_params:
+    model: cerebras/gpt-oss-120b
+    api_key: os.environ/CEREBRAS_API_KEY
+  model_info:
+    description: pk-costaud via cerebras
+- model_name: pk-costaud--8
+  litellm_params:
+    model: deepseek/deepseek-chat
+    api_key: os.environ/DEEPSEEK_API_KEY
+  model_info:
+    description: pk-costaud via deepseek
+- model_name: pk-costaud--9
+  litellm_params:
+    model: openrouter/openrouter/free
+    api_key: os.environ/OPENROUTER_API_KEY
+  model_info:
+    description: pk-costaud via openrouter
+- model_name: pk-code
+  litellm_params:
+    model: mistral/codestral-latest
+    api_key: os.environ/MISTRAL_API_KEY
+  model_info:
+    description: pk-code via mistral
+- model_name: pk-code--2
+  litellm_params:
+    model: groq/qwen/qwen3.8-27b
+    api_key: os.environ/GROQ_API_KEY
+  model_info:
+    description: pk-code via groq
+- model_name: pk-code--3
+  litellm_params:
+    model: openrouter/qwen/qwen3.8-27b:free
+    api_key: os.environ/OPENROUTER_API_KEY
+  model_info:
+    description: pk-code via openrouter
+- model_name: pk-code--4
+  litellm_params:
+    model: groq/openai/gpt-oss-120b
+    api_key: os.environ/GROQ_API_KEY
+  model_info:
+    description: pk-code via groq
+- model_name: pk-code--5
+  litellm_params:
+    model: openrouter/cohere/north-mini-code:free
+    api_key: os.environ/OPENROUTER_API_KEY
+  model_info:
+    description: pk-code via openrouter
+- model_name: pk-code--6
+  litellm_params:
+    model: openrouter/poolside/laguna-s-2.1:free
+    api_key: os.environ/OPENROUTER_API_KEY
+  model_info:
+    description: pk-code via openrouter
+- model_name: pk-code--7
+  litellm_params:
+    model: cerebras/gpt-oss-120b
+    api_key: os.environ/CEREBRAS_API_KEY
+  model_info:
+    description: pk-code via cerebras
+- model_name: pk-code--8
+  litellm_params:
+    model: openrouter/openrouter/free
+    api_key: os.environ/OPENROUTER_API_KEY
+  model_info:
+    description: pk-code via openrouter
+- model_name: pk-vision
+  litellm_params:
+    model: gemini/gemini-flash-latest
+    api_key: os.environ/GEMINI_API_KEY
+  model_info:
+    description: pk-vision via gemini
+- model_name: pk-vision--2
+  litellm_params:
+    model: openrouter/google/gemma-4-31b-it:free
+    api_key: os.environ/OPENROUTER_API_KEY
+  model_info:
+    description: pk-vision via openrouter
+- model_name: pk-vision--3
+  litellm_params:
+    model: openrouter/qwen/qwen3.8-27b:free
+    api_key: os.environ/OPENROUTER_API_KEY
+  model_info:
+    description: pk-vision via openrouter
+- model_name: pk-vision--4
+  litellm_params:
+    model: mistral/mistral-small-latest
+    api_key: os.environ/MISTRAL_API_KEY
+  model_info:
+    description: pk-vision via mistral
+- model_name: pk-vision--5
+  litellm_params:
+    model: openrouter/openrouter/free
+    api_key: os.environ/OPENROUTER_API_KEY
+  model_info:
+    description: pk-vision via openrouter
+- model_name: pk-long
+  litellm_params:
+    model: gemini/gemini-flash-latest
+    api_key: os.environ/GEMINI_API_KEY
+  model_info:
+    description: pk-long via gemini
+- model_name: pk-long--2
+  litellm_params:
+    model: openrouter/nvidia/nemotron-3-ultra-550b-a55b:free
+    api_key: os.environ/OPENROUTER_API_KEY
+  model_info:
+    description: pk-long via openrouter
+- model_name: pk-long--3
+  litellm_params:
+    model: openrouter/google/gemma-4-31b-it:free
+    api_key: os.environ/OPENROUTER_API_KEY
+  model_info:
+    description: pk-long via openrouter
+- model_name: pk-long--4
+  litellm_params:
+    model: mistral/mistral-medium-latest
+    api_key: os.environ/MISTRAL_API_KEY
+  model_info:
+    description: pk-long via mistral
+- model_name: pk-long--5
+  litellm_params:
+    model: openrouter/openrouter/free
+    api_key: os.environ/OPENROUTER_API_KEY
+  model_info:
+    description: pk-long via openrouter
+router_settings:
+  fallbacks:
+  - pk-rapide:
+    - pk-rapide--2
+    - pk-rapide--3
+    - pk-rapide--4
+    - pk-rapide--5
+    - pk-rapide--6
+    - pk-rapide--7
+    - pk-rapide--8
+  - pk-costaud:
+    - pk-costaud--2
+    - pk-costaud--3
+    - pk-costaud--4
+    - pk-costaud--5
+    - pk-costaud--6
+    - pk-costaud--7
+    - pk-costaud--8
+    - pk-costaud--9
+  - pk-code:
+    - pk-code--2
+    - pk-code--3
+    - pk-code--4
+    - pk-code--5
+    - pk-code--6
+    - pk-code--7
+    - pk-code--8
+  - pk-vision:
+    - pk-vision--2
+    - pk-vision--3
+    - pk-vision--4
+    - pk-vision--5
+  - pk-long:
+    - pk-long--2
+    - pk-long--3
+    - pk-long--4
+    - pk-long--5
+  num_retries: 0
+  allowed_fails: 1
+  cooldown_time: 45
+  timeout: 90
+  enable_pre_call_checks: false
+litellm_settings:
+  drop_params: true
+  request_timeout: 90
+  num_retries: 0
+  set_verbose: false
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY

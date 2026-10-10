@@ -1,0 +1,7 @@
+# API des agents (compatible OpenAI) — protégée par la clé PK_API_KEY
+{$PK_DOMAINE_API} {
+    import securite
+    reverse_proxy pk_orchestrateur:4001 {
+        flush_interval -1
+    }
+}

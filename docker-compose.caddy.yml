@@ -1,0 +1,29 @@
+# Reverse proxy Caddy (HTTPS Let's Encrypt automatique).
+# Utilisé seulement si les ports 80/443 du VPS sont libres (install.sh le détecte
+# et l'ajoute via COMPOSE_FILE dans .env). Sinon install.sh configure le nginx existant.
+volumes:
+  pk_caddy_data:
+    name: ${PK_VOL_CADDY:-pixelkreol-bureau-ia_pk_caddy_data}
+  pk_caddy_config:
+    name: ${PK_VOL_CADDY_CONFIG:-pixelkreol-bureau-ia_pk_caddy_config}
+
+services:
+  pk_caddy:
+    image: caddy:2-alpine
+    container_name: pk_caddy
+    restart: unless-stopped
+    environment:
+      PK_DOMAINE_AGENTS: ${PK_DOMAINE_AGENTS:-agents.mebeeltech.online}
+      PK_DOMAINE_N8N: ${PK_DOMAINE_N8N:-agents-n8n.mebeeltech.online}
+      PK_DOMAINE_API: ${PK_DOMAINE_API:-agents-api.mebeeltech.online}
+      PK_EMAIL_ACME: ${PK_EMAIL_ACME:-mobeeltech@gmail.com}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./config/Caddyfile:/etc/caddy/Caddyfile:ro
+      - pk_caddy_data:/data
+      - pk_caddy_config:/config
+    networks: [pixelkreol_net]
+    depends_on: [pk_openwebui, pk_n8n, pk_orchestrateur]
+    mem_limit: 128m

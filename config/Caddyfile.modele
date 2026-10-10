@@ -1,0 +1,23 @@
+{
+    email {$PK_EMAIL_ACME}
+}
+
+(securite) {
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+    encode zstd gzip
+}
+
+{$PK_DOMAINE_AGENTS} {
+    import securite
+    reverse_proxy pk_openwebui:8080
+}
+
+{$PK_DOMAINE_N8N} {
+    import securite
+    reverse_proxy pk_n8n:5678
+}

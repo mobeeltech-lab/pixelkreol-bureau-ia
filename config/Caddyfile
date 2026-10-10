@@ -1,0 +1,23 @@
+# =====================================================================
+# Reverse proxy — Bureau IA PixelKréol
+# Remplacer les sous-domaines par ceux réellement configurés en DNS
+# (chez Hostinger : ajouter un enregistrement A vers 72.62.189.101
+#  pour chacun des sous-domaines ci-dessous avant de démarrer Caddy,
+#  sinon la demande de certificat HTTPS échouera)
+# =====================================================================
+
+{$OPENWEBUI_SUBDOMAIN:agents.pixelkreol.re} {
+	reverse_proxy pk_openwebui:8080
+	encode gzip
+}
+
+{$N8N_SUBDOMAIN:agents-n8n.pixelkreol.re} {
+	reverse_proxy pk_n8n:5678
+	encode gzip
+}
+
+# Actif seulement si le profil "extended" est démarré
+{$SEARXNG_SUBDOMAIN:agents-recherche.pixelkreol.re} {
+	reverse_proxy pk_searxng:8080
+	encode gzip
+}
