@@ -4,7 +4,7 @@ Base de l'audit : `serveur-20261010` (code en service), puis rebasé sur la bran
 (pages HTML, `vercel.json`, dossier `atelier`) : elle n'a **aucun** fichier du Bureau IA (ni orchestrateur, ni
 `install.sh`, ni registre des agents). Les deux branches sont donc deux projets différents ; ne jamais déployer `main` sur le VPS.
 
-Résultat des tests : **232 réussis, 0 échec** après correction (**93 échecs** sur le code d'origine, avec les mêmes tests).
+Résultat des tests : **238 réussis, 0 échec** après correction (**98 échecs** sur le code d'origine, avec les mêmes tests).
 Aucun test n'appelle un vrai fournisseur ni n'utilise de vraie clé.
 
 ## 1. Défauts corrigés (du plus grave au moins grave)

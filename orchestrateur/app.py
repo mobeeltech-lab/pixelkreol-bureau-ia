@@ -126,6 +126,15 @@ def messages_valides(corps: dict) -> list[dict]:
     return [m for m in brut if isinstance(m, dict)] if isinstance(brut, list) else []
 
 
+def aucun_agent() -> JSONResponse | None:
+    """Réponse 503 claire si le registre n'a chargé aucun agent (fichier illisible…), sinon None."""
+    REGISTRE.recharger()
+    if REGISTRE.agents:
+        return None
+    return erreur(503, "Aucun agent disponible : le registre n'a pas pu être chargé. "
+                       "Voir /health (champ « avertissements ») et les journaux du serveur.", "aucun_agent")
+
+
 def erreur(statut: int, message: str, code: str = "erreur") -> JSONResponse:
     return JSONResponse(status_code=statut, content={"error": {"message": message, "type": code, "code": statut}})
 
@@ -427,7 +436,9 @@ async def choisir_agent(client: httpx.AsyncClient, messages: list[dict]) -> tupl
         return a1, "mots-clés"
     if contient_image(messages) and "photo-video" in REGISTRE.agents:
         return REGISTRE.agents["photo-video"], "image"
-    defaut = REGISTRE.agents.get("orchestrateur") or next(iter(REGISTRE.agents.values()))
+    defaut = REGISTRE.agents.get("orchestrateur") or next(iter(REGISTRE.agents.values()), None)
+    if defaut is None:
+        raise LookupError("aucun agent chargé")
     return defaut, "défaut"
 
 
@@ -795,7 +806,9 @@ async def tester_routage(request: Request):
     if not isinstance(corps, dict):
         return erreur(400, "Un objet JSON est attendu", "requete")
     messages = messages_valides(corps) or [{"role": "user", "content": str(corps.get("texte", ""))}]
-    REGISTRE.recharger()
+    vide = aucun_agent()
+    if vide:
+        return vide
     agent, methode = await choisir_agent(request.app.state.client, messages)
     return {"agent": agent["id"], "modele": agent["modele"], "nom": agent["nom"], "methode": methode}
 
@@ -814,7 +827,10 @@ async def chat(request: Request):
     client: httpx.AsyncClient = request.app.state.client
     modele = str(corps.get("model", "pk-auto"))
     flux = bool(corps.get("stream"))
-    REGISTRE.recharger()
+    vide = aucun_agent()
+    if vide:
+        LOG.error("Requête refusée (%s) : aucun agent chargé", modele)
+        return vide
 
     if modele in ("pk-equipe", "equipe"):
         return await mode_equipe(client, corps, flux)

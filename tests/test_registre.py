@@ -235,3 +235,38 @@ def test_un_agent_perso_mal_forme_deja_present_ne_casse_pas_pk_auto(client, h_ap
     os.utime(agents_dir / "perso.yaml", ns=(1, 2_000_000_000_000_000_000))
     assert client.post("/route", headers=h_api, json={"texte": "un devis"}).status_code == 200
     assert nb_agents(client, h_api) == 25
+
+
+# ---------------------------------------------------------------- aucun agent chargé
+@pytest.fixture
+def client_sans_agent(monkeypatch, agents_dir, faux):
+    """Registre illisible dès le démarrage : 0 agent."""
+    ecrire(agents_dir, "registre.yaml", "agents: [cassé")
+    app = charger_app(monkeypatch, agents_dir)
+    with TestClient(app.app, raise_server_exceptions=False) as tc:
+        tc.app.state.client = __import__("httpx").AsyncClient(transport=__import__("httpx").MockTransport(faux))
+        tc.faux = faux
+        yield tc
+
+
+@pytest.mark.parametrize("modele", ["pk-auto", "auto", "pk-equipe", "pk-02-commercial"])
+def test_sans_agent_chargé_reponse_claire_503(client_sans_agent, h_api, modele):
+    r = client_sans_agent.post("/v1/chat/completions", headers=h_api, json={
+        "model": modele, "messages": [{"role": "user", "content": "Fais un devis"}]})
+    assert r.status_code == 503, r.text
+    e = r.json()["error"]
+    assert "aucun agent disponible" in e["message"].lower() and "/health" in e["message"]
+    assert e["code"] == 503 and e["type"] == "aucun_agent"
+    assert client_sans_agent.faux.appels == []          # on n'a appelé aucun cerveau pour rien
+
+
+def test_sans_agent_chargé_route_et_flux_aussi(client_sans_agent, h_api):
+    assert client_sans_agent.post("/route", headers=h_api, json={"texte": "devis"}).status_code == 503
+    r = client_sans_agent.post("/v1/chat/completions", headers=h_api, json={
+        "model": "pk-auto", "stream": True, "messages": [{"role": "user", "content": "salut"}]})
+    assert r.status_code == 503
+
+
+def test_sans_agent_chargé_health_dit_pourquoi(client_sans_agent):
+    h = client_sans_agent.get("/health").json()
+    assert h["ok"] is False and h["agents"] == 0 and h["avertissements"]
