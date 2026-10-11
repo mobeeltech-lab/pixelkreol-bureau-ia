@@ -259,6 +259,8 @@ class Registre:
             return f"outils doit être une liste parmi : {', '.join(sorted(OUTILS_CONNUS))}"
         if a.get("inclure_annuaire") is not None and not isinstance(a["inclure_annuaire"], bool):
             return "inclure_annuaire doit être true ou false"
+        if a.get("routage_prioritaire_en_tete") is not None and not isinstance(a["routage_prioritaire_en_tete"], bool):
+            return "routage_prioritaire_en_tete doit être true ou false"
         regles = a.get("routage_prioritaire")
         if regles is not None and not Registre.regles_valides(regles):
             return ("routage_prioritaire doit être une liste de règles ; chaque règle est une liste de groupes ; "
@@ -466,9 +468,11 @@ def regle_prioritaire(texte: str) -> dict | None:
 
     Une règle = liste de groupes ; elle s'applique quand CHAQUE groupe contient au moins une de ses expressions
     dans le message (ex. un mot de « bail » ET un verbe de relecture). Elle l'emporte sur le score des mots-clés.
-    Si plusieurs agents ont une règle qui s'applique, le premier (numéro le plus bas) est choisi."""
+    Si plusieurs agents ont une règle qui s'applique, le premier (numéro le plus bas) est choisi,
+    sauf les agents marqués `routage_prioritaire_en_tete: true` (formule explicite, ex. « améliore ma demande ») qui passent avant tous les autres."""
     tn = POLITESSES.sub(" ", normaliser(texte))
-    for a in REGISTRE.agents.values():
+    ordre = sorted(REGISTRE.agents.values(), key=lambda x: (x.get("routage_prioritaire_en_tete") is not True, x["num"]))
+    for a in ordre:
         for regle in a.get("_regles") or []:
             if all(any(phrase_presente(m, tn) for m in groupe) for groupe in regle):
                 return a

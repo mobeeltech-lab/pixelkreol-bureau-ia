@@ -259,3 +259,21 @@ def test_le_banc_abi_existe_avec_10_cas_et_les_memes_regles():
     bonne = BONNE_DEVIS.replace("pk-04-devis", "pk-04-appels-de-fonds").replace("PixelKréol", "ABI Holding")
     assert not rate(noter(cas("appel-de-fonds", "abi"), bonne), "agent")
     assert rate(noter(cas("appel-de-fonds", "abi"), bonne.replace("pk-04-appels-de-fonds", "pk-04-devis")), "agent")      # le Devis n'existe pas chez ABI
+
+
+# =============================================================== 6. la formule explicite passe avant TOUTE autre règle prioritaire (Juriste d'ABI compris)
+@pytest.mark.parametrize("texte", ["Améliore ma demande : relis le bail", "Écris le prompt pour relire le bail du locataire", "Reformule ma demande : vérifie les clauses du bail"])
+def test_abi_formule_explicite_avant_la_regle_du_juriste(texte, app_abi, faux):
+    assert route(app_abi, faux, texte) == ID
+
+
+@pytest.mark.parametrize("texte", ["Relis ce bail", "Relis le bail et dis-moi si la clause de révision est correcte", "Vérifie les clauses du bail du lot A03"])
+def test_abi_relire_un_bail_va_toujours_au_juriste(texte, app_abi, faux):
+    assert route(app_abi, faux, texte) == "juriste"
+
+
+def test_champ_routage_prioritaire_en_tete_doit_etre_booleen(appli, agents_dir):
+    mauvais = {"agents": [{"id": "x2", "num": 161, "nom": "X", "cerveau": "pk-rapide", "description": "d", "consignes": "c", "routage_prioritaire_en_tete": "oui"}]}
+    (agents_dir / "perso.yaml").write_text(yaml.safe_dump(mauvais), encoding="utf-8")
+    appli.REGISTRE.recharger(force=True)
+    assert "x2" not in appli.REGISTRE.agents

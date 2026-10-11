@@ -93,7 +93,7 @@ def test_le_registre_abi_suit_le_meme_format_que_pixelkreol():
     ref = yaml.safe_load((RACINE / "agents" / "registre.yaml").read_text(encoding="utf-8"))["agents"]
     cles_ref = set(ref[0])
     for a in charge("registre.yaml")["agents"]:
-        assert set(a) - {"routage_prioritaire", "outils", "inclure_annuaire"} == cles_ref, f"{a['id']} : champs différents du registre PixelKréol"
+        assert set(a) - {"routage_prioritaire", "routage_prioritaire_en_tete", "outils", "inclure_annuaire"} == cles_ref, f"{a['id']} : champs différents du registre PixelKréol"
 
 
 def test_perso_abi_vide_et_valide():

@@ -63,5 +63,5 @@ La réponse doit contenir `"agents":10`. (`dc` est le raccourci décrit dans `in
 ## Limites connues
 - Les réponses de l'agent dépendent du modèle `pk-costaud` : les règles automatiques du banc vérifient la forme (agent existant, bloc de copie, 5 ingrédients, ≤ 3 questions, crochets, secret retiré), pas la **pertinence** de la demande réécrite.
 - La liste des agents ajoute environ 3 700 caractères au message système de cet agent chez PixelKréol (1 300 chez ABI) : sans effet sur les autres agents.
-- « Améliore ma demande : relis le bail » chez ABI part chez le Juriste : la règle prioritaire du Juriste (bail + relecture, numéro plus bas) passe avant celle du Spécialiste Prompt.
+- Les formules explicites (« améliore ma demande », « écris le prompt »…) passent avant toute autre règle prioritaire, y compris celle du Juriste d'ABI (champ `routage_prioritaire_en_tete: true`) ; un simple « Relis ce bail » reste chez le Juriste.
 - Le routage `pk-auto` par mots-clés peut hésiter sur une demande qui contient à la fois la formule du Spécialiste Prompt et un mot-clé fort d'un autre métier : la formule explicite (« améliore ma demande », « écris le prompt »…) l'emporte, sauf cas particulier ci-dessus.

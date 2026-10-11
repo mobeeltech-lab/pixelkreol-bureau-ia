@@ -253,6 +253,7 @@ agents:
     inclure_annuaire: true
     description: Transforme une demande brouillon en demande claire adressée au bon agent (nom exact pk-NN-id), avec contexte, tâche, pièces, forme du résultat et limites ; peut aussi améliorer la fiche d'un agent.
     mots_cles: [ameliore ma demande, ameliorer ma demande, ameliore mon prompt, ameliorer mon prompt, reformule ma demande, reformuler ma demande, ecris le prompt, ecris-moi le prompt, prompt pour, meilleure facon de demander, facon de demander, formuler ma demande, bien demander, demander a un agent, comment demander, a quel agent demander, quel agent pour, ameliore la fiche, ameliorer la fiche d'un agent, modeles de demandes, modele de demande, bibliotheque de prompts, bibliotheque de demandes, mon prompt, ma demande est floue]
+    routage_prioritaire_en_tete: true   # une formule explicite passe avant toute autre règle prioritaire
     routage_prioritaire:
       - - [ameliore ma demande, ameliorer ma demande, ameliore mon prompt, ameliorer mon prompt, reformule ma demande, reformuler ma demande, ecris le prompt, ecris-moi le prompt, ecris moi le prompt, redige le prompt, ameliore la fiche, ameliore cette fiche, ameliorer la fiche]
     consignes: |
