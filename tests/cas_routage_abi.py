@@ -71,6 +71,28 @@ CAS = [
     ("Y a-t-il des doublons dans le dossier des acquéreurs ?", "archiviste"),
     ("Quelles pièces manquent dans le dossier de M. Fictif ?", "archiviste"),
     ("Renomme ces fichiers selon notre règle de nommage", "archiviste"),
+
+    # --- Spécialiste Prompt : 10 demandes qui doivent y aller, puis 10 voisines qui ne doivent PAS y aller
+    ("Améliore ma demande : relance les gens qui n'ont pas payé", "specialiste-prompt"),
+    ('Écris-moi le prompt pour préparer un appel de fonds', "specialiste-prompt"),
+    ("Reformule ma demande pour l'agent Juriste", "specialiste-prompt"),
+    ('Quelle est la meilleure façon de demander un courrier aux acquéreurs ?', "specialiste-prompt"),
+    ("Ma demande est floue, aide-moi à la préciser avant de l'envoyer", "specialiste-prompt"),
+    ("Donne-moi des modèles de demandes prêts à l'emploi", "specialiste-prompt"),
+    ('Je voudrais une bibliothèque de prompts pour la direction', "specialiste-prompt"),
+    ("Améliore la fiche de l'agent Archiviste, voici son texte", "specialiste-prompt"),
+    ('Comment demander à un agent de faire le point sur le chantier ?', "specialiste-prompt"),
+    ('Améliore mon prompt : fais le courrier', "specialiste-prompt"),
+    ("Prépare l'appel de fonds de la mise hors d'eau", 'appels-de-fonds'),
+    ('Relis le bail du locataire du T2', 'juriste'),
+    ('Rédige un courrier type pour les acquéreurs', 'secretaire'),
+    ('Retrouve le PV de livraison du lot C07', 'archiviste'),
+    ('Fais-moi le point du jour', 'orchestrateur'),
+    ('Rédige une annonce pour un appartement de 3 pièces', 'commercial'),
+    ('Fais la quittance du locataire du lot A03', 'locatif'),
+    ('Mets à jour le planning du chantier de la tranche 2', 'suivi-programme'),
+    ('Passe les écritures comptables de la facture du terrassier', 'comptable'),
+    ('Relis le contrat de réservation du lot B12', 'juriste'),
 ]
 
 CAS_CONTROLE = [

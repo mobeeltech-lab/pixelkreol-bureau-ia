@@ -6,7 +6,7 @@ from pathlib import Path
 RACINE = Path(__file__).resolve().parent.parent
 FICHIERS = ["agents/registre.yaml", "agents/socle.txt", "scripts/banc_agents.py", "scripts/banc/__init__.py", "scripts/banc/regles.py", "scripts/banc/cas.py",
             "scripts/banc/cas_direction_vente.py", "scripts/banc/cas_production.py", "scripts/banc/cas_gestion_relation.py",
-            "scripts/banc/cas_technique_produit.py", "scripts/banc/cas_nouveaux.py", "scripts/banc/runner.py", "scripts/banc/audit.py", "scripts/banc/LISEZMOI.md", "scripts/banc/DEPLOIEMENT.md"]
+            "scripts/banc/cas_technique_produit.py", "scripts/banc/cas_nouveaux.py", "scripts/banc/cas_prompt.py", "scripts/banc/cas_prompt_abi.py", "scripts/banc/runner.py", "scripts/banc/audit.py", "scripts/banc/LISEZMOI.md", "scripts/banc/DEPLOIEMENT.md"]
 
 if __name__ == "__main__":
     lignes = [f"{hashlib.sha256((RACINE / f).read_bytes()).hexdigest()}  {f}" for f in FICHIERS]

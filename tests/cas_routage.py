@@ -97,6 +97,28 @@ CAS = [
     ("Bonjour !", "orchestrateur"),
     ("Prépare un pack d'agents IA pour un cabinet d'infirmières", "architecte-bureau-ia"),
     ("Je veux créer un nouvel agent pour un garage automobile", "fabrique-agents"),
+
+    # --- Spécialiste Prompt : 10 demandes qui doivent y aller, puis 10 voisines qui ne doivent PAS y aller
+    ('Améliore ma demande : fais un truc pour le site du coiffeur', "specialiste-prompt"),
+    ('Écris-moi le prompt pour demander un devis de site vitrine', "specialiste-prompt"),
+    ("Reformule ma demande pour l'agent Devis", "specialiste-prompt"),
+    ('Quelle est la meilleure façon de demander un mail de relance à un client ?', "specialiste-prompt"),
+    ("Ma demande est floue, aide-moi à la préciser avant de l'envoyer", "specialiste-prompt"),
+    ("Donne-moi des modèles de demandes prêts à l'emploi", "specialiste-prompt"),
+    ('Je veux une bibliothèque de prompts pour mon équipe', "specialiste-prompt"),
+    ("Améliore la fiche de l'agent Commercial, voici son texte", "specialiste-prompt"),
+    ('Comment demander à un agent de préparer un planning ?', "specialiste-prompt"),
+    ('Améliore mon prompt : fais le site', "specialiste-prompt"),
+    ('Crée un agent pour un salon de coiffure', 'fabrique-agents'),
+    ('Fais-moi un devis pour un site vitrine', 'devis'),
+    ('Rédige une accroche LinkedIn pour notre nouveau service', 'community-manager'),
+    ('Traduis ce message en créole pour mon client', 'traducteur'),
+    ('Prépare le planning du projet client de la pharmacie', 'chef-de-projet'),
+    ('Rédige les mentions légales du site', 'juriste'),
+    ("Prépare un pack d'agents IA pour un cabinet d'infirmières", 'architecte-bureau-ia'),
+    ('Relis ce devis avant envoi au client', 'relecture-croisee'),
+    ('Rédige le cahier des charges du site de réservation', 'cahier-des-charges'),
+    ('Prépare un tutoriel pour mon client', 'formateur'),
 ]
 
 

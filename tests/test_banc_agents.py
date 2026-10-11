@@ -55,7 +55,8 @@ CHANGEMENTS_VOULUS = {      # id -> champs modifiés (décision de Will : PixelK
 }
 AJOUTES_VAGUE_A = [("relances", 26, "gestion"), ("cahier-des-charges", 27, "vente"), ("onboarding-client", 28, "relation"), ("rapport-mensuel", 29, "relation")]
 AJOUTES_VAGUE_B = [("rgpd-conformite", 30, "gestion"), ("accessibilite-performance", 31, "technique"), ("appels-offres", 32, "vente"), ("relecture-croisee", 33, "technique")]
-NB_AGENTS = 33
+AJOUTE_PROMPT = [("specialiste-prompt", 34, "produit")]
+NB_AGENTS = 34
 
 
 def test_les_25_agents_gardent_identite_cerveau_et_description():
@@ -70,9 +71,10 @@ def test_les_25_agents_gardent_identite_cerveau_et_description():
 def test_les_8_agents_des_vagues_a_et_b_s_ajoutent_sans_toucher_aux_25():
     ag = registre()
     assert [(a["id"], a["num"], a["famille"]) for a in ag[25:29]] == AJOUTES_VAGUE_A
-    assert [(a["id"], a["num"], a["famille"]) for a in ag[29:]] == AJOUTES_VAGUE_B and len(ag) == NB_AGENTS
+    assert [(a["id"], a["num"], a["famille"]) for a in ag[29:33]] == AJOUTES_VAGUE_B and len(ag) == NB_AGENTS
+    assert [(a["id"], a["num"], a["famille"]) for a in ag[33:]] == AJOUTE_PROMPT
     assert len({a["id"] for a in ag}) == NB_AGENTS and len({a["num"] for a in ag}) == NB_AGENTS
-    for a in ag[25:]:
+    for a in ag[25:33]:
         assert a["cerveau"] in ("pk-rapide", "pk-costaud", "pk-code", "pk-vision", "pk-long") and 0 <= a["temperature"] <= 1 and a["mots_cles"] and len(a["consignes"]) <= 2900
 
 
@@ -163,7 +165,8 @@ def test_instance_abi_et_orchestrateur_inchanges():
         pytest.skip("branche de départ absente de ce dépôt")
     diff = subprocess.run(["git", "-C", str(RACINE), "diff", "--name-only", "origin/serveur-propre", "--", "instances", "config", "docker-compose.yml",
                            "install.sh", "outils"], capture_output=True, text=True).stdout.split()
-    assert diff == []                                                     # dont instances/abi/agents/socle.txt : le socle d'ABI n'est pas touché
+    # seuls le registre d'ABI (Spécialiste Prompt n° 10), son LISEZMOI et ses modèles de demandes changent : le socle et les cerveaux d'ABI ne sont pas touchés
+    assert set(diff) <= {"instances/abi/agents/registre.yaml", "instances/abi/LISEZMOI.md", "instances/abi/modeles-de-demandes.txt"}
     orch = subprocess.run(["git", "-C", str(RACINE), "diff", "--name-only", "origin/serveur-propre", "--", "orchestrateur"], capture_output=True, text=True).stdout.split()
     assert set(orch) <= {"orchestrateur/app.py", "orchestrateur/mcp_client.py", "orchestrateur/mcp_serveur.py", "orchestrateur/Dockerfile"}
 
@@ -186,12 +189,12 @@ def test_chaque_fiche_nomme_la_regle_des_feux_et_ses_renvois():
 
 
 # =============================================================== 2. le banc : cas, règles, notation
-def test_266_cas_8_par_agent_sauf_devops_10_pour_les_33_agents():
+def test_276_cas_8_par_agent_sauf_devops_et_specialiste_prompt_10_pour_les_34_agents():
     liste = cas_mod.tous()
     par = cas_mod.par_agent(liste)
-    assert len(liste) == 266 and set(par) == {a["id"] for a in registre()}
-    assert all(len(v) == (10 if k == "devops" else 8) for k, v in par.items())
-    assert len({c.cle for c in liste}) == 266 and len({c.question for c in liste}) == 266
+    assert len(liste) == 276 and set(par) == {a["id"] for a in registre()}
+    assert all(len(v) == (10 if k in ("devops", "specialiste-prompt") else 8) for k, v in par.items())
+    assert len({c.cle for c in liste}) == 276 and len({c.question for c in liste}) == 276
     for c in liste:
         assert c.question.strip() and len(c.criteres) > 20 and c.verifs, c.cle
         assert c.route is None or c.route in par, c.cle
@@ -405,8 +408,8 @@ def test_commande_options_et_erreurs(capsys, monkeypatch, tmp_path):
     monkeypatch.delenv("PK_API_KEY", raising=False)
     monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
     monkeypatch.chdir(tmp_path)
-    assert banc_agents.main(["--liste"]) == 0 and "266 cas" in capsys.readouterr().out
-    assert banc_agents.main(["--liste", "--rapide"]) == 0 and "99 cas" in capsys.readouterr().out
+    assert banc_agents.main(["--liste"]) == 0 and "276 cas" in capsys.readouterr().out
+    assert banc_agents.main(["--liste", "--rapide"]) == 0 and "102 cas" in capsys.readouterr().out
     assert banc_agents.main(["--agent", "inconnu"]) == 2 and "inconnu" in capsys.readouterr().err
     assert banc_agents.main(["--agent", "devis", "--pause", "0"]) in (0, 2)          # sans clé (hors dépôt) : refus net ; dans le dépôt, le .env éventuel est lu
 
@@ -490,7 +493,7 @@ FICHIERS_A_COPIER = [
     "scripts/banc_agents.py",
     "scripts/banc/__init__.py", "scripts/banc/regles.py", "scripts/banc/cas.py", "scripts/banc/cas_direction_vente.py",
     "scripts/banc/cas_production.py", "scripts/banc/cas_gestion_relation.py", "scripts/banc/cas_technique_produit.py", "scripts/banc/cas_nouveaux.py",
-    "scripts/banc/runner.py", "scripts/banc/audit.py", "scripts/banc/LISEZMOI.md", "scripts/banc/DEPLOIEMENT.md", "scripts/banc/SHA256SUMS",
+    "scripts/banc/cas_prompt.py", "scripts/banc/cas_prompt_abi.py", "scripts/banc/runner.py", "scripts/banc/audit.py", "scripts/banc/LISEZMOI.md", "scripts/banc/DEPLOIEMENT.md", "scripts/banc/SHA256SUMS",
 ]
 
 
@@ -779,13 +782,13 @@ def test_cas_secretariat_deux_fuseaux():
     assert noter(cas, bonne).score >= 0.99
     seulement_reunion = "Jeudi : 14 h, 15 h ou 16 h (heure de la Réunion, UTC+4)."
     assert noter(cas, seulement_reunion).score < 0.8
-    assert len([c for c in cas_mod.tous() if c.agent == "community-manager"]) == 8 and len(cas_mod.tous()) == 266
+    assert len([c for c in cas_mod.tous() if c.agent == "community-manager"]) == 8 and len(cas_mod.tous()) == 276
 
 
 def test_deploiement_mentionne_le_socle():
     d = (RACINE / "scripts" / "banc" / "DEPLOIEMENT.md").read_text(encoding="utf-8")
-    assert "15 fichiers" in d and "`agents/socle.txt`" in d and "cp /root/lot1/agents/socle.txt agents/socle.txt" in d
-    assert "socle.txt.avant-lot1" in d and "son propre socle" in d and "pour les 14 fichiers" in d
+    assert "17 fichiers" in d and "`agents/socle.txt`" in d and "cp /root/lot1/agents/socle.txt agents/socle.txt" in d
+    assert "socle.txt.avant-lot1" in d and "son propre socle" in d and "pour les 16 fichiers" in d
     assert "agents/socle.txt" in (RACINE / "scripts" / "banc" / "SHA256SUMS").read_text(encoding="utf-8")
 
 

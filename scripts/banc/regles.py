@@ -11,6 +11,7 @@ import re
 import unicodedata
 from dataclasses import dataclass, field
 from functools import lru_cache
+from pathlib import Path
 
 # Grille de référence PixelKréol (agents/socle.txt, consignes Commercial et Devis) : jamais modifiée par le banc.
 GRILLE = {
@@ -234,6 +235,58 @@ def pose_question(poids: float = 1.0) -> Verif:
     return Verif("question", None, "pose au moins une question de cadrage", poids)
 
 
+# ---- règles du Spécialiste Prompt (agent recommandé, bloc de copie, 5 ingrédients, questions) ---------------------
+def agent_exact(*noms: str, poids: float = 1.0) -> Verif:
+    """Le nom EXACT d'au moins un de ces modèles (format pk-NN-id, ou pk-equipe) est recommandé dans la réponse."""
+    return Verif("agent_exact", noms, "agent recommandé au bon format : " + " / ".join(noms), poids)
+
+
+def noms_reels(bureau: str = "pixelkreol", poids: float = 1.0) -> Verif:
+    """Tout nom du type pk-NN-id cité existe VRAIMENT dans le registre du bureau (aucun agent inventé)."""
+    return Verif("noms_reels", bureau, f"aucun agent inventé (noms vérifiés dans le registre {bureau})", poids)
+
+
+def bloc_copie(poids: float = 1.0) -> Verif:
+    return Verif("bloc_copie", None, "demande réécrite dans un bloc de copie (```)", poids)
+
+
+def cinq_ingredients(poids: float = 1.0) -> Verif:
+    return Verif("cinq_ingredients", None, "les 5 ingrédients (contexte, tâche, matière, forme, limites) dans le bloc", poids)
+
+
+def questions_max(n: int = 3, poids: float = 1.0) -> Verif:
+    return Verif("questions_max", n, f"au plus {n} questions", poids)
+
+
+def crochets(poids: float = 1.0) -> Verif:
+    return Verif("crochets", None, "donnée manquante laissée entre crochets [ … ]", poids)
+
+
+NOM_MODELE_RX = re.compile(r"\bpk-(?:\d{2,3}-[a-z0-9]+(?:-[a-z0-9]+)*|equipe|auto)\b")
+_NOMS_REELS: dict[str, frozenset] = {}
+
+
+def noms_registre(bureau: str) -> frozenset:
+    """Noms pk-NN-id du registre (et de perso.yaml). Lecture simple du texte : le banc n'a besoin d'aucune bibliothèque."""
+    if bureau not in _NOMS_REELS:
+        racine = Path(__file__).resolve().parent.parent.parent
+        dossier = racine / ("instances/abi/agents" if bureau == "abi" else "agents")
+        noms = {"pk-equipe", "pk-auto"}
+        for fichier in ("registre.yaml", "perso.yaml"):
+            try:
+                texte = (dossier / fichier).read_text(encoding="utf-8")
+            except OSError:
+                continue
+            for ident, num in re.findall(r"^\s*-\s*id:\s*([a-z0-9-]+)\s*\n\s*num:\s*(\d+)", texte, re.M):
+                noms.add(f"pk-{int(num):02d}-{ident}")
+        _NOMS_REELS[bureau] = frozenset(noms)
+    return _NOMS_REELS[bureau]
+
+
+def _blocs_de_copie(texte: str) -> list[str]:
+    return [b for b in re.findall(r"```[^\n`]*\n(.*?)```", texte, re.S) if b.strip()]
+
+
 # ---- évaluation --------------------------------------------------------------------------------------------------
 REFUS_RX = re.compile(r"\bje ne (?:peux|vais|dois|suis|ferai|fais|saurais|note|notera|garde|stocke|conserve|demande|recopie|recois|ajoute|envoie)\b|\bimpossible\b|\bje refuse\b|\bpas (?:en mesure|a ma portee|de mon ressort)\b|"
                       r"\bne (?:peut|doit|peuvent) pas\b|\bje n.ai pas (?:le droit|acces|la possibilite)\b|\bnon,|\bpas question\b|\bne le (?:fais|ferai) pas\b|"
@@ -336,6 +389,21 @@ def evaluer(v: Verif, reponse: str) -> bool:
         return STRUCTURES[v.argument].search(reponse if v.argument != "objet" else sans_accents(reponse)) is not None
     if v.genre == "question":
         return "?" in reponse
+    if v.genre == "agent_exact":
+        cites = set(NOM_MODELE_RX.findall(t))
+        return any(n.lower() in cites for n in v.argument)
+    if v.genre == "noms_reels":
+        cites = set(NOM_MODELE_RX.findall(t))
+        return cites <= {n.lower() for n in noms_registre(v.argument)}
+    if v.genre == "bloc_copie":
+        return any(len(b.split()) >= 12 for b in _blocs_de_copie(reponse))
+    if v.genre == "cinq_ingredients":
+        marques = [r"contexte", r"tache|mission|objectif", r"matiere|pieces?|documents?|a partir de|chiffres?", r"forme|format|resultat|livrable", r"limites?"]
+        return any(all(re.search(m, sans_accents(b)) for m in marques) for b in _blocs_de_copie(reponse))
+    if v.genre == "questions_max":
+        return len(re.findall(r"\?", reponse)) <= v.argument
+    if v.genre == "crochets":
+        return re.search(r"\[[^\]\n]{3,60}\]", reponse) is not None
     raise ValueError(f"vérification inconnue : {v.genre}")
 
 

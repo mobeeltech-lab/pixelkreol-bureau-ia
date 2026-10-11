@@ -257,6 +257,10 @@ class Registre:
         outils = a.get("outils")
         if outils is not None and (not isinstance(outils, list) or not all(isinstance(o, str) and o in OUTILS_CONNUS for o in outils)):
             return f"outils doit être une liste parmi : {', '.join(sorted(OUTILS_CONNUS))}"
+        if a.get("inclure_annuaire") is not None and not isinstance(a["inclure_annuaire"], bool):
+            return "inclure_annuaire doit être true ou false"
+        if a.get("routage_prioritaire_en_tete") is not None and not isinstance(a["routage_prioritaire_en_tete"], bool):
+            return "routage_prioritaire_en_tete doit être true ou false"
         regles = a.get("routage_prioritaire")
         if regles is not None and not Registre.regles_valides(regles):
             return ("routage_prioritaire doit être une liste de règles ; chaque règle est une liste de groupes ; "
@@ -385,6 +389,24 @@ class Registre:
         suite = table.get(cerveau) if isinstance(table, dict) else None
         return [c for c in suite if isinstance(c, str)] if isinstance(suite, list) else []
 
+    def annuaire(self, courant: dict) -> str:
+        """Liste bornée « nom exact du modèle : description », tirée du registre chargé (perso.yaml compris)."""
+        lignes, total = [], 0
+        autres = sorted((x for x in self.agents.values() if x["id"] != courant["id"]), key=lambda x: x["num"])
+        for x in autres:
+            desc = " ".join(str(x["description"]).split())
+            if len(desc) > ANNUAIRE_MAX_DESC:
+                desc = desc[:ANNUAIRE_MAX_DESC - 1].rstrip() + "…"
+            ligne = f"- {x['modele']} : {desc}"
+            if total + len(ligne) > ANNUAIRE_MAX_CAR:
+                lignes.append("- (liste tronquée : d'autres agents existent, ne les invente pas)")
+                break
+            lignes.append(ligne)
+            total += len(ligne) + 1
+        return ("## Annuaire des agents (nom exact du modèle : rôle)\n"
+                "Recommande uniquement un nom de cette liste, recopié à l'identique. "
+                "Pour plusieurs métiers à la fois : pk-equipe.\n" + "\n".join(lignes))
+
     def prompt_systeme(self, a: dict) -> str:
         maintenant = dt.datetime.now(TZ)
         date = f"{JOURS[maintenant.weekday()]} {maintenant.strftime('%d/%m/%Y %H:%M')}"
@@ -399,8 +421,13 @@ class Registre:
             equipe = "\n".join(f"- {x['emoji']} {x['nom']} ({x['id']}) : {x['description']}"
                                for x in self.agents.values() if x["id"] != "orchestrateur")
             parties.append("## L'équipe que tu coordonnes\n" + equipe)
+        if a.get("inclure_annuaire") is True:
+            parties.append(self.annuaire(a))
         return "\n\n".join(p for p in parties if p)
 
+
+ANNUAIRE_MAX_DESC = 110
+ANNUAIRE_MAX_CAR = 6000
 
 REGISTRE = Registre(AGENTS_DIR)
 
@@ -441,9 +468,11 @@ def regle_prioritaire(texte: str) -> dict | None:
 
     Une règle = liste de groupes ; elle s'applique quand CHAQUE groupe contient au moins une de ses expressions
     dans le message (ex. un mot de « bail » ET un verbe de relecture). Elle l'emporte sur le score des mots-clés.
-    Si plusieurs agents ont une règle qui s'applique, le premier (numéro le plus bas) est choisi."""
+    Si plusieurs agents ont une règle qui s'applique, le premier (numéro le plus bas) est choisi,
+    sauf les agents marqués `routage_prioritaire_en_tete: true` (formule explicite, ex. « améliore ma demande ») qui passent avant tous les autres."""
     tn = POLITESSES.sub(" ", normaliser(texte))
-    for a in REGISTRE.agents.values():
+    ordre = sorted(REGISTRE.agents.values(), key=lambda x: (x.get("routage_prioritaire_en_tete") is not True, x["num"]))
+    for a in ordre:
         for regle in a.get("_regles") or []:
             if all(any(phrase_presente(m, tn) for m in groupe) for groupe in regle):
                 return a

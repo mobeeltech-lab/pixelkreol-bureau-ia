@@ -184,9 +184,11 @@ def test_phrases_mixtes_ne_plantent_pas(appli, ia_en_panne, garde):
 # ---------------------------------------------------------------- règles de routage prioritaires (champ facultatif)
 def test_registre_pixelkreol_n_a_aucune_regle_prioritaire_donc_rien_ne_change(appli, ia_en_panne):
     from cas_routage import CAS_CONTROLE
-    assert all(not a["_regles"] for a in appli.REGISTRE.agents.values())
-    for texte, _ in CAS + CAS_CONTROLE:
-        assert router(appli, ia_en_panne, texte)[1] != "règle"
+    # seul le Spécialiste Prompt a une règle prioritaire (formules explicites « améliore ma demande », « écris le prompt »…) : aucune autre demande n'en est affectée
+    assert all(not a["_regles"] for a in appli.REGISTRE.agents.values() if a["id"] != "specialiste-prompt")
+    for texte, attendu in CAS + CAS_CONTROLE:
+        agent, methode = router(appli, ia_en_panne, texte)
+        assert methode != "règle" or (agent["id"] == "specialiste-prompt" and attendu == "specialiste-prompt"), texte
 
 
 REGLE = {"id": "relecteur", "num": 140, "nom": "Relecteur", "cerveau": "pk-rapide", "description": "d", "consignes": "c",
