@@ -161,3 +161,15 @@ def test_gitignore_protege_les_fichiers_sensibles(tmp_path):
                    "docker-compose.yml.broken.1", "agents/registre.yaml.avant-2026"):
         r = subprocess.run(["git", "check-ignore", "-q", chemin], cwd=RACINE)
         assert r.returncode == 0, f"{chemin} n'est pas ignoré par .gitignore"
+
+
+def test_env_exemple_est_suivi_par_git_mais_pas_les_vrais_env():
+    """Le modèle .env.exemple (sans valeurs) doit être commité ; un vrai .env jamais."""
+    import shutil
+    import subprocess
+    if shutil.which("git") is None:
+        pytest.skip("git absent")
+    modele = subprocess.run(["git", "check-ignore", "-q", "instances/abi/.env.exemple"], cwd=RACINE)
+    assert modele.returncode == 1, ".env.exemple est ignoré par Git : il ne serait jamais commité"
+    for chemin in (".env", "instances/abi/.env", "instances/abi/.env.local", ".env.exemple.bak", "instances/abi/.env.prod"):
+        assert subprocess.run(["git", "check-ignore", "-q", chemin], cwd=RACINE).returncode == 0, chemin

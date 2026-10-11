@@ -26,7 +26,7 @@ import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, AsyncIterator
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
 import yaml
@@ -41,7 +41,6 @@ VERSION = "2.0.0"
 CERVEAUX_VALIDES = {"pk-rapide", "pk-costaud", "pk-code", "pk-vision", "pk-long"}
 FAMILLES = {"direction", "vente", "production", "gestion", "relation", "technique", "produit", "client"}
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,40}$")
-TZ = ZoneInfo("Indian/Reunion")
 
 
 def cfg(nom: str, defaut: str = "") -> str:
@@ -70,6 +69,20 @@ ANNONCE = cfg("PK_ANNONCE_AGENT", "true").lower() == "true"
 MAX_EQUIPE = cfg_nombre("PK_EQUIPE_MAX", 4, 1, 8, entier=True)
 DELAI_AGENT = cfg_nombre("PK_EQUIPE_DELAI", 150, 1, 900)   # secondes accordées à chaque agent en mode équipe
 DATABASE_URL = cfg("DATABASE_URL", "")
+
+# Textes propres à une installation (valeurs par défaut = celles de l'instance PixelKréol, inchangées).
+# Une autre instance (ex. ABI Holding, tests) les remplace par des variables d'environnement.
+MARQUE = cfg("PK_MARQUE", "PixelKréol")                       # « Bureau IA <marque> »
+LIEU = cfg("PK_LIEU", "à La Réunion")                         # « Date et heure <lieu> : … »
+FUSEAU = cfg("PK_FUSEAU", "Indian/Reunion")                   # fuseau horaire donné aux agents
+PATRON = cfg("PK_PATRON", "Will")                             # « Demande de <patron> : … » (synthèse d'équipe)
+VITRINE_PIED = cfg("PK_VITRINE_PIED", "LLM gratuits · La Réunion")
+PROPRIETAIRE = cfg("PK_PROPRIETAIRE", "pixelkreol")           # champ owned_by du catalogue /v1/models
+try:
+    TZ = ZoneInfo(FUSEAU)
+except (ZoneInfoNotFoundError, ValueError):
+    LOG.warning("PK_FUSEAU « %s » inconnu : fuseau Indian/Reunion utilisé", FUSEAU)
+    TZ = ZoneInfo("Indian/Reunion")
 
 
 # =====================================================================
@@ -217,7 +230,19 @@ class Registre:
         mots = a.get("mots_cles")
         if mots is not None and (not isinstance(mots, list) or not all(isinstance(m, str) for m in mots)):
             return "mots_cles doit être une liste de textes"
+        regles = a.get("routage_prioritaire")
+        if regles is not None and not Registre.regles_valides(regles):
+            return ("routage_prioritaire doit être une liste de règles ; chaque règle est une liste de groupes ; "
+                    "chaque groupe est une liste de textes non vides")
         return None
+
+    @staticmethod
+    def regles_valides(regles: Any) -> bool:
+        return (isinstance(regles, list) and all(
+            isinstance(regle, list) and regle and all(
+                isinstance(groupe, list) and groupe and all(isinstance(m, str) and m.strip() for m in groupe)
+                for groupe in regle)
+            for regle in regles))
 
     # ------------------------------------------------------------------
     def _lire_agents(self, nom: str, avert: list[str]) -> list | None:
@@ -283,6 +308,8 @@ class Registre:
                 a["source"] = nom
                 a["modele"] = f"pk-{a['num']:02d}-{a['id']}"
                 a["_mots"] = [normaliser(m).strip() for m in a["mots_cles"] if m.strip()]
+                a["_regles"] = [[[normaliser(m).strip() for m in groupe] for groupe in regle]
+                                for regle in a.get("routage_prioritaire") or []]
                 agents[a["id"]] = a
                 ids.add(a["id"])
                 nums.add(a["num"])
@@ -336,7 +363,7 @@ class Registre:
         date = f"{JOURS[maintenant.weekday()]} {maintenant.strftime('%d/%m/%Y %H:%M')}"
         parties = [self.socle,
                    f"## Ton poste : {a['emoji']} {a['nom']}\n{a['description']}\n\n{a['consignes'].strip()}",
-                   f"Date et heure à La Réunion : {date}."]
+                   f"Date et heure {LIEU} : {date}."]
         if a["id"] == "orchestrateur":
             equipe = "\n".join(f"- {x['emoji']} {x['nom']} ({x['id']}) : {x['description']}"
                                for x in self.agents.values() if x["id"] != "orchestrateur")
@@ -367,6 +394,29 @@ def score_agent(a: dict, texte_norm: str) -> float:
     if re.search(rf"(?<![a-z0-9]){re.escape(normaliser(a['nom']).strip())}(?![a-z0-9])", padded):
         score += 1.5  # le nom du poste est cité tel quel (« juriste », « chef de projet »…)
     return score
+
+
+def phrase_presente(mot: str, texte_norm: str) -> bool:
+    """Même logique de reconnaissance que les mots-clés : expression = sous-chaîne, mot seul = mot entier (pluriel toléré)."""
+    if not mot:
+        return False
+    if " " in mot or "'" in mot:
+        return mot in texte_norm
+    return bool(re.search(rf"(?<![a-z0-9]){re.escape(mot)}s?(?![a-z0-9])", f" {texte_norm} "))
+
+
+def regle_prioritaire(texte: str) -> dict | None:
+    """Agent dont une règle de routage prioritaire s'applique (champ facultatif `routage_prioritaire` du registre).
+
+    Une règle = liste de groupes ; elle s'applique quand CHAQUE groupe contient au moins une de ses expressions
+    dans le message (ex. un mot de « bail » ET un verbe de relecture). Elle l'emporte sur le score des mots-clés.
+    Si plusieurs agents ont une règle qui s'applique, le premier (numéro le plus bas) est choisi."""
+    tn = POLITESSES.sub(" ", normaliser(texte))
+    for a in REGISTRE.agents.values():
+        for regle in a.get("_regles") or []:
+            if all(any(phrase_presente(m, tn) for m in groupe) for groupe in regle):
+                return a
+    return None
 
 
 def classement_mots_cles(texte: str) -> list[tuple[float, dict]]:
@@ -423,6 +473,9 @@ async def routage_ia(client: httpx.AsyncClient, texte: str) -> dict | None:
 async def choisir_agent(client: httpx.AsyncClient, messages: list[dict]) -> tuple[dict, str]:
     messages = [m for m in messages if isinstance(m, dict)]
     texte = dernier_message_utilisateur(messages)
+    prioritaire = regle_prioritaire(texte)
+    if prioritaire:
+        return prioritaire, "règle"
     notes = classement_mots_cles(texte)
     meilleur, a1 = notes[0] if notes else (0.0, None)
     second = notes[1][0] if len(notes) > 1 else 0.0
@@ -721,7 +774,7 @@ async def cycle_de_vie(app: FastAPI):
     await JOURNAL.arreter()
 
 
-app = FastAPI(title="Bureau IA PixelKréol — Orchestrateur", version=VERSION, lifespan=cycle_de_vie,
+app = FastAPI(title=f"Bureau IA {MARQUE} — Orchestrateur", version=VERSION, lifespan=cycle_de_vie,
               docs_url=None, redoc_url=None, openapi_url=None)
 
 
@@ -766,13 +819,13 @@ async def modeles(request: Request):
     REGISTRE.recharger()
     cree = int(time.time())
     donnees = [
-        {"id": "pk-auto", "object": "model", "created": cree, "owned_by": "pixelkreol",
+        {"id": "pk-auto", "object": "model", "created": cree, "owned_by": PROPRIETAIRE,
          "name": "🧠 PK Auto — choisit le bon agent"},
-        {"id": "pk-equipe", "object": "model", "created": cree, "owned_by": "pixelkreol",
+        {"id": "pk-equipe", "object": "model", "created": cree, "owned_by": PROPRIETAIRE,
          "name": "👥 PK Équipe — plusieurs agents + synthèse"},
     ]
     for a in REGISTRE.agents.values():
-        donnees.append({"id": a["modele"], "object": "model", "created": cree, "owned_by": "pixelkreol",
+        donnees.append({"id": a["modele"], "object": "model", "created": cree, "owned_by": PROPRIETAIRE,
                         "name": f"{a['emoji']} {a['nom']}", "description": a["description"],
                         "famille": a["famille"], "cerveau": a["cerveau"]})
     return {"object": "list", "data": donnees}
@@ -1000,7 +1053,7 @@ async def mode_equipe(client: httpx.AsyncClient, corps: dict, flux: bool):
                       + "). Réessaie dans quelques minutes.", "cerveaux_indisponibles")
 
     contributions = "\n\n".join(f"### {a['emoji']} {a['nom']}\n{txt}" for (a, _), (txt, _) in zip(taches, resultats))
-    prompt_synthese = (f"Demande de Will : {demande}\n\nVoici les contributions de l'équipe :\n\n{contributions}\n\n")
+    prompt_synthese = (f"Demande de {PATRON} : {demande}\n\nVoici les contributions de l'équipe :\n\n{contributions}\n\n")
     if muets:
         prompt_synthese += ("ATTENTION : " + ", ".join(a["nom"] for a in muets) + " n'a pas pu répondre (indisponible). "
                             "N'invente pas leur partie : dis clairement ce qui manque et ce qu'il faudra redemander.\n\n")
@@ -1156,7 +1209,7 @@ async def vitrine():
         f'<small>{html.escape(a["famille"])}</small><p>{html.escape(a["description"])}</p></div>'
         for a in REGISTRE.agents.values())
     return f"""<!doctype html><html lang="fr"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>Bureau IA PixelKréol</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Bureau IA {html.escape(MARQUE)}</title>
 <style>:root{{--l:#0B5D6B;--v:#17B6C4;--c:#E8542F;--s:#FFF6E8;--n:#1D2A2E}}
 body{{margin:0;font-family:system-ui,sans-serif;background:var(--s);color:var(--n)}}
 header{{background:var(--l);color:#fff;padding:28px 16px}}h1{{margin:0 0 6px}}
@@ -1164,5 +1217,5 @@ main{{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap
 .c{{background:#fff;border-radius:12px;padding:14px;border-top:4px solid var(--v)}}.e{{font-size:28px}}
 small{{display:block;color:var(--c);text-transform:uppercase;font-size:11px;letter-spacing:.06em;margin:2px 0 6px}}
 p{{margin:0;font-size:14px;line-height:1.4}}</style></head><body>
-<header><h1>Bureau IA PixelKréol</h1>{len(REGISTRE.agents)} agents · LLM gratuits · La Réunion</header>
+<header><h1>Bureau IA {html.escape(MARQUE)}</h1>{len(REGISTRE.agents)} agents · {html.escape(VITRINE_PIED)}</header>
 <main>{cartes}</main></body></html>"""

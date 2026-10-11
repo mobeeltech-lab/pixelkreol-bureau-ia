@@ -1,0 +1,36 @@
+# =====================================================================
+#  Instance de TEST ABI Holding — les CERVEAUX (même format que agents/cerveaux.yaml de l'instance principale)
+#
+#  Cette instance n'a PAS son propre LiteLLM : elle appelle celui qui tourne déjà sur le serveur
+#  (http://pk_litellm:4000) avec une clé dédiée, et demande les mêmes cerveaux (pk-rapide, pk-costaud…).
+#  Les chaînes de fournisseurs réelles sont donc celles de ce LiteLLM : elles sont volontairement vides ici
+#  et il ne faut PAS lancer outils/generer_litellm.py avec ce fichier.
+#  L'orchestrateur n'utilise de ce fichier que la liste « secours_entre_cerveaux ».
+# =====================================================================
+
+fournisseurs: {}
+
+cerveaux:
+  pk-rapide:
+    role: "Réponses courtes et rapides : secrétariat, commercial, locatif, tri"
+    chaine: []
+  pk-costaud:
+    role: "Réflexion, calculs, synthèses : comptabilité, appels de fonds, suivi de programme, direction"
+    chaine: []
+  pk-code:
+    role: "Non utilisé par les agents ABI (disponible en secours)"
+    chaine: []
+  pk-vision:
+    role: "Lecture d'images et de documents scannés (utilisé automatiquement si une image est jointe)"
+    chaine: []
+  pk-long:
+    role: "Documents longs : contrats, marchés de travaux, dossiers d'archives"
+    chaine: []
+
+# Si un cerveau entier est indisponible, l'orchestrateur essaie ceux-ci.
+secours_entre_cerveaux:
+  pk-rapide:  [pk-costaud]
+  pk-costaud: [pk-rapide, pk-long]
+  pk-code:    [pk-costaud]
+  pk-vision:  [pk-costaud]
+  pk-long:    [pk-costaud]
