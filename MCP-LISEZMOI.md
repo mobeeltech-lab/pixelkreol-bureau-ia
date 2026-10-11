@@ -126,7 +126,41 @@ pas le serveur.** Échec de remise : 5 essais au plus (toutes les 5 min), sans j
 3. Ouvrir la page, **Refuser** une première action (rien ne doit se passer), puis **Valider** une seconde.
 4. Laisser une troisième action 24 h : elle doit apparaître « expiree ».
 
+## Serveur MCP du Bureau IA — exposer des agents en lecture seule (étape 3)
+Un client MCP (un assistant de bureau, un autre outil) peut interroger des agents du Bureau IA. **Éteint par défaut**, indépendant du client MCP ci-dessus,
+**jamais pour ABI** (garde-fou dans le code : refusé pour toute autre marque que PixelKréol).
+
+| Point | Détail |
+|---|---|
+| Adresse | `POST http://127.0.0.1:4001/mcp` (JSON-RPC, « streamable HTTP » sans session ni flux). Non exposé sur Internet : pour un accès à distance, tunnel SSH (`ssh -L 4001:127.0.0.1:4001 serveur`) tant que nous n'en avons pas décidé autrement |
+| Clé | `PK_MCP_SERVEUR_CLE`, **dédiée** : 32 caractères au moins, différente de `LITELLM_MASTER_KEY`, `PK_API_KEY` et `PK_ADMIN_KEY`, sinon le serveur répond 503 (raison dans `/health` et les journaux). La clé API et la clé admin **n'ouvrent pas** ce serveur, et inversement. En-tête `Authorization: Bearer …` (jamais dans l'adresse) |
+| Outils | **deux seulement** : `lister_agents` (id, nom, famille, rôle ; jamais les fiches de poste) et `poser_question` |
+| Lecture seule | `poser_question` appelle l'agent **sans aucun outil** (ni NAS, ni client MCP, ni écriture) : il rédige, explique, propose. Rien ne peut être envoyé, créé, payé ni mis en attente par ce chemin (testé) |
+| Liste blanche | `agents/mcp_serveur.yaml` (copie de `agents/mcp_serveur.exemple.yaml`) ; absent = **aucun agent exposé** |
+| Bornes | question 4 000 caractères, réponse 8 000, 20 questions/minute, 2 simultanées, 90 s, requête 64 Ko |
+| Navigateurs | en-tête `Origin` contrôlé (refusé s'il n'est pas l'hôte lui-même ou une origine listée) |
+| Journal | agent, durée, succès ; **jamais** la question ni la réponse |
+
+**⚠ Données.** La question posée part vers le fournisseur de modèle en ligne de l'agent, comme tout message au Bureau IA : pas de données de clients, pas d'ABI.
+
+**Mise en service**
+1. Générer une clé : `openssl rand -hex 24`, la mettre dans `.env` : `PK_MCP_SERVEUR_CLE=…`.
+2. Copier `agents/mcp_serveur.exemple.yaml` en `agents/mcp_serveur.yaml` et choisir les agents.
+3. Ajouter `:docker-compose.mcp-serveur.yml` à `COMPOSE_FILE` dans `.env`, puis `docker compose up -d --build pk_orchestrateur`.
+4. Essai :
+   ```
+   curl -s localhost:4001/health                                   # "mcp_serveur":{"actif":true,"agents":N,"disponible":true,…}
+   curl -s -H "Authorization: Bearer $PK_MCP_SERVEUR_CLE" -H "Content-Type: application/json" \
+        -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' localhost:4001/mcp
+   curl -s -H "Authorization: Bearer $PK_MCP_SERVEUR_CLE" -H "Content-Type: application/json" \
+        -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"lister_agents","arguments":{}}}' localhost:4001/mcp
+   ```
+5. Dans le client MCP : serveur HTTP à l'adresse ci-dessus avec l'en-tête `Authorization: Bearer <clé>` (la façon de le déclarer dépend du client).
+
+**Retour arrière** : retirer `docker-compose.mcp-serveur.yml` de `COMPOSE_FILE` (ou `PK_MCP_SERVEUR_ACTIF=0`) puis `docker compose up -d pk_orchestrateur`.
+Fichiers : `orchestrateur/mcp_serveur.py`, `orchestrateur/app.py`, `orchestrateur/Dockerfile`, `agents/mcp_serveur.exemple.yaml`, `docker-compose.mcp-serveur.yml`.
+
 ## Tests
-`python -m pytest tests/test_mcp.py tests/test_mcp_validation.py` : faux serveur MCP et faux n8n en mémoire (aucun accès réseau) — désactivé par défaut, ABI coupée, liste blanche, classes,
+`python -m pytest tests/test_mcp.py tests/test_mcp_validation.py tests/test_mcp_cle_admin.py tests/test_mcp_serveur.py` : faux serveur MCP et faux n8n en mémoire (aucun accès réseau) — désactivé par défaut, ABI coupée, liste blanche, classes,
 paiement refusé (14 noms), arguments contrôlés (16 adresses refusées), bornes, injection (résultat piégé, description piégée, appel écrit en texte),
-journal sans contenu, jetons non divulgués ; validation : une seule exécution, expiration à 24 h, revérification, page (connexion, cookie limité au chemin, CSRF, origine, échappement, liens relatifs, préfixe configurable), notification sans arguments. Étape 3 (à venir) : serveur MCP exposant les agents en lecture seule.
+journal sans contenu, jetons non divulgués ; validation : une seule exécution, expiration à 24 h, revérification, page (connexion, cookie limité au chemin, CSRF, origine, échappement, liens relatifs, préfixe configurable), notification sans arguments. `tests/test_mcp_cle_admin.py` : clé admin dédiée. `tests/test_mcp_serveur.py` : serveur MCP en lecture seule (éteint par défaut, ABI coupée, clé dédiée, liste blanche, aucun outil joignable, protocole, bornes, journal sans contenu).

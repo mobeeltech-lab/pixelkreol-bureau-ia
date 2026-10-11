@@ -90,6 +90,14 @@ MCP_MARQUE = cfg("PK_MCP_MARQUE", "PixelKréol")
 if MCP_ACTIF and MARQUE != MCP_MARQUE:
     logging.getLogger("pk").error("PK_MCP_ACTIF=1 ignoré : MCP n'est autorisé que pour la marque « %s » (instance « %s » : MCP reste coupé)", MCP_MARQUE, MARQUE)
     MCP_ACTIF = False
+# Serveur MCP du Bureau IA (expose des agents EN LECTURE SEULE à un client MCP). DÉSACTIVÉ par défaut ; jamais pour une autre marque que PixelKréol.
+MCP_SERVEUR_ACTIF = cfg("PK_MCP_SERVEUR_ACTIF", "0").strip().lower() in ("1", "true", "oui", "yes", "on")
+if MCP_SERVEUR_ACTIF and MARQUE != MCP_MARQUE:
+    logging.getLogger("pk").error("PK_MCP_SERVEUR_ACTIF=1 ignoré : le serveur MCP n'est autorisé que pour la marque « %s » (instance « %s » : coupé)", MCP_MARQUE, MARQUE)
+    MCP_SERVEUR_ACTIF = False
+MCPS = None            # module mcp_serveur.py
+MCPSRV = None          # instance mcp_serveur.Serveur
+MCP_SERVEUR_PB = None  # raison pour laquelle le serveur MCP refuse de répondre (clé absente / courte / partagée), sinon None
 MCPM = None            # module mcp_client.py (chargé seulement si MCP est actif)
 MCPC = None            # gestionnaire MCP (mcp_client.MCP)
 MCP_CLE_PB = None      # raison pour laquelle la validation par Will est refusée (clé admin absente / courte / partagée), sinon None
@@ -1183,6 +1191,9 @@ async def sante(request: Request):
             except OSError:
                 dispo = False
         sortie["nas"] = {"actif": DOCS is not None, "disponible": dispo}
+    if MCP_SERVEUR_ACTIF:   # idem pour le serveur MCP
+        sortie["mcp_serveur"] = {"actif": MCPSRV is not None, "agents": len(MCPSRV.cfg.agents) if MCPSRV is not None else 0,
+                                 "disponible": MCPSRV is not None and MCP_SERVEUR_PB is None, "raison": MCP_SERVEUR_PB or ""}
     if MCP_ACTIF:   # clé ajoutée seulement quand MCP est demandé : /health reste identique sinon
         sortie["mcp"] = {"actif": MCPC is not None, "outils": len(MCPC.cfg.outils) if MCPC is not None else 0,
                          "validation": {"disponible": MCP_CLE_PB is None, "raison": MCP_CLE_PB or ""}}
@@ -1801,3 +1812,80 @@ def _poser_routes_mcp() -> None:
 
 if MCP_ACTIF:
     _poser_routes_mcp()
+
+
+# =====================================================================
+#  Serveur MCP du Bureau IA (lecture seule) — route POST /mcp ajoutée SEULEMENT si PK_MCP_SERVEUR_ACTIF=1
+# =====================================================================
+async def _poser_a_un_agent(agent_id: str, question: str) -> str:
+    """Question à un agent SANS AUCUN OUTIL (ni NAS, ni MCP) : appeler() direct, jamais appeler_agent(). Le contenu n'est pas journalisé."""
+    REGISTRE.recharger()
+    a = REGISTRE.agents.get(agent_id)
+    if a is None:
+        raise RuntimeError("agent absent du registre")
+    corps, chaine = preparer_corps({"messages": [{"role": "user", "content": question}], "max_tokens": 1200}, {**a, "outils": []})
+    debut = time.monotonic()
+    try:
+        rep, cerveau = await appeler(app.state.client, corps, chaine)
+    except EchecCerveaux:
+        await JOURNAL.ecrire(agent_id, "mcp-serveur", "-", debut, False, "cerveaux indisponibles")
+        raise
+    texte = MCPS.nettoyer_reponse(masquer(texte_de_la_reponse(rep)))
+    await JOURNAL.ecrire(agent_id, "mcp-serveur", cerveau, debut, bool(texte), "")
+    return texte or "(réponse vide)"
+
+
+def _agents_exposes(ids: tuple) -> list[dict]:
+    REGISTRE.recharger()
+    return [{"id": a["id"], "nom": a["nom"], "famille": a["famille"], "description": a["description"]}
+            for i in ids if (a := REGISTRE.agents.get(i))]
+
+
+def _poser_route_mcp_serveur() -> None:
+    global MCPS, MCPSRV, MCP_SERVEUR_PB
+    try:
+        spec = importlib.util.spec_from_file_location("pk_mcp_serveur", Path(__file__).with_name("mcp_serveur.py"))
+        MCPS = importlib.util.module_from_spec(spec)
+        sys.modules["pk_mcp_serveur"] = MCPS
+        spec.loader.exec_module(MCPS)
+        config = MCPS.charger_config(Path(cfg("PK_MCP_SERVEUR_CONFIG") or (AGENTS_DIR / "mcp_serveur.yaml")), set(REGISTRE.agents))
+        MCPSRV = MCPS.Serveur(config, _agents_exposes, _poser_a_un_agent)
+    except Exception as e:  # noqa: BLE001
+        LOG.error("Serveur MCP NON démarré (%s : %s)", type(e).__name__, masquer(str(e))[:200])
+        return
+    for e in config.erreurs:
+        LOG.warning("mcp_serveur.yaml : %s", e)
+    MCP_SERVEUR_PB = MCPS.verifier_cle(cfg("PK_MCP_SERVEUR_CLE"), {"LITELLM_MASTER_KEY": LITELLM_KEY, "PK_API_KEY": cfg("PK_API_KEY"),
+                                                                  "PK_ADMIN_KEY": cfg("PK_ADMIN_KEY")})
+    if MCP_SERVEUR_PB:
+        LOG.error("Serveur MCP : %s La route /mcp refuse de répondre.", MCP_SERVEUR_PB)
+    else:
+        LOG.info("Serveur MCP actif (lecture seule) : %d agent(s) exposé(s)%s", len(config.agents), "" if config.agents else " — AUCUN (agents/mcp_serveur.yaml absent ou vide)")
+
+    async def mcp(request: Request):
+        if MCP_SERVEUR_PB:
+            return erreur(503, "Serveur MCP indisponible (configuration) : voir /health et les journaux", "config")
+        if not autorise(request, cfg("PK_MCP_SERVEUR_CLE")):
+            return JSONResponse(status_code=401, content={"error": {"message": "Clé du serveur MCP invalide", "type": "auth"}}, headers={"WWW-Authenticate": "Bearer"})
+        origine = request.headers.get("origin")
+        if origine:
+            hote = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
+            if origine.split("://", 1)[-1].rstrip("/") != hote and origine.rstrip("/") not in MCPSRV.cfg.origines:
+                return erreur(403, "Origine refusée", "auth")
+        taille = request.headers.get("content-length", "")
+        if taille.isdigit() and int(taille) > MCPS.CORPS_MAX:
+            return erreur(413, "Requête trop volumineuse", "requete")
+        statut, corps = await MCPSRV.traiter(await request.body())
+        if corps is None:
+            return Response(status_code=statut)
+        return JSONResponse(status_code=statut, content=corps)
+
+    async def pas_permis(request: Request):
+        return JSONResponse(status_code=405, content={"error": {"message": "POST seulement (serveur sans session ni flux)", "type": "requete"}}, headers={"Allow": "POST"})
+
+    app.add_api_route("/mcp", mcp, methods=["POST"], include_in_schema=False)
+    app.add_api_route("/mcp", pas_permis, methods=["GET", "DELETE", "PUT"], include_in_schema=False)
+
+
+if MCP_SERVEUR_ACTIF:
+    _poser_route_mcp_serveur()

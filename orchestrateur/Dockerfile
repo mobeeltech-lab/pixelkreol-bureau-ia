@@ -3,7 +3,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install -r requirements.txt
-COPY app.py documents.py mcp_client.py ./
+COPY app.py documents.py mcp_client.py mcp_serveur.py ./
 RUN useradd -u 1000 -m pk && mkdir -p /app/agents /app/data /app/data/mcp && chown -R pk /app
 USER pk
 EXPOSE 4001
