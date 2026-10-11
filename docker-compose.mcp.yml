@@ -1,0 +1,22 @@
+# =====================================================================
+#  AJOUT « MCP » (client d'outils externes) — OPTIONNEL, éteint tant qu'il n'est pas ajouté.
+#  Lu seulement si COMPOSE_FILE=docker-compose.yml:docker-compose.mcp.yml figure dans .env (voir MCP-LISEZMOI.md).
+#  Sans ce fichier : PK_MCP_ACTIF absent = 0 → l'orchestrateur est celui d'avant. N'existe PAS pour l'instance ABI.
+#  Les serveurs MCP eux-mêmes (pages, agenda, courrier, drive) sont des services à part, à ajouter un par un quand Will les aura choisis.
+# =====================================================================
+services:
+  pk_orchestrateur:
+    environment:
+      PK_MCP_ACTIF: "1"
+      PK_MCP_DATA: /app/data/mcp
+      # Jetons : seulement les NOMS ici ; les valeurs sont dans .env (jamais dans le dépôt)
+      PK_MCP_PAGES_JETON: ${PK_MCP_PAGES_JETON:-}
+      PK_MCP_AGENDA_JETON: ${PK_MCP_AGENDA_JETON:-}
+      PK_MCP_COURRIER_JETON: ${PK_MCP_COURRIER_JETON:-}
+      PK_MCP_DRIVE_JETON: ${PK_MCP_DRIVE_JETON:-}
+    volumes:
+      - pk_mcp_data:/app/data/mcp
+
+volumes:
+  pk_mcp_data:
+    name: ${PK_VOL_MCP:-pixelkreol-bureau-ia_pk_mcp_data}

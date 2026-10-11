@@ -84,7 +84,15 @@ PROPRIETAIRE = cfg("PK_PROPRIETAIRE", "pixelkreol")           # champ owned_by d
 NAS_ACTIF = cfg("PK_NAS_ACTIF", "0").strip().lower() in ("1", "true", "oui", "yes", "on")
 DOCS = None            # instance de documents.Documents quand l'outil est actif
 DOCUMENTS = None       # module documents.py (chargé seulement si l'outil est actif)
-OUTILS_CONNUS = {"documents"}
+# Outils MCP (serveurs externes choisis par Will, lecture seule par défaut). DÉSACTIVÉ par défaut ; jamais pour une autre marque que PixelKréol (ABI : coupé).
+MCP_ACTIF = cfg("PK_MCP_ACTIF", "0").strip().lower() in ("1", "true", "oui", "yes", "on")
+MCP_MARQUE = cfg("PK_MCP_MARQUE", "PixelKréol")
+if MCP_ACTIF and MARQUE != MCP_MARQUE:
+    logging.getLogger("pk").error("PK_MCP_ACTIF=1 ignoré : MCP n'est autorisé que pour la marque « %s » (instance « %s » : MCP reste coupé)", MCP_MARQUE, MARQUE)
+    MCP_ACTIF = False
+MCPM = None            # module mcp_client.py (chargé seulement si MCP est actif)
+MCPC = None            # gestionnaire MCP (mcp_client.MCP)
+OUTILS_CONNUS = {"documents", "mcp"}
 try:
     TZ = ZoneInfo(FUSEAU)
 except (ZoneInfoNotFoundError, ValueError):
@@ -376,6 +384,8 @@ class Registre:
                    f"Date et heure {LIEU} : {date}."]
         if DOCS is not None and "documents" in (a.get("outils") or []):
             parties.append(DOCUMENTS.INSTRUCTIONS_AGENT)
+        if MCPC is not None and "mcp" in (a.get("outils") or []):
+            parties.append(MCPM.INSTRUCTIONS_AGENT)
         if a["id"] == "orchestrateur":
             equipe = "\n".join(f"- {x['emoji']} {x['nom']} ({x['id']}) : {x['description']}"
                                for x in self.agents.values() if x["id"] != "orchestrateur")
@@ -847,6 +857,23 @@ def demarrer_nas(app: FastAPI) -> None:
     app.state.taches.append(asyncio.create_task(boucle_indexation(app)))
 
 
+def demarrer_mcp(app: FastAPI) -> None:
+    """Prépare le client MCP. Un échec est journalisé et laisse MCP éteint : jamais de panne générale."""
+    global MCPM, MCPC
+    try:
+        spec = importlib.util.spec_from_file_location("pk_mcp_client", Path(__file__).with_name("mcp_client.py"))
+        MCPM = importlib.util.module_from_spec(spec)
+        sys.modules["pk_mcp_client"] = MCPM
+        spec.loader.exec_module(MCPM)
+        MCPC = MCPM.depuis_env(set(REGISTRE.agents), AGENTS_DIR)
+    except Exception as e:  # noqa: BLE001
+        LOG.error("MCP NON démarré (%s : %s) — les agents travaillent sans outils externes", type(e).__name__, masquer(str(e))[:200])
+        MCPC = None
+        return
+    LOG.info("MCP actif : %d serveur(s), %d outil(s) autorisé(s)%s", len(MCPC.cfg.serveurs), len(MCPC.cfg.outils),
+             " — AUCUN outil configuré (agents/mcp.yaml absent ou vide)" if MCPC.cfg.vide else "")
+
+
 async def indexer_nas() -> dict:
     bilan = await asyncio.to_thread(DOCS.indexer)
     LOG.info("Indexation du NAS : %s", bilan)
@@ -872,6 +899,11 @@ async def boucle_indexation(app: FastAPI) -> None:
 
 def utilise_outils(agent: dict, corps: dict) -> bool:
     return DOCS is not None and "documents" in (agent.get("outils") or []) and not corps.get("tools")
+
+
+def utilise_mcp(agent: dict, corps: dict) -> bool:
+    """Vrai si MCP est actif ET que la fiche de l'agent déclare `outils: [mcp]` (l'outil « documents » garde la priorité si l'agent a les deux)."""
+    return MCPC is not None and "mcp" in (agent.get("outils") or []) and not corps.get("tools") and not utilise_outils(agent, corps)
 
 
 def demandeur_de(request: Request, corps: dict) -> str:
@@ -941,9 +973,66 @@ def assainir_reponse(rep: dict) -> None:
         rep["choices"][0]["finish_reason"] = "stop"
 
 
+MESSAGE_MCP_VIDE = "Je n'ai pas pu utiliser l'outil demandé pour cette réponse. Reformulez la demande ou réessayez dans un instant."
+
+
+async def appeler_agent_mcp(client: httpx.AsyncClient, corps: dict, chaine: list[str], agent: dict,
+                            demandeur: str = "api") -> tuple[dict, str]:
+    """Boucle d'appels d'outils MCP. Seuls les VRAIS tool_calls sont traités (jamais un appel écrit en texte) ; tours et appels bornés ;
+    les écritures sont mises en attente par le gestionnaire ; le texte renvoyé par un outil est une donnée, pas une consigne."""
+    outils = await MCPC.outils_pour(agent["id"])
+    if not outils:
+        return await appeler(client, corps, chaine)
+    usage: dict[str, int] = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+    corps_o = {**corps, "tools": outils, "tool_choice": "auto", "messages": [dict(m) for m in corps["messages"]]}
+    appels_faits = 0
+    try:
+        for _ in range(MCPC.cfg.tours_max):
+            rep, cerveau = await appeler(client, corps_o, chaine)
+            cumuler_usage(usage, rep)
+            msg = rep["choices"][0]["message"]
+            appels = [a for a in (msg.get("tool_calls") or []) if isinstance(a, dict)]
+            if not appels:
+                break
+            corps_o["messages"].append({"role": "assistant", "content": msg.get("content"), "tool_calls": appels})
+            for appel in appels:
+                fonction = appel.get("function") if isinstance(appel.get("function"), dict) else {}
+                if appels_faits >= MCPC.cfg.appels_max:
+                    resultat = "Trop d'appels d'outils pour cette demande : conclus avec ce que tu as."
+                else:
+                    appels_faits += 1
+                    resultat = await MCPC.executer(agent["id"], demandeur, str(fonction.get("name", "")), fonction.get("arguments"))
+                corps_o["messages"].append({"role": "tool", "tool_call_id": str(appel.get("id", "")), "content": resultat})
+        else:  # le modèle réclame encore des outils : dernier appel pour qu'il conclue avec ce qu'il a
+            corps_o["tool_choice"] = "none"
+            rep, cerveau = await appeler(client, corps_o, chaine)
+            cumuler_usage(usage, rep)
+    except EchecCerveaux as e:
+        if e.statut in (400, 422, 501):
+            LOG.warning("Le cerveau n'accepte pas l'appel d'outils MCP (%s) : réponse sans outils", e.statut)
+            rep, cerveau = await appeler(client, corps, chaine)
+            cumuler_usage(usage, rep)
+        else:
+            raise
+    if usage["total_tokens"]:
+        rep["usage"] = usage
+    try:                                                    # rien de technique ne part vers l'utilisateur
+        m = rep["choices"][0]["message"]
+        m.pop("tool_calls", None)
+        propre = MCPM.nettoyer_texte(m.get("content") if isinstance(m.get("content"), str) else "", 100000)[0]
+        m["content"] = propre if propre.strip() else MESSAGE_MCP_VIDE
+        if rep["choices"][0].get("finish_reason") == "tool_calls":
+            rep["choices"][0]["finish_reason"] = "stop"
+    except (KeyError, IndexError, TypeError, AttributeError):
+        pass
+    return rep, cerveau
+
+
 async def appeler_agent(client: httpx.AsyncClient, corps: dict, chaine: list[str], agent: dict,
                         demandeur: str = "api") -> tuple[dict, str]:
     """Comme appeler(), avec l'outil « documents » si l'agent y a droit et que le NAS est actif (sinon : strictement appeler())."""
+    if utilise_mcp(agent, corps):
+        return await appeler_agent_mcp(client, corps, chaine, agent, demandeur)
     if not utilise_outils(agent, corps):
         return await appeler(client, corps, chaine)
     mode = DOCS.cfg.mode
@@ -1015,9 +1104,13 @@ async def cycle_de_vie(app: FastAPI):
     app.state.taches = []
     if NAS_ACTIF:
         demarrer_nas(app)
+    if MCP_ACTIF:
+        demarrer_mcp(app)
     yield
     for t in getattr(app.state, "taches", []):
         t.cancel()
+    if MCPC is not None:
+        await MCPC.fermer()
     await app.state.client.aclose()
     await JOURNAL.arreter()
 
@@ -1067,6 +1160,8 @@ async def sante(request: Request):
             except OSError:
                 dispo = False
         sortie["nas"] = {"actif": DOCS is not None, "disponible": dispo}
+    if MCP_ACTIF:   # clé ajoutée seulement quand MCP est demandé : /health reste identique sinon
+        sortie["mcp"] = {"actif": MCPC is not None, "outils": len(MCPC.cfg.outils) if MCPC is not None else 0}
     return sortie
 
 
@@ -1160,7 +1255,7 @@ async def chat(request: Request):
 
     corps_final, chaine = preparer_corps(corps, agent)
     debut = time.monotonic()
-    avec_outils = utilise_outils(agent, corps_final)
+    avec_outils = utilise_outils(agent, corps_final) or utilise_mcp(agent, corps_final)
 
     if not flux or avec_outils:
         try:
@@ -1463,6 +1558,24 @@ async def retirer_agent(agent_id: str, request: Request):
         return erreur(500, "Écriture de perso.yaml impossible. Rien n'a été modifié.", "config")
     REGISTRE.recharger(force=True)
     return {"ok": True, "retire": agent_id}
+
+
+@app.get("/admin/mcp/etat")
+async def etat_mcp(request: Request):
+    if not autorise(request, ADMIN_KEY):
+        return erreur(401, "Clé admin invalide", "auth")
+    if MCPC is None:
+        return erreur(404, "MCP n'est pas activé", "introuvable")
+    return await asyncio.to_thread(MCPC.etat)
+
+
+@app.get("/admin/mcp/journal")
+async def journal_mcp(request: Request):
+    if not autorise(request, ADMIN_KEY):
+        return erreur(401, "Clé admin invalide", "auth")
+    if MCPC is None:
+        return erreur(404, "MCP n'est pas activé", "introuvable")
+    return {"appels": await asyncio.to_thread(MCPC.base.appels, 100)}
 
 
 @app.get("/admin/nas")

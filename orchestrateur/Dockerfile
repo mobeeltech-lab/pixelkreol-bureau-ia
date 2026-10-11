@@ -3,8 +3,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install -r requirements.txt
-COPY app.py documents.py ./
-RUN useradd -u 1000 -m pk && mkdir -p /app/agents /app/data && chown -R pk /app
+COPY app.py documents.py mcp_client.py ./
+RUN useradd -u 1000 -m pk && mkdir -p /app/agents /app/data /app/data/mcp && chown -R pk /app
 USER pk
 EXPOSE 4001
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=5 \

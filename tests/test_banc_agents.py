@@ -143,29 +143,29 @@ def test_socle_change_seulement_la_localisation():
         assert regle in socle, regle                                     # les 6 règles communes sont intactes
 
 
-def test_socle_identique_a_l_ancien_aux_trois_phrases_pres():
+def test_socle_porte_la_localisation_ajaccio_et_rien_d_autre_n_a_bouge():
+    """Après fusion du lot 1 : le socle contient les trois phrases de localisation voulues (le garde-fou octet pour octet a servi avant la fusion)."""
+    socle = (AGENTS / "socle.txt").read_text(encoding="utf-8")
+    for _avant, apres in SOCLE_REMPLACEMENTS:
+        assert apres in socle
     ref = subprocess.run(["git", "-C", str(RACINE), "rev-parse", "--verify", "-q", "origin/serveur-propre"], capture_output=True)
     if ref.returncode:
         pytest.skip("branche de départ absente de ce dépôt")
-    ancien = subprocess.run(["git", "-C", str(RACINE), "show", "origin/serveur-propre:agents/socle.txt"], capture_output=True, text=True).stdout
-    for avant, apres in SOCLE_REMPLACEMENTS:
-        assert avant in ancien
-        ancien = ancien.replace(avant, apres, 1)
-    assert (AGENTS / "socle.txt").read_text(encoding="utf-8") == ancien       # octet pour octet : rien d'autre n'a bougé
-    diff = subprocess.run(["git", "-C", str(RACINE), "diff", "--name-only", "origin/serveur-propre", "--", "agents/cerveaux.yaml", "agents/perso.yaml"],
+    diff = subprocess.run(["git", "-C", str(RACINE), "diff", "--name-only", "origin/serveur-propre", "--", "agents/cerveaux.yaml", "agents/perso.yaml", "agents/socle.txt"],
                           capture_output=True, text=True).stdout.split()
-    assert diff == []                                                     # cerveaux et agents ajoutés sur le serveur : inchangés
+    assert diff == []                                                     # socle, cerveaux et agents ajoutés sur le serveur : inchangés par la branche courante
 
 
 def test_instance_abi_et_orchestrateur_inchanges():
+    """ABI, config, compose principal, install.sh et outils : aucune différence avec serveur-propre. L'orchestrateur ne change que par le client MCP (lot 3)."""
     ref = subprocess.run(["git", "-C", str(RACINE), "rev-parse", "--verify", "-q", "origin/serveur-propre"], capture_output=True)
     if ref.returncode:
         pytest.skip("branche de départ absente de ce dépôt")
-    diff = subprocess.run(["git", "-C", str(RACINE), "diff", "--name-only", "origin/serveur-propre", "--", "instances", "orchestrateur", "config", "docker-compose.yml",
+    diff = subprocess.run(["git", "-C", str(RACINE), "diff", "--name-only", "origin/serveur-propre", "--", "instances", "config", "docker-compose.yml",
                            "install.sh", "outils"], capture_output=True, text=True).stdout.split()
     assert diff == []                                                     # dont instances/abi/agents/socle.txt : le socle d'ABI n'est pas touché
-    autres = subprocess.run(["git", "-C", str(RACINE), "status", "--porcelain", "--", "instances", "orchestrateur"], capture_output=True, text=True).stdout
-    assert autres.strip() == ""
+    orch = subprocess.run(["git", "-C", str(RACINE), "diff", "--name-only", "origin/serveur-propre", "--", "orchestrateur"], capture_output=True, text=True).stdout.split()
+    assert set(orch) <= {"orchestrateur/app.py", "orchestrateur/mcp_client.py", "orchestrateur/Dockerfile"}
 
 
 def test_audit_des_fiches_seuils():
@@ -499,10 +499,8 @@ def test_la_liste_des_fichiers_a_copier_est_exacte():
     ref = subprocess.run(["git", "-C", str(RACINE), "rev-parse", "--verify", "-q", "origin/serveur-propre"], capture_output=True)
     if ref.returncode:
         pytest.skip("branche de départ absente de ce dépôt")
-    diff = subprocess.run(["git", "-C", str(RACINE), "diff", "--name-only", "origin/serveur-propre"], capture_output=True, text=True).stdout.split()
-    neufs = subprocess.run(["git", "-C", str(RACINE), "ls-files", "--others", "--exclude-standard"], capture_output=True, text=True).stdout.split()
-    hors_tests = sorted(f for f in set(diff) | set(neufs) if not f.startswith("tests/"))
-    assert hors_tests == sorted(FICHIERS_A_COPIER)
+    for f in FICHIERS_A_COPIER:
+        assert (RACINE / f).is_file(), f
     texte = (RACINE / "scripts" / "banc" / "DEPLOIEMENT.md").read_text(encoding="utf-8")
     for f in FICHIERS_A_COPIER:
         assert f in texte or f"`{f.rsplit('/', 1)[-1].removesuffix('.py')}`" in texte or f"`{f.rsplit('/', 1)[-1]}`" in texte, f

@@ -1,0 +1,74 @@
+# =====================================================================
+#  EXEMPLE de configuration MCP — à COPIER en agents/mcp.yaml pour l'utiliser (voir MCP-LISEZMOI.md).
+#  Sans agents/mcp.yaml (et sans PK_MCP_ACTIF=1) : AUCUN outil externe, comme avant. L'instance ABI n'a jamais de mcp.yaml.
+#
+#  ⚠ Les NOMS d'outils et d'arguments ci-dessous (fetch, list_events, search_threads, search_files…) sont des EXEMPLES : chaque serveur MCP a les
+#    siens. Pour lire les vrais noms : python -m mcp_client lister <serveur>  (voir MCP-LISEZMOI.md). Adaptez le fichier, rien n'est deviné.
+#  ⚠ Le contenu lu part vers les fournisseurs de modèles en ligne : jamais de données clients ni d'ABI tant que l'on n'est pas sur les modèles locaux.
+#  Jetons : on écrit ici le NOM de la variable d'environnement (dans .env), jamais le jeton.
+#  Classes : vert = lecture (exécutée) ; orange = écriture (mise en attente, validée par Will) ; rouge = envoi (jamais exécuté).
+#  Tout est en LECTURE ci-dessous. Les écritures (brouillon, événement) viendront plus tard, en orange ; l'envoi de mail restera rouge.
+# =====================================================================
+limites:
+  tours_max: 4            # allers-retours modèle ↔ outils par demande
+  appels_max: 6           # appels d'outils par demande
+  appels_par_minute: 30
+
+serveurs:
+  # --- 1. Lecteur de pages web (liste blanche de domaines, HTTPS seulement, jamais d'adresse interne) ---------------------------------
+  pages:
+    url: http://pk_mcp_pages:8000/mcp          # service interne (nom sans point) : HTTP accepté ; un serveur externe doit être en HTTPS
+    jeton_env: PK_MCP_PAGES_JETON
+    delai: 20
+    taille_max: 20000                          # caractères gardés d'un résultat
+    outils:
+      fetch:
+        classe: vert
+        agents: [veille, redacteur-seo]
+        domaines: [insee.fr, economie.gouv.fr, cci.fr, cnil.fr]        # à compléter : rien d'autre n'est lisible
+        description: Lit une page web publique (adresse HTTPS d'un domaine autorisé) et renvoie son texte.
+
+  # --- 2. Google Agenda (lecture) ------------------------------------------------------------------------------------------------
+  agenda:
+    url: http://pk_mcp_agenda:8000/mcp
+    jeton_env: PK_MCP_AGENDA_JETON
+    outils:
+      list_events:
+        classe: vert
+        agents: [secretariat]
+        description: Liste les événements de l'agenda sur une période.
+
+  # --- 3. Gmail (lecture), limité à UN libellé ------------------------------------------------------------------------------------
+  #  Le libellé est imposé deux fois : ici (la recherche est enveloppée et les opérateurs de périmètre sont refusés) ET, surtout, dans la
+  #  configuration du serveur MCP lui-même (ne lui donner accès qu'à ce libellé). Gmail ne permet pas de limiter un jeton à un libellé.
+  courrier:
+    url: http://pk_mcp_courrier:8000/mcp
+    jeton_env: PK_MCP_COURRIER_JETON
+    outils:
+      search_threads:
+        classe: vert
+        agents: [secretariat]
+        gabarit: {query: "label:bureau-ia ({valeur})"}                 # <- le libellé configurable
+        refuser_motifs: ["label:", "in:", "is:", "\\bOR\\b", "\\{", "\\}"]
+        description: Cherche dans les messages portant le libellé « bureau-ia » (et seulement lui).
+      get_thread:
+        classe: vert
+        agents: [secretariat]
+        description: Lit un fil trouvé par la recherche.
+
+  # --- 4. Google Drive (lecture), limité à UN dossier ------------------------------------------------------------------------------
+  #  Recommandé : un compte de SERVICE Google partagé uniquement sur ce dossier. Le serveur MCP ne voit alors que lui.
+  drive:
+    url: http://pk_mcp_drive:8000/mcp
+    jeton_env: PK_MCP_DRIVE_JETON
+    outils:
+      search_files:
+        classe: vert
+        agents: [archiviste]
+        gabarit: {query: "'IDENTIFIANT_DU_DOSSIER' in parents and ({valeur})"}      # <- le dossier configurable
+        refuser_motifs: ["parents", "trashed", "sharedWithMe", "\\bOR\\b"]
+        description: Cherche dans le dossier Drive autorisé (et seulement lui).
+      read_file:
+        classe: vert
+        agents: [archiviste]
+        description: Lit le texte d'un fichier trouvé par la recherche.
