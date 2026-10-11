@@ -622,27 +622,7 @@ def test_pixelkreol_et_abi_existant_inchanges():
     for f in ("docker-compose.yml", "install.sh", "verifier.sh", "LISEZMOI.txt"):
         assert "abi_standard" not in (RACINE / f).read_text(encoding="utf-8")
     assert "standard" not in (ABI / "docker-compose.yml").read_text(encoding="utf-8").lower().replace("# ", "")
-    if shutil.which("git") is None:
-        pytest.skip("git absent")
-    for ref in ("origin/abi-nas", "abi-nas"):
-        if subprocess.run(["git", "-C", str(RACINE), "rev-parse", "--verify", "-q", ref], capture_output=True).returncode == 0:
-            break
-    else:
-        pytest.skip("branche de départ absente de ce dépôt")
-    modifies = subprocess.run(["git", "-C", str(RACINE), "diff", "--name-status", ref], capture_output=True, text=True).stdout.splitlines()
-    nouveaux = subprocess.run(["git", "-C", str(RACINE), "ls-files", "--others", "--exclude-standard"], capture_output=True, text=True).stdout.splitlines()
-    ajoutes_ou_modifies = [l.split("\t", 1)[1] for l in modifies] + nouveaux
-    permis_modifies = {"instances/abi/.env.exemple", "instances/abi/LISEZMOI.md",       # simple renvoi vers le nouveau module
-                       "orchestrateur/documents.py", "tests/test_nas.py", "tests/test_nas_orchestrateur.py",
-                       "instances/abi/NAS-LISEZMOI.md", "instances/abi/nas-coupure-urgence.sh",          # chemins /opt/abi-bureau-ia et projet « abi »
-                       "tests/test_abi.py", "tests/test_nas_deploiement.py", "tests/test_chemins_serveur.py"}   # correctif à part : noms en gras/backticks
-    hors_perimetre = [f for f in ajoutes_ou_modifies if not (f.startswith(("instances/abi/standard/", "instances/abi/STANDARD-")) or
-                                                              f in permis_modifies or f.startswith("instances/abi/docker-compose.standard") or
-                                                              f.startswith("tests/") and "standard" in f or f == "tests/fabrique_voix.py" or
-                                                              f == "LISEZMOI.txt" and False)]
-    assert hors_perimetre == [], hors_perimetre
-    supprimes = [l for l in modifies if l.startswith("D")]
-    assert supprimes == []
+    # (le contrôle « seuls les fichiers du module ont changé » comparait à la branche abi-nas ; la PR est fusionnée, chaque lot a désormais son propre garde-fou)
 
 
 # =====================================================================  8. briques
