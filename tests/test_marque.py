@@ -126,3 +126,12 @@ def test_compose_abi_ajaccio_fixe():
 def test_valeur_par_defaut_du_compose_donne_le_meme_prompt_que_le_code(monkeypatch, agents_dir):
     app = charger_app(monkeypatch, agents_dir, PK_LIEU="à Ajaccio", PK_FUSEAU="Europe/Paris")
     assert (app.LIEU, str(app.TZ)) == ("à Ajaccio", "Europe/Paris")
+
+
+def test_n8n_suit_le_fuseau_du_bureau():
+    import pathlib
+    import re
+    txt = pathlib.Path("docker-compose.yml").read_text(encoding="utf-8")
+    bloc = re.search(r"^  pk_n8n:\n(.*?)(?=^  \S|\Z)", txt, re.S | re.M).group(1)
+    assert "GENERIC_TIMEZONE: ${PK_FUSEAU:-Europe/Paris}" in bloc and "TZ: ${PK_FUSEAU:-Europe/Paris}" in bloc
+    assert "Indian/Reunion" not in bloc
