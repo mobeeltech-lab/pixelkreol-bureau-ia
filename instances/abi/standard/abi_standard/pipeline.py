@@ -365,6 +365,8 @@ class Standard:
         if tronque:
             L += ["", f"ATTENTION : message long, seules les {self.cfg.duree_max_s} premières secondes ont été transcrites. "
                       "Écouter l'original dans la boîte vocale de l'opérateur."]
+        if s.classement == "ia" and not s.resume_ok:
+            L += ["", "Note : la Secrétaire n'a pas fourni de vrai résumé ; ce résumé a été reconstitué à partir du motif et de l'action. Se fier à la transcription."]
         if s.classement == "regles":
             L += ["", "Note : classement de secours (règles simples), la Secrétaire n'a pas répondu. À relire avec attention."]
         L += ["", "TRANSCRIPTION AUTOMATIQUE (peut contenir des erreurs ; l'enregistrement d'origine reste dans la boîte vocale de l'opérateur)",

@@ -734,7 +734,7 @@ def test_docker_compose_config_valide_avec_et_sans_le_standard():
 
 def test_lisezmoi_standard_complet():
     t = (ABI / "STANDARD-LISEZMOI.md").read_text(encoding="utf-8")
-    for mot in ("terminal Hostinger", "docker compose build abi_standard", "ABI_STANDARD_ACTIF=0", "COMPOSE_FILE", "Télécharger le modèle de voix",
+    for mot in ("terminal Hostinger", "dc build abi_standard", "ABI_STANDARD_ACTIF=0", "COMPOSE_FILE", "Télécharger le modèle de voix",
                 "assistant automatique", "trente jours", "messagerie vocale vers e-mail", "ABI_STANDARD_EXPEDITEURS_OK", "astreinte",
                 "Arrêt immédiat", "Désinstallation", "docker volume rm abi_standard_donnees", "Limites connues", "Pourquoi un service à part",
                 "ne fait JAMAIS"):
@@ -769,3 +769,179 @@ def test_aucun_secret_ni_donnee_reelle_dans_le_module():
         assert "gmail.com" not in t and "mobeeltech@" not in t, p
     env = (ABI / ".env.exemple").read_text(encoding="utf-8")
     assert not re.search(r"^ABI_STANDARD_[A-Z_]+=\S", env, re.M)                 # noms seulement, aucune valeur
+
+
+
+# =====================================================================  10. correctifs après l'essai sur le VPS
+def test_lisezmoi_chemins_et_commandes_compose():
+    t = (ABI / "STANDARD-LISEZMOI.md").read_text(encoding="utf-8")
+    assert "/opt/pk-abi" not in t and t.count("/opt/abi-bureau-ia") >= 4
+    # une seule définition de dc ; plus aucune commande « docker compose » nue hors de cette définition
+    definition = 'dc() { (cd /opt/abi-bureau-ia/instances/abi && docker compose -p abi --project-directory . "$@"); }'
+    assert t.count(definition) == 1
+    assert "docker compose" not in t.replace(definition, "").replace("`dc` remplace `docker compose`", "").replace("Docker Compose", "")
+    for ligne in t.splitlines():                                    # toute commande qui touche au service passe par dc
+        if "abi_standard" in ligne and ("up -d" in ligne or "exec " in ligne or "logs" in ligne or " build" in ligne):
+            assert "dc " in ligne or ligne.lstrip().startswith(("-v ", "python")), ligne
+    # le chemin du dépôt cloné est celui du serveur ; le projet est « abi »
+    assert "dc ps" in t and "-p abi" in t and "instances/abi/.env" in t
+
+
+@pytest.mark.skipif(shutil.which("docker") is None, reason="docker absent")
+def test_commande_dc_du_lisezmoi_vise_le_bon_projet(tmp_path):
+    """On exécute la fonction dc EXACTEMENT telle qu'écrite dans le LISEZMOI (chemin du dépôt remplacé), depuis un autre dossier : le .env de
+    instances/abi porte COMPOSE_FILE en chemins relatifs ; le projet résolu est « abi », avec le service du module (et sans lui si COMPOSE_FILE ne le cite pas)."""
+    import re
+    definition = re.search(r"^dc\(\) \{.*\}$", (ABI / "STANDARD-LISEZMOI.md").read_text(encoding="utf-8"), re.M).group(0)
+    depot = tmp_path / "abi-bureau-ia"
+    inst = depot / "instances" / "abi"
+    inst.mkdir(parents=True)
+    for f in ("docker-compose.yml", "docker-compose.standard.yml"):
+        shutil.copy(ABI / f, inst / f)
+    (inst / "standard").symlink_to(STANDARD)
+    env = {"PATH": "/usr/bin:/bin:/usr/local/bin", "HOME": "/tmp"}
+    cles = "ABI_LITELLM_KEY=x\nABI_API_KEY=x\nABI_ADMIN_KEY=x\nABI_POSTGRES_PASSWORD=x\nABI_WEBUI_SECRET_KEY=x\n"
+
+    def dc(*args):
+        script = definition.replace("/opt/abi-bureau-ia", str(depot)) + '\ndc "$@"'
+        return subprocess.run(["bash", "-c", script, "dc", *args], capture_output=True, text=True, env=env, cwd=tmp_path)
+    (inst / ".env").write_text(cles + "COMPOSE_FILE=docker-compose.yml:docker-compose.standard.yml\n")
+    r = dc("config")
+    if "not a docker command" in r.stderr:
+        pytest.skip("plugin compose absent")
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.startswith("name: abi\n") and "abi_standard:" in r.stdout
+    (inst / ".env").write_text(cles)
+    sans = dc("config", "--services")
+    assert sans.returncode == 0 and "abi_standard" not in sans.stdout.split() and "abi_orchestrateur" in sans.stdout.split()
+
+
+def test_modele_small_et_1280m_par_defaut():
+    assert Config.depuis_env({}).whisper_modele == "small"
+    assert Config.depuis_env({"ABI_STANDARD_WHISPER_MODELE": "base"}).whisper_modele == "base"
+    s = compose_standard()["services"]["abi_standard"]
+    assert s["environment"]["ABI_STANDARD_WHISPER_MODELE"] == "${ABI_STANDARD_WHISPER_MODELE:-small}"
+    assert s["mem_limit"] == s["memswap_limit"] == "${ABI_STANDARD_MEM:-1280m}"
+    exemple = (ABI / ".env.exemple").read_text(encoding="utf-8")
+    assert "(small)" in exemple and "(1280m" in exemple and "(base)" not in exemple
+    doc = (ABI / "STANDARD-LISEZMOI.md").read_text(encoding="utf-8")
+    assert "| `ABI_STANDARD_WHISPER_MODELE` | `small` |" in doc and "1280m / 1.5" in doc and "pic de mémoire 675 Mo" in doc
+
+
+@pytest.mark.skipif(shutil.which("docker") is None, reason="docker absent")
+def test_compose_rend_small_et_1280m_par_defaut():
+    env = {"PATH": "/usr/bin:/bin:/usr/local/bin", "HOME": "/tmp", "ABI_LITELLM_KEY": "x", "ABI_API_KEY": "x", "ABI_ADMIN_KEY": "x",
+           "ABI_POSTGRES_PASSWORD": "x", "ABI_WEBUI_SECRET_KEY": "x"}
+    r = subprocess.run(["docker", "compose", "-f", str(ABI / "docker-compose.yml"), "-f", str(ABI / "docker-compose.standard.yml"), "config"],
+                       capture_output=True, text=True, env=env)
+    if "not a docker command" in r.stderr:
+        pytest.skip("plugin compose absent")
+    assert 'ABI_STANDARD_WHISPER_MODELE: small' in r.stdout and 'mem_limit: "1342177280"' in r.stdout
+
+
+# ---- urgence 5 tolérante aux transcriptions abîmées
+ABIMEES = [
+    "Bonjour il y a des gâts d'eau dans mon appartement", "DEGATS DES EAUX chez ma voisine", "j'ai un dé gât des eaux", "un degat des eau au deuxième",
+    "dégat des os", "l'eau coule du plafond", "leau coule partout", "ça fuit depuis ce matin", "il y a une fuite", "le plafond est tombé",
+    "inondation dans le garage", "le sous-sol est inondé", "un incendie au chantier", "in cendie dans la cave", "de la fumée dans l'escalier",
+    "odeur de gaz dans le couloir", "un ouvrier blessé", "il y a des blessés", "une ef fraction cette nuit", "effraction sur le chantier",
+    "cambriolage cette nuit", "on a été cambriolés", "un accident de chantier", "un axident grave", "appelez les pompiers", "le mur s'est effondré",
+]
+SAINES = [
+    "Bonjour je voudrais visiter un appartement trois pièces", "tranche hors d'eau", "appel de fonds de la tranche hors d'eau et hors d'air",
+    "la dalle, le devis et la facture", "ma quittance de loyer d'octobre", "les idéaux de l'entreprise", "rappelez-moi demain matin",
+    "votre permis de construire est prêt", "la réunion de chantier est avancée",
+]
+
+
+@pytest.mark.parametrize("texte", ABIMEES)
+def test_urgence_5_malgre_une_transcription_abimee(texte):
+    assert secretaire.urgence_5_detectee(texte), texte
+
+
+@pytest.mark.parametrize("texte", SAINES)
+def test_pas_d_urgence_5_sur_un_message_ordinaire(texte):
+    assert secretaire.urgence_5_detectee(texte) == [], texte
+
+
+def test_mots_d_alerte_nommes():
+    assert set(secretaire.urgence_5_detectee("des gâts d'eau, le plafond, de la fumée et du gaz")) >= {"dégât", "des eaux", "plafond", "fumée", "gaz"}
+    assert secretaire.urgence_5_detectee("hors d'eau mais aussi un dégât des eaux") != []
+
+
+@voix
+def test_pipeline_alerte_5_sur_transcription_abimee_si_l_ia_minimise(banc):
+    banc.deposer_audio(fabrique_voix.ton(banc.tmp / "a.wav", 5), "Allô bonjour c'est urgent il y a des gâts d'eau et l'eau coule du plafond chez le voisin, rappelez moi.")
+    banc.std.cycle()
+    e = banc.envoyes()[0]
+    assert fs.ASTREINTE in a_qui(e) and fs.message_recu(e)["Subject"].startswith("[URGENT 5/5")
+    assert "Mots d'alerte détectés" in fs.corps_recu(e) and banc.sqlite("SELECT urgence FROM messages") == [(5,)]
+
+
+# ---- résumé : un vrai résumé en 2 lignes, jamais le début du message recopié
+DIT = "Bonjour ici Madame Fictive locataire de l'appartement du programme Les Oliviers ma quittance de loyer d'octobre n'est pas arrivée merci de me rappeler"
+BON = {"appelant": {"nom": "Madame Fictive", "societe": None, "numero_rappel": None}, "motif": "Quittance d'octobre manquante", "categorie": "location",
+       "urgence": 2, "resume": ["Locataire des Oliviers sans quittance d'octobre.", "Demande un rappel pour l'obtenir."],
+       "action_proposee": "Envoyer la quittance après vérification.", "agent": "locatif"}
+
+
+def test_recopie_detectee():
+    assert secretaire.recopie("Bonjour ici Madame Fictive locataire de l'appartement du programme Les Oliviers", DIT)
+    assert secretaire.recopie("ma quittance de loyer d'octobre n'est pas arrivée merci de me rappeler", DIT)
+    assert not secretaire.recopie("Locataire des Oliviers sans quittance d'octobre.", DIT)
+    assert not secretaire.recopie("Rappel demandé", DIT)                 # trop court pour parler de recopie
+
+
+def test_resume_valide_exige_deux_vraies_lignes():
+    v = secretaire.resume_valide
+    assert v(["Locataire sans quittance.", "Demande un rappel."], DIT)
+    assert not v(["Une seule ligne."], DIT) and not v(["a", "b", "c"], DIT) and not v([], DIT)
+    assert not v(["Bonjour ici Madame Fictive locataire de l'appartement du programme", "Demande un rappel."], DIT)       # recopie
+    assert not v(["Même ligne.", "Même ligne."], DIT) and not v(["x" * 250, "Demande un rappel."], DIT)
+
+
+def test_valider_signale_un_resume_recopie_et_le_reconstitue():
+    copie = {**BON, "resume": [" ".join(DIT.split()[:12]), " ".join(DIT.split()[12:24])]}
+    s = secretaire.valider(copie, DIT)
+    assert s.resume_ok is False and len(s.resume) == 2 and s.categorie == "location" and s.urgence == 2       # le classement est conservé
+    assert s.resume[0] == "Motif : Quittance d'octobre manquante" and s.resume[1].startswith("À faire : ")
+    assert not any(secretaire.recopie(l, DIT) for l in s.resume)
+    assert secretaire.valider(BON, DIT).resume_ok is True
+    assert secretaire.valider({**BON, "resume": "une seule ligne"}, DIT).resume_ok is False
+
+
+def test_secours_par_regles_ne_recopie_pas():
+    r = secretaire.depuis_regles(DIT)
+    assert r.resume_ok is False and not any(secretaire.recopie(l, DIT) for l in r.resume) and len(r.resume) == 2
+
+
+@voix
+def test_resume_recopie_redemande_une_fois_puis_accepte(banc):
+    copie = {**BON, "resume": [" ".join(DIT.split()[:12]), " ".join(DIT.split()[12:24])]}
+    banc.secr.file = [json.dumps(copie, ensure_ascii=False), json.dumps(BON, ensure_ascii=False)]
+    banc.deposer_audio(fabrique_voix.ton(banc.tmp / "r.wav", 5), DIT)
+    banc.std.cycle()
+    assert len(banc.secr.appels) == 2
+    retour = banc.secr.appels[1]["corps"]["messages"]
+    assert [m["role"] for m in retour] == ["user", "assistant", "user"] and "recopie le message" in retour[2]["content"]
+    corps = fs.corps_recu(banc.envoyes()[0])
+    assert "Locataire des Oliviers sans quittance d'octobre." in corps and "reconstitué" not in corps
+
+
+@voix
+def test_resume_toujours_recopie_est_reconstitue_et_signale(banc):
+    copie = {**BON, "resume": [" ".join(DIT.split()[:12]), " ".join(DIT.split()[12:24])]}
+    banc.secr.reponse_brute = json.dumps(copie, ensure_ascii=False)
+    banc.deposer_audio(fabrique_voix.ton(banc.tmp / "r.wav", 5), DIT)
+    banc.std.cycle()
+    assert len(banc.secr.appels) == 2                                    # une seule nouvelle demande, pas de boucle
+    e = banc.envoyes()[0]
+    corps = fs.corps_recu(e)
+    assert a_qui(e) == {fs.DEST["location"]} and "ce résumé a été reconstitué" in corps and "Motif : Quittance d'octobre manquante" in corps
+    resume = corps.split("RÉSUMÉ")[1].split("ACTION PROPOSÉE")[0]
+    assert "Bonjour ici Madame Fictive" not in resume                    # le début de la transcription n'est pas recopié dans le résumé
+
+
+def test_consigne_de_la_secretaire_exige_un_vrai_resume():
+    c = secretaire.CONSIGNE
+    assert "exactement 2 lignes" in c and "Tu ne recopies jamais" in c and "120 caractères" in c

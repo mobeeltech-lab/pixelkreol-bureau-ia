@@ -50,7 +50,7 @@ services:
       ABI_STANDARD_DOMAINES_OK: ${ABI_STANDARD_DOMAINES_OK:-}
       ABI_STANDARD_HORAIRES: ${ABI_STANDARD_HORAIRES:-08:00-18:00}
       ABI_STANDARD_JOURS: ${ABI_STANDARD_JOURS:-1-5}
-      ABI_STANDARD_WHISPER_MODELE: ${ABI_STANDARD_WHISPER_MODELE:-base}
+      ABI_STANDARD_WHISPER_MODELE: ${ABI_STANDARD_WHISPER_MODELE:-small}
       ABI_STANDARD_THREADS: ${ABI_STANDARD_THREADS:-2}
       ABI_STANDARD_BEAM: ${ABI_STANDARD_BEAM:-1}
       ABI_STANDARD_DUREE_MAX: ${ABI_STANDARD_DUREE_MAX:-180}
@@ -83,8 +83,8 @@ services:
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     pids_limit: 128
-    mem_limit: ${ABI_STANDARD_MEM:-768m}
-    memswap_limit: ${ABI_STANDARD_MEM:-768m}     # pas de swap : le service ne peut pas ralentir le serveur en le saturant
+    mem_limit: ${ABI_STANDARD_MEM:-1280m}
+    memswap_limit: ${ABI_STANDARD_MEM:-1280m}     # pas de swap : le service ne peut pas ralentir le serveur en le saturant
     cpus: ${ABI_STANDARD_CPUS:-1.5}
     healthcheck:
       test: ["CMD", "python", "-m", "abi_standard", "sante"]

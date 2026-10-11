@@ -72,7 +72,7 @@ class Config:
     jours: str = "1-5"
     fuseau: str = "Europe/Paris"
     # --- transcription locale
-    whisper_modele: str = "base"
+    whisper_modele: str = "small"
     whisper_dossier: str = "/models"
     threads: int = 2
     beam: int = 1
@@ -116,7 +116,7 @@ class Config:
             dest_defaut=liste_adresses(g("DEST_DEFAUT")), dest_urgence=liste_adresses(g("DEST_URGENCE")),
             domaines_ok=[d.lower().lstrip("@") for d in liste_adresses(g("DOMAINES_OK"))],
             horaires=g("HORAIRES", "08:00-18:00"), jours=g("JOURS", "1-5"), fuseau=g("FUSEAU", "Europe/Paris"),
-            whisper_modele=g("WHISPER_MODELE", "base"), whisper_dossier=g("WHISPER_DOSSIER", "/models"),
+            whisper_modele=g("WHISPER_MODELE", "small"), whisper_dossier=g("WHISPER_DOSSIER", "/models"),
             threads=_nombre(e, "ABI_STANDARD_THREADS", 2, 1, 4), beam=_nombre(e, "ABI_STANDARD_BEAM", 1, 1, 5),
             duree_max_s=_nombre(e, "ABI_STANDARD_DUREE_MAX", 180, 10, 900),
             taille_max_mo=_nombre(e, "ABI_STANDARD_TAILLE_MAX_MO", 15, 1, 100),

@@ -73,89 +73,101 @@ Points à vérifier avec le client : le numéro d'astreinte existe vraiment et e
 Toutes les commandes se tapent dans le **terminal Hostinger** (hPanel → VPS → *Terminal*), en administrateur (`root`), **une par une**. Ne jamais coller
 un mot de passe dans un chat ni l'afficher à l'écran.
 
+### 0. Préparer le terminal *(terminal Hostinger)*
+Le dépôt est dans `/opt/abi-bureau-ia`, la pile ABI tourne sous le nom de projet Docker Compose `abi` et ses réglages sont dans `instances/abi`.
+Pour que toutes les commandes ci-dessous visent la même pile, taper **d'abord** (à refaire à chaque nouvelle ouverture du terminal) :
+```bash
+cd /opt/abi-bureau-ia
+dc() { (cd /opt/abi-bureau-ia/instances/abi && docker compose -p abi --project-directory . "$@"); }
+dc ps                      # doit lister abi_orchestrateur, abi_postgres, abi_openwebui
+```
+`dc` remplace `docker compose` : elle se place dans `/opt/abi-bureau-ia/instances/abi` (le `.env` et les chemins de `COMPOSE_FILE` y sont relatifs) et ajoute `-p abi --project-directory .` (même projet que la pile en marche).
+Sans cela, Docker Compose pourrait créer un second projet et se plaindre de conteneurs déjà existants.
+
 ### 1. Vérifier la mémoire *(terminal Hostinger)*
 ```bash
-free -h                      # viser au moins 1 Go « available » avec le modèle « base » (1,5 Go avec « small »)
+free -h                      # viser au moins 1,5 Go « available » (le conteneur est plafonné à 1,25 Go avec le modèle « small »)
 docker stats --no-stream     # ce que consomment déjà les conteneurs
 ```
 
 ### 2. Récupérer le code *(terminal Hostinger)*
 Le module se trouve sur la branche `abi-standard` ; après la fusion de la pull request, sur `serveur-propre`.
 ```bash
-cd /opt/pk-abi && git fetch origin && git checkout serveur-propre && git pull
+cd /opt/abi-bureau-ia && git fetch origin && git checkout serveur-propre && git pull
 cd instances/abi
 ls docker-compose.standard.yml standard/Dockerfile       # les deux fichiers doivent exister
 ```
 
 ### 3. Régler le standard dans `.env` *(terminal Hostinger)*
 ```bash
-cd /opt/pk-abi/instances/abi
+cd /opt/abi-bureau-ia/instances/abi
 nano .env          # Ctrl+O puis Entrée pour enregistrer, Ctrl+X pour quitter
 ```
 Ajouter (ou compléter) les lignes `ABI_STANDARD_…` décrites dans `.env.exemple` (la liste complète et commentée y est). Au minimum :
 `ABI_STANDARD_IMAP_HOTE`, `_IMAP_COMPTE`, `_IMAP_MDP`, `_EXPEDITEURS_OK`, `_SMTP_HOTE`, `_SMTP_EXPEDITEUR`, `_DEST_DEFAUT`, `_DEST_URGENCE`, les `_DEST_<catégorie>`,
-`_HORAIRES`, `_JOURS`, `_DOMAINES_OK`. **Laisser `ABI_STANDARD_ACTIF=0` pour l'instant.** Puis ajouter le fichier compose :
+`_HORAIRES`, `_JOURS`, `_DOMAINES_OK`. **Laisser `ABI_STANDARD_ACTIF=0` pour l'instant.** (Les réglages se font toujours dans `/opt/abi-bureau-ia/instances/abi/.env`.) Puis ajouter le fichier compose :
 ```bash
 grep '^COMPOSE_FILE' .env || echo 'COMPOSE_FILE=docker-compose.yml:docker-compose.standard.yml' >> .env
 # Si la ligne COMPOSE_FILE existait déjà (NAS activé), la compléter au lieu d'en créer une seconde :
 sed -i '/^COMPOSE_FILE=/{/docker-compose.standard.yml/!s|$|:docker-compose.standard.yml|}' .env
 grep '^COMPOSE_FILE' .env          # doit se terminer par docker-compose.standard.yml
 chmod 600 .env
-docker compose config -q && echo "réglages OK"
+dc config -q && echo "réglages OK"
 ```
 Les mots de passe sont dans `.env` uniquement (droits 600). Éviter les caractères `$` et `"` dans les mots de passe (ou les doubler : `$$`).
 
 ### 4. Construire le conteneur *(terminal Hostinger)*
 ```bash
-docker compose build abi_standard         # plusieurs minutes ; image de l'ordre de 0,5 à 1 Go
+dc build abi_standard         # plusieurs minutes ; image de l'ordre de 0,5 à 1 Go
 ```
 
 ### 5. Télécharger le modèle de voix, UNE fois *(terminal Hostinger)*
 C'est la seule fois où le service parle à Internet pour la voix : il récupère le modèle, puis ne se reconnecte plus (`HF_HUB_OFFLINE=1`).
 ```bash
-docker compose run --rm -e HF_HUB_OFFLINE=0 abi_standard python -m abi_standard telecharger
+dc run --rm -e HF_HUB_OFFLINE=0 abi_standard python -m abi_standard telecharger
 ```
-Pour le modèle plus précis : mettre `ABI_STANDARD_WHISPER_MODELE=small` et `ABI_STANDARD_MEM=1280m` dans `.env`, puis relancer la commande.
+Le modèle par défaut est `small` (réglage `ABI_STANDARD_WHISPER_MODELE`, plafond mémoire `ABI_STANDARD_MEM=1280m`). Pour le modèle plus léger, mettre `ABI_STANDARD_WHISPER_MODELE=base` dans `.env` (`ABI_STANDARD_MEM=768m` suffit), puis relancer la commande.
 
 ### 6. Mesurer sur CE serveur avant d'allumer *(terminal Hostinger)*
 Enregistrer un message de test de quelques secondes (téléphone, ordinateur) au format WAV ou MP3, le déposer sur le serveur (`/root/essai.wav`), puis :
 ```bash
-docker compose run --rm -v /root/essai.wav:/mesure/essai.wav:ro abi_standard \
+dc run --rm -v /root/essai.wav:/mesure/essai.wav:ro abi_standard \
   python -m abi_standard.mesure --audio /mesure/essai.wav --secondes 60
 ```
 Le programme répète le fichier jusqu'à 60 s et affiche : temps de chargement du modèle, temps de transcription (× le temps réel), pic de mémoire.
 Le conteneur est soumis aux **mêmes limites** que le service : un « Killed » signifie qu'il faut plus de mémoire ou un modèle plus léger.
-**Noter les chiffres** : ils décident du modèle (`base` ou `small`) et du délai moyen d'un message.
+**Noter les chiffres** : ils décident du modèle (`small` ou `base`) et du délai moyen d'un message. Mesure faite sur le VPS d'essai (2 processeurs), pour 60 s d'audio : `small` 16 s, pic de mémoire 675 Mo ; `base` 6 s, pic 387 Mo. Un message d'une minute est donc prêt en une vingtaine de secondes avec `small`, hors attente de la relève.
 
 ### 7. Essai à blanc avec une boîte de test *(terminal Hostinger)*
 Utiliser d'abord une boîte de TEST (pas celle du client), `ABI_STANDARD_ACTIF=1`, des destinataires internes à PixelKréol :
 ```bash
+cd /opt/abi-bureau-ia/instances/abi
 sed -i 's|^ABI_STANDARD_ACTIF=.*|ABI_STANDARD_ACTIF=1|' .env
-docker compose run --rm abi_standard python -m abi_standard etat       # « Réglages : complets »
-docker compose up -d abi_standard
-docker compose logs --tail 30 abi_standard                              # « standard démarré : modèle base… »
+dc run --rm abi_standard python -m abi_standard etat       # « Réglages : complets »
+dc up -d abi_standard
+dc logs --tail 30 abi_standard                              # « standard démarré : modèle small… »
 docker stats --no-stream abi_standard                                   # mémoire réelle au repos
 ```
 Envoyer depuis l'adresse autorisée un mail avec un message vocal **fictif** en pièce jointe à la boîte dédiée. Dans les 2 minutes (`ABI_STANDARD_INTERVALLE`) :
-la synthèse arrive chez le destinataire de la catégorie ; `docker compose exec abi_standard python -m abi_standard journal` montre la ligne (numéro masqué) ;
+la synthèse arrive chez le destinataire de la catégorie ; `dc exec abi_standard python -m abi_standard journal` montre la ligne (numéro masqué) ;
 `… taches` montre la tâche de rappel. Tester aussi : un message qui dit « dégât des eaux » (alerte immédiate), un fichier PDF, un mail sans pièce jointe.
 
 ### 8. Brancher la vraie boîte, seulement après accord du client
-Changer les réglages IMAP/SMTP et les destinataires dans `.env`, puis `docker compose up -d abi_standard`. Faire configurer par l'opérateur l'envoi des messages
-vocaux vers la boîte dédiée, puis l'annonce du répondeur. Premier jour : surveiller (`docker compose logs -f --tail 50 abi_standard`, Ctrl+C pour quitter l'affichage).
+Changer les réglages IMAP/SMTP et les destinataires dans `.env`, puis `dc up -d abi_standard`. Faire configurer par l'opérateur l'envoi des messages
+vocaux vers la boîte dédiée, puis l'annonce du répondeur. Premier jour : surveiller (`dc logs -f --tail 50 abi_standard`, Ctrl+C pour quitter l'affichage).
 
-## Utilisation courante *(terminal Hostinger, dossier `/opt/pk-abi/instances/abi`)*
+## Utilisation courante *(terminal Hostinger, après l'étape 0)*
 
 | Besoin | Commande |
 |---|---|
-| Tâches de rappel à faire | `docker compose exec abi_standard python -m abi_standard taches` |
-| Marquer une tâche faite | `docker compose exec abi_standard python -m abi_standard fait 12` |
-| Journal des 7 derniers jours (numéros masqués) | `docker compose exec abi_standard python -m abi_standard journal` |
-| État et réglages | `docker compose exec abi_standard python -m abi_standard etat` |
-| Voir ce qui se passe | `docker compose logs -f --tail 50 abi_standard` |
-| **Arrêt immédiat** | `docker compose stop abi_standard` (rien n'est perdu : les messages restent non lus dans la boîte) |
-| Éteindre durablement | `sed -i 's|^ABI_STANDARD_ACTIF=.*|ABI_STANDARD_ACTIF=0|' .env && docker compose up -d abi_standard` |
-| Appliquer la durée de conservation tout de suite | `docker compose exec abi_standard python -m abi_standard purger` |
+| Tâches de rappel à faire | `dc exec abi_standard python -m abi_standard taches` |
+| Marquer une tâche faite | `dc exec abi_standard python -m abi_standard fait 12` |
+| Journal des 7 derniers jours (numéros masqués) | `dc exec abi_standard python -m abi_standard journal` |
+| État et réglages | `dc exec abi_standard python -m abi_standard etat` |
+| Voir ce qui se passe | `dc logs -f --tail 50 abi_standard` |
+| **Arrêt immédiat** | `dc stop abi_standard` (rien n'est perdu : les messages restent non lus dans la boîte) |
+| Éteindre durablement | `sed -i 's|^ABI_STANDARD_ACTIF=.*|ABI_STANDARD_ACTIF=0|' /opt/abi-bureau-ia/instances/abi/.env && dc up -d abi_standard` |
+| Appliquer la durée de conservation tout de suite | `dc exec abi_standard python -m abi_standard purger` |
 
 Un message qui arrive entre deux relèves attend au plus `ABI_STANDARD_INTERVALLE` secondes (120 par défaut), plus le temps de transcription. Les alertes d'urgence 5 partent dès
 que le message est traité, de jour comme de nuit, sans limite d'horaires.
@@ -163,10 +175,10 @@ que le message est traité, de jour comme de nuit, sans limite d'horaires.
 ## Réglages qui comptent
 | Réglage | Défaut | Effet |
 |---|---|---|
-| `ABI_STANDARD_WHISPER_MODELE` | `base` | `small` est plus précis mais demande plus de mémoire (`ABI_STANDARD_MEM`) |
+| `ABI_STANDARD_WHISPER_MODELE` | `small` | `base` est plus rapide (6 s au lieu de 16 s par minute d'audio) et plus léger (pic 387 Mo au lieu de 675 Mo) mais moins précis |
 | `ABI_STANDARD_DUREE_MAX` | 180 s | au-delà, seules les premières secondes sont transcrites et la synthèse le dit (l'original reste dans la boîte) |
 | `ABI_STANDARD_LOT_MAX` | 5 | messages traités par relève ; **un seul à la fois** dans tous les cas |
-| `ABI_STANDARD_MEM` / `_CPUS` | 768m / 1.5 | plafonds du conteneur (le serveur a 2 cœurs) |
+| `ABI_STANDARD_MEM` / `_CPUS` | 1280m / 1.5 | plafonds du conteneur (le serveur a 2 cœurs) |
 | `ABI_STANDARD_IMAP_APRES` | `lu` | `ranger` copie dans le dossier « Traité » puis retire de la boîte de réception (jamais de suppression sans copie) |
 | `ABI_STANDARD_CONSERVATION_JOURS` | 30 | transcriptions, synthèses, tâches ; le journal (sans texte) : `_CONSERVATION_JOURNAL`, 365 |
 | `ABI_STANDARD_MAX_MAILS_HEURE` | 30 | garde-fou contre un déluge de mails ; les alertes 5 ont leur propre limite (10) |
@@ -174,9 +186,9 @@ que le message est traité, de jour comme de nuit, sans limite d'horaires.
 ## Dépannage
 | Constat | Cause probable | Quoi faire |
 |---|---|---|
-| Le conteneur s'arrête tout de suite | `ABI_STANDARD_ACTIF=0`, ou réglages incomplets | `docker compose logs abi_standard` indique ce qui manque |
+| Le conteneur s'arrête tout de suite | `ABI_STANDARD_ACTIF=0`, ou réglages incomplets | `dc logs abi_standard` indique ce qui manque |
 | « relève impossible » dans les journaux, puis mail d'alerte | identifiants, port, SSL, ou serveur IMAP hors service | vérifier `IMAP_HOTE/PORT/SSL/COMPTE/MDP` ; les messages restent dans la boîte |
-| « transcription impossible » | modèle non téléchargé (étape 5) ou mémoire insuffisante (`docker inspect abi_standard --format '{{.State.OOMKilled}}'`) | refaire l'étape 5 ; `ABI_STANDARD_MEM` plus grand, ou modèle `base` |
+| « transcription impossible » | modèle non téléchargé (étape 5) ou mémoire insuffisante (`docker inspect abi_standard --format '{{.State.OOMKilled}}'`) | refaire l'étape 5 ; `ABI_STANDARD_MEM` plus grand, ou modèle `base` (`ABI_STANDARD_WHISPER_MODELE=base`) |
 | Les messages arrivent mais rien n'est traité | expéditeur différent de `ABI_STANDARD_EXPEDITEURS_OK` (ils sont ignorés, marqués lus) | corriger l'adresse (voir la ligne « ignore » du journal) |
 | Synthèse « classement de secours » | la Secrétaire n'a pas répondu (LiteLLM/modèles) | `bash verifier.sh --rapide` ; le message est quand même transmis |
 | Synthèses en retard | limite horaire atteinte (`MAX_MAILS_HEURE`) ou SMTP en panne | elles partent seules ensuite ; `journal` montre le statut `a_notifier` |
@@ -197,7 +209,8 @@ que le message est traité, de jour comme de nuit, sans limite d'horaires.
 ## Limites connues
 - **Qualité de la transcription** : noms propres, numéros dits en toutes lettres, accents, mauvaise ligne. Le numéro à rappeler n'est retenu que si ses chiffres figurent dans la
   transcription ; sinon c'est celui de l'en-tête du mail de l'opérateur, signalé comme « non confirmé par l'appelant ». La synthèse rappelle que la transcription peut contenir des erreurs.
-- **Les mots-clés d'urgence 5 ne comprennent pas la négation** (« il n'y a pas eu d'accident » déclenche l'alerte) : on préfère une fausse alerte à un sinistre manqué.
+- **Les mots d'urgence 5 sont volontairement larges** (racines et variantes, accents perdus, mots coupés : dégât, des eaux, fuite, inondation, l'eau coule, plafond, incendie, fumée, gaz, blessé, effraction, cambriolage, accident…) et ne comprennent pas la négation (« il n'y a pas eu d'accident » déclenche l'alerte) : on préfère une fausse alerte à un sinistre manqué. « Hors d'eau » (étape de chantier) est écarté. Mots à double sens possibles (« plafond de loyer », « chauffage au gaz ») : ils déclenchent l'alerte aussi ; la liste se resserre dans `classement.py` (`MOTS_URGENCE_5`) si cela devient gênant.
+- **Résumé** : si la Secrétaire recopie le message au lieu de le résumer (ou ne rend pas exactement 2 lignes), le standard le lui redemande une fois ; si c'est encore mauvais, il garde le classement et reconstitue le résumé à partir du motif et de l'action, en le signalant dans la synthèse.
 - **Un message à la fois** : après une rafale, les derniers attendent. Au-delà de `DUREE_MAX` secondes, le reste du message n'est pas transcrit.
 - **La tâche de rappel** vit dans le journal du standard (commandes `taches` / `fait`) et dans le mail ; elle n'est pas reliée à un outil de tâches du client.
 - **Pas de rappel groupé le matin** : chaque message donne un mail (avec la limite horaire en garde-fou).
@@ -206,8 +219,8 @@ que le message est traité, de jour comme de nuit, sans limite d'horaires.
 
 ## Désinstallation *(terminal Hostinger)*
 ```bash
-cd /opt/pk-abi/instances/abi
-docker compose stop abi_standard && docker compose rm -f abi_standard                           # arrêter et retirer le conteneur
+cd /opt/abi-bureau-ia/instances/abi
+dc stop abi_standard && dc rm -f abi_standard                           # arrêter et retirer le conteneur
 sed -i 's|:docker-compose.standard.yml||' .env                                                    # retire le module de COMPOSE_FILE
 docker volume rm abi_standard_donnees abi_standard_modeles      # EFFACE le journal, les tâches et le modèle de voix
 docker image rm abi/standard:1

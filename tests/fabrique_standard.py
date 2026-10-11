@@ -303,6 +303,7 @@ class FausseSecretaire:
         self.panne: int | None = None          # code HTTP à renvoyer, ou None
         self.reponse_brute: str | None = None  # texte à renvoyer tel quel (réponse illisible, injection…)
         self.exception: Exception | None = None
+        self.file: list[str] = []              # réponses brutes servies dans l'ordre, avant le comportement normal
 
     def __call__(self, requete: httpx.Request) -> httpx.Response:
         corps = json.loads(requete.content)
@@ -311,9 +312,10 @@ class FausseSecretaire:
             raise self.exception
         if self.panne:
             return httpx.Response(self.panne, json={"error": {"message": "indisponible"}})
-        texte = corps["messages"][-1]["content"]
+        texte = next(m["content"] for m in corps["messages"] if "<message>" in m["content"])      # (la relance ajoute des messages après)
         dit = re.search(r"<message>\n(.*?)\n</message>", texte, re.S).group(1)
-        contenu = self.reponse_brute if self.reponse_brute is not None else json.dumps(self.analyser(dit), ensure_ascii=False)
+        contenu = (self.file.pop(0) if self.file else self.reponse_brute if self.reponse_brute is not None
+                   else json.dumps(self.analyser(dit), ensure_ascii=False))
         return httpx.Response(200, json={"choices": [{"message": {"role": "assistant", "content": contenu}}]})
 
     @staticmethod
