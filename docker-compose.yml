@@ -96,6 +96,8 @@ services:
       PK_ROUTAGE_IA: ${PK_ROUTAGE_IA:-true}
       PK_ANNONCE_AGENT: ${PK_ANNONCE_AGENT:-true}
       PK_AGENTS_DIR: /app/agents
+      PK_LIEU: ${PK_LIEU:-à Ajaccio}
+      PK_FUSEAU: ${PK_FUSEAU:-Europe/Paris}
       DATABASE_URL: postgresql://${POSTGRES_USER:-pixelkreol}:${POSTGRES_PASSWORD}@pk_postgres:5432/${PK_DB_BUREAU:-pk_bureau}
     volumes:
       - ./agents:/app/agents

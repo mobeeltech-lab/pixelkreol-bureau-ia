@@ -75,8 +75,8 @@ DATABASE_URL = cfg("DATABASE_URL", "")
 # Textes propres à une installation (valeurs par défaut = celles de l'instance PixelKréol, inchangées).
 # Une autre instance (ex. ABI Holding, tests) les remplace par des variables d'environnement.
 MARQUE = cfg("PK_MARQUE", "PixelKréol")                       # « Bureau IA <marque> »
-LIEU = cfg("PK_LIEU", "à La Réunion")                         # « Date et heure <lieu> : … »
-FUSEAU = cfg("PK_FUSEAU", "Indian/Reunion")                   # fuseau horaire donné aux agents
+LIEU = cfg("PK_LIEU", "à Ajaccio")                            # « Date et heure <lieu> : … »
+FUSEAU = cfg("PK_FUSEAU", "Europe/Paris")                      # fuseau horaire donné aux agents
 PATRON = cfg("PK_PATRON", "Will")                             # « Demande de <patron> : … » (synthèse d'équipe)
 VITRINE_PIED = cfg("PK_VITRINE_PIED", "LLM gratuits · La Réunion")
 PROPRIETAIRE = cfg("PK_PROPRIETAIRE", "pixelkreol")           # champ owned_by du catalogue /v1/models
@@ -88,8 +88,8 @@ OUTILS_CONNUS = {"documents"}
 try:
     TZ = ZoneInfo(FUSEAU)
 except (ZoneInfoNotFoundError, ValueError):
-    LOG.warning("PK_FUSEAU « %s » inconnu : fuseau Indian/Reunion utilisé", FUSEAU)
-    TZ = ZoneInfo("Indian/Reunion")
+    LOG.warning("PK_FUSEAU « %s » inconnu : fuseau Europe/Paris utilisé", FUSEAU)
+    TZ = ZoneInfo("Europe/Paris")
 
 
 # =====================================================================
@@ -526,13 +526,22 @@ def option_autorisee(nom: str) -> bool:
     return nom not in OPTIONS_INTERDITES and not str(nom).startswith(PREFIXES_INTERDITS)
 
 
+CHAMPS_MESSAGE = ("role", "content", "name", "tool_calls", "tool_call_id")
+
+
+def nettoyer_message(m: dict) -> dict:
+    """Ne garde que les champs standard d'un message : l'historique d'Open WebUI peut contenir des champs propres
+    à un fournisseur (reasoning_details, reasoning_content…) que Groq, Mistral, Cerebras ou DeepSeek refusent."""
+    return {k: v for k, v in m.items() if k in CHAMPS_MESSAGE}
+
+
 def preparer_corps(corps: dict, agent: dict) -> tuple[dict, list[str]]:
     messages = [m for m in corps.get("messages", []) if isinstance(m, dict)]
     systeme_client = "\n\n".join(texte_du_message(m) for m in messages if m.get("role") == "system").strip()
     systeme = REGISTRE.prompt_systeme(agent)
     if systeme_client:
         systeme += "\n\n## Consignes supplémentaires de l'utilisateur\n" + systeme_client
-    nouveaux = [{"role": "system", "content": systeme}] + [m for m in messages if m.get("role") != "system"]
+    nouveaux = [{"role": "system", "content": systeme}] + [nettoyer_message(m) for m in messages if m.get("role") != "system"]
     sortie = {k: v for k, v in corps.items() if k not in ("messages", "model") and option_autorisee(k)}
     sortie["messages"] = nouveaux
     sortie.setdefault("temperature", agent.get("temperature", 0.4))

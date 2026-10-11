@@ -21,7 +21,7 @@ from conftest import CLE_ADMIN, CLE_API, RACINE, FauxLiteLLM, charger_app  # noq
 
 OK = FauxLiteLLM.ok
 AGENTS_ABI = RACINE / "instances" / "abi" / "agents"
-ENV_ABI = {"PK_MARQUE": "ABI Holding", "PK_LIEU": "en Corse", "PK_FUSEAU": "Europe/Paris", "PK_PATRON": "la direction d'ABI Holding",
+ENV_ABI = {"PK_MARQUE": "ABI Holding", "PK_LIEU": "à Ajaccio", "PK_FUSEAU": "Europe/Paris", "PK_PATRON": "la direction d'ABI Holding",
            "PK_PROPRIETAIRE": "abi"}
 ACTE = "Oliviers/acquereurs/FICTIF-DURAND/acte-vefa-A02.pdf"
 H = {"Authorization": f"Bearer {CLE_API}"}

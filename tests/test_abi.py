@@ -23,7 +23,7 @@ ABI = RACINE / "instances" / "abi"
 AGENTS_ABI = ABI / "agents"
 IDS = ["orchestrateur", "secretaire", "comptable", "appels-de-fonds", "commercial", "locatif", "juriste",
        "suivi-programme", "archiviste"]
-ENV_ABI = {"PK_MARQUE": "ABI Holding", "PK_LIEU": "en Corse", "PK_FUSEAU": "Europe/Paris",
+ENV_ABI = {"PK_MARQUE": "ABI Holding", "PK_LIEU": "à Ajaccio", "PK_FUSEAU": "Europe/Paris",
            "PK_PATRON": "la direction d'ABI Holding", "PK_VITRINE_PIED": "environnement de test · données fictives",
            "PK_PROPRIETAIRE": "abi"}
 
@@ -264,7 +264,7 @@ def test_la_fiche_envoyee_au_modele_ne_cite_pas_pixelkreol(client_abi, h_api, fa
     envoye = sans_accents(str(faux.appels[0]["messages"]))
     for interdit in ("pixelkreol", "la reunion", "will", "kap numerik"):
         assert interdit not in envoye
-    assert "date et heure en corse" in envoye
+    assert "date et heure a ajaccio" in envoye
     page = sans_accents(client_abi.get("/").text.split("<main>")[0])
     assert "abi holding" in page and "pixelkreol" not in page
 
