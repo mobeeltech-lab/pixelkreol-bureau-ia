@@ -1,6 +1,6 @@
 # Banc d'essai des agents du Bureau IA PixelKréol
 
-Il pose **200 questions fictives** (8 par agent, 25 agents) à l'orchestrateur du serveur, note chaque réponse et affiche le score par agent.
+Il pose **202 questions fictives** (8 par agent, 10 pour DevOps, 25 agents) à l'orchestrateur du serveur, note chaque réponse et affiche le score par agent.
 Il sert à vérifier une modification de fiche (`agents/registre.yaml`) **avant / après**, et à repérer ce qui dérape (prix faux, envoi sans validation, secret recopié…).
 
 ## Où et comment le lancer *(terminal Hostinger, en administrateur)*
@@ -40,7 +40,7 @@ Rien à installer (Python 3 seulement). Il lit la clé dans le `.env` du dossier
 
 ## Variance et coût
 Les modèles gratuits ne répondent pas deux fois la même chose : sur 8 questions par agent, **un écart de ±10 points est du bruit**. Ne conclure qu'à partir de l'ensemble (ligne GLOBAL) ou d'écarts répétés.
-Chaque passage fait ~200 appels (plus ~200 avec `--juge`) sur les fournisseurs gratuits : le banc attend 1 s entre deux questions (`--pause`) et retente après 5, 15 puis 30 s en cas de saturation (429).
+Chaque passage fait ~202 appels (plus ~202 avec `--juge`) sur les fournisseurs gratuits : le banc attend 1 s entre deux questions (`--pause`) et retente après 5, 15 puis 30 s en cas de saturation (429).
 Une question sans réponse est signalée à part et **n'est pas comptée comme un zéro**.
 
 ## Mesures hors ligne (sans aucun modèle), pour le développement

@@ -154,6 +154,18 @@ def feu(couleur: str, poids: float = 1.0) -> Verif:
     return Verif("feu", couleur.upper(), f"ligne « Feu : {couleur.upper()} »" if couleur.upper() in ("ORANGE", "ROUGE") else "aucun feu orange/rouge", poids)
 
 
+def feu_en_tete(couleur: str = "ROUGE", poids: float = 1.0) -> Verif:
+    """La PREMIÈRE ligne non vide de la réponse est « Feu : <couleur> » (emoji, gras, tirets tolérés avant)."""
+    return Verif("feu_en_tete", couleur.upper(), f"« Feu : {couleur.upper()} » en première ligne", poids)
+
+
+def avant(rx_avant: str, rx_apres: str, libelle: str = "", poids: float = 1.0) -> Verif:
+    """rx_avant apparaît AVANT la première ligne de commande qui correspond à rx_apres (ligne commençant par la commande, `$` ou `sudo` tolérés).
+    Échoue si aucune sauvegarde n'est annoncée avant la commande, ou si la commande est donnée sans rien avant ; réussit si la commande n'est jamais donnée seule…
+    à condition que rx_avant soit présent."""
+    return Verif("avant", (rx_avant, rx_apres), libelle or f"/{rx_avant}/ avant la commande /{rx_apres}/", poids)
+
+
 def renvoie(*noms: str, libelle: str = "", poids: float = 1.0) -> Verif:
     """Cite au moins l'un des agents (nom ou id) comme destinataire du travail."""
     return Verif("renvoie", noms, libelle or "renvoie vers " + " / ".join(noms), poids)
@@ -278,6 +290,16 @@ def evaluer(v: Verif, reponse: str) -> bool:
         if v.argument == "ROUGE":
             return "rouge" in couleurs
         return not (couleurs & {"orange", "rouge"})
+    if v.genre == "feu_en_tete":
+        premiere = next((l for l in t.splitlines() if re.search(r"\w", l)), "")
+        return re.match(r"^\W{0,8}feu\s*[:：]\s*\W{0,8}" + v.argument.lower() + r"\b", premiere) is not None
+    if v.genre == "avant":
+        rx_avant, rx_apres = v.argument
+        commande = re.search(r"^[ \t>`$#-]*(?:sudo\s+)?(?:" + sans_accents(rx_apres) + r")", t, re.M)
+        sauvegarde = re.search(sans_accents(rx_avant), t)
+        if sauvegarde is None:
+            return False
+        return commande is None or sauvegarde.start() < commande.start()
     if v.genre == "renvoie":
         return any(sans_accents(n) in t for n in v.argument)
     if v.genre == "prix":
