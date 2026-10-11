@@ -84,6 +84,8 @@ def fabriquer(racine: Path, dehors: Path, taille_gros: int = 1_300_000) -> dict:
     ecrire(racine / "Cypres/livraison/PV-livraison-CYP-B12.txt",
            "DONNÉES FICTIVES — TEST\nProcès-verbal de livraison du lot B12 (programme Les Cyprès). Réserves : aucune. Clés remises le 2025-06-30.\n")
     ecrire(racine / "Cypres/baux/bail-A.csv", "DONNÉES FICTIVES — TEST\nlocataire;loyer;charges\nTEST-LOCATAIRE;650,00;45,00\n")
+    ecrire(racine / "Oliviers/juridique/compromis-vente-A05.txt",
+           "DONNÉES FICTIVES — TEST\nCompromis de vente du lot A05 (Résidence Les Oliviers). Prix 171 500,00 euros. Condition suspensive : prêt.\n")
     ecrire(racine / "Rapport d'achèvement 2026.txt", "DONNÉES FICTIVES — TEST\nRapport sur l'achèvement des travaux.\n")
     # dossiers EXCLUS (invisibles)
     ecrire(racine / "RH/paie/bulletin-2026-09.txt", f"DONNÉES FICTIVES — TEST\nBulletin de paie {SECRET_PAIE} salaire 3000.\n")
