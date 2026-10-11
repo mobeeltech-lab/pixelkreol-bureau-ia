@@ -68,7 +68,7 @@ Le code Python est dans l'image : **reconstruire** l'orchestrateur (pas de simpl
 3. Copier `agents/mcp.exemple.yaml` en `agents/mcp.yaml`, **adapter** noms d'outils, domaines, libellé, dossier. Vérifier :
    `docker compose exec pk_orchestrateur python mcp_client.py verifier`
    Lister les vrais outils d'un serveur : `docker compose exec pk_orchestrateur python mcp_client.py lister pages`
-4. Mettre les jetons dans `.env` (noms : `PK_MCP_PAGES_JETON`, `PK_MCP_AGENDA_JETON`, `PK_MCP_COURRIER_JETON`, `PK_MCP_DRIVE_JETON`, et pour la notification
+4. Mettre dans `.env` une clé **`PK_ADMIN_KEY`** dédiée (voir plus bas), puis les jetons (noms : `PK_MCP_PAGES_JETON`, `PK_MCP_AGENDA_JETON`, `PK_MCP_COURRIER_JETON`, `PK_MCP_DRIVE_JETON`, et pour la notification
    `PK_MCP_NOTIF_URL`, `PK_MCP_NOTIF_JETON`) et ajouter
    `COMPOSE_FILE=docker-compose.yml:docker-compose.mcp.yml` (en gardant ce qui y figure déjà, ex. `:docker-compose.caddy.yml`).
 5. Donner `outils: [mcp]` aux seuls agents voulus (dans leur fiche : `agents/registre.yaml` ou `agents/perso.yaml`).
@@ -88,6 +88,13 @@ répond « en attente de validation de Will ». Will la voit et décide :
 - À la validation, tout est **revérifié** (l'outil est-il toujours autorisé, toujours « orange », l'agent aussi, arguments conformes) : sinon refus
   automatique. Une action ne s'exécute **qu'une seule fois** (double clic, deux onglets). Après 24 h : « expirée », impossible à valider, rien n'est fait.
 - Si le serveur ne répond pas ou répond en erreur après validation, la page le dit (« peut-être faite, peut-être pas : vérifiez avant de recommencer »).
+
+**Clé d'administration dédiée (obligatoire pour valider).** La page `/pk-validation` et les routes `/admin/mcp/valider|refuser|classer` **refusent de répondre**
+(erreur 503 avec la raison) si `PK_ADMIN_KEY` est **absente**, fait **moins de 32 caractères**, ou est **identique à `LITELLM_MASTER_KEY` ou à `PK_API_KEY`**.
+Le message est dans `/health` (`mcp.validation.raison`) et dans les journaux (`docker compose logs pk_orchestrateur | grep "validation MCP"`).
+Tant que c'est le cas, **aucun outil orange n'est proposé aux agents** (personne ne pourrait valider) ; les lectures continuent. Avec `docker-compose.mcp.yml`,
+le compose **ne retombe plus** sur `LITELLM_MASTER_KEY` : il refuse de démarrer si `PK_ADMIN_KEY` manque dans `.env`.
+Générer une clé : `openssl rand -hex 24` (48 caractères), à mettre dans `.env` sous `PK_ADMIN_KEY=`.
 
 **Sécurité de la page.** Connexion par la clé admin (comparaison à temps constant ; au-delà de 10 échecs en 15 min chaque essai coûte 2 s) → cookie
 signé de 8 h, `HttpOnly`, `SameSite=Strict`, `Secure` derrière HTTPS, **limité au chemin de la page**. Chaque bouton porte un jeton anti-CSRF propre à

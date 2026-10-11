@@ -8,6 +8,9 @@ services:
   pk_orchestrateur:
     environment:
       PK_MCP_ACTIF: "1"
+      # Valider une écriture exige une clé d'administration DÉDIÉE (32 caractères au moins, différente de LITELLM_MASTER_KEY et de PK_API_KEY).
+      # Avec ce fichier, le compose ne retombe PLUS sur LITELLM_MASTER_KEY quand PK_ADMIN_KEY est absente : il refuse de démarrer.
+      PK_ADMIN_KEY: ${PK_ADMIN_KEY:?PK_ADMIN_KEY manquante dans .env (clé dédiée de 32 caractères au moins, différente de LITELLM_MASTER_KEY et de PK_API_KEY)}
       PK_MCP_DATA: /app/data/mcp
       # Page de validation (ouverte sous ce chemin, en local et derrière le serveur web) et notification par mail via n8n
       PK_MCP_URL_PUBLIQUE: ${PK_MCP_URL_PUBLIQUE:-https://agents.mebeeltech.online/pk-validation}

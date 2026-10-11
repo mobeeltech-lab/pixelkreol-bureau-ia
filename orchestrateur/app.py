@@ -92,6 +92,7 @@ if MCP_ACTIF and MARQUE != MCP_MARQUE:
     MCP_ACTIF = False
 MCPM = None            # module mcp_client.py (chargé seulement si MCP est actif)
 MCPC = None            # gestionnaire MCP (mcp_client.MCP)
+MCP_CLE_PB = None      # raison pour laquelle la validation par Will est refusée (clé admin absente / courte / partagée), sinon None
 OUTILS_CONNUS = {"documents", "mcp"}
 try:
     TZ = ZoneInfo(FUSEAU)
@@ -876,6 +877,9 @@ def demarrer_mcp(app: FastAPI) -> None:
         LOG.error("MCP NON démarré (%s : %s) — les agents travaillent sans outils externes", type(e).__name__, masquer(str(e))[:200])
         MCPC = None
         return
+    MCPC.validation_pb = MCP_CLE_PB
+    if MCP_CLE_PB:
+        LOG.error("MCP : %s Les outils d'écriture (orange) ne sont pas proposés aux agents.", MCP_CLE_PB)
     LOG.info("MCP actif : %d serveur(s), %d outil(s) autorisé(s)%s", len(MCPC.cfg.serveurs), len(MCPC.cfg.outils),
              " — AUCUN outil configuré (agents/mcp.yaml absent ou vide)" if MCPC.cfg.vide else "")
     app.state.taches.append(asyncio.create_task(boucle_mcp()))
@@ -1180,7 +1184,8 @@ async def sante(request: Request):
                 dispo = False
         sortie["nas"] = {"actif": DOCS is not None, "disponible": dispo}
     if MCP_ACTIF:   # clé ajoutée seulement quand MCP est demandé : /health reste identique sinon
-        sortie["mcp"] = {"actif": MCPC is not None, "outils": len(MCPC.cfg.outils) if MCPC is not None else 0}
+        sortie["mcp"] = {"actif": MCPC is not None, "outils": len(MCPC.cfg.outils) if MCPC is not None else 0,
+                         "validation": {"disponible": MCP_CLE_PB is None, "raison": MCP_CLE_PB or ""}}
     return sortie
 
 
@@ -1655,6 +1660,8 @@ async def attente_mcp(request: Request):
 
 
 async def _decision_api(request: Request, ident: str, verbe: str):
+    if MCPC is not None and MCP_CLE_PB:
+        return erreur(503, MCP_CLE_PB, "config")                      # refus de fonctionner avec une clé admin inadaptée (avant même de comparer la clé fournie)
     if not autorise(request, ADMIN_KEY):
         return erreur(401, "Clé admin invalide", "auth")
     if MCPC is None:
@@ -1731,12 +1738,18 @@ def _poser_routes_mcp() -> None:
     except Exception as e:  # noqa: BLE001
         LOG.error("Routes MCP non posées (%s)", type(e).__name__)
         return
+    global MCP_CLE_PB
     P = _prefixe_mcp()
     limiteur = MCPM.Limiteur()
+    MCP_CLE_PB = MCPM.verifier_cle_admin(cfg("PK_ADMIN_KEY"), LITELLM_KEY, cfg("PK_API_KEY"))
+    if MCP_CLE_PB:
+        LOG.error("MCP : %s La page %s/ et les routes /admin/mcp/valider|refuser|classer refusent de répondre.", MCP_CLE_PB, P)
 
     async def racine(request: Request):
         if MCPC is None:
             return erreur(404, "MCP n'est pas activé", "introuvable")
+        if MCP_CLE_PB:
+            return erreur(503, MCP_CLE_PB, "config")
         session = _session_mcp(request)
         code = request.query_params.get("m", "")
         code = code if code in MCPM.MESSAGES else ""
@@ -1751,6 +1764,8 @@ def _poser_routes_mcp() -> None:
     async def connexion(request: Request):
         if MCPC is None:
             return erreur(404, "MCP n'est pas activé", "introuvable")
+        if MCP_CLE_PB:
+            return erreur(503, MCP_CLE_PB, "config")
         champs = await _formulaire(request)
         if champs is None:
             return _html_mcp(MCPM.page_connexion("invalide"), 400)
@@ -1765,6 +1780,8 @@ def _poser_routes_mcp() -> None:
         async def f(ident: str, request: Request):
             if MCPC is None:
                 return erreur(404, "MCP n'est pas activé", "introuvable")
+            if MCP_CLE_PB:
+                return erreur(503, MCP_CLE_PB, "config")
             session = _session_mcp(request)
             champs = await _formulaire(request)
             if not session or champs is None or not re.fullmatch(r"[0-9a-f]{10}", ident) or not MCPM.csrf_valide(ADMIN_KEY, session, ident, verbe, champs.get("jeton", "")):
