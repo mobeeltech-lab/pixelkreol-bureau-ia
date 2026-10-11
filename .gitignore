@@ -1,5 +1,6 @@
 .*
 !.gitignore
+!.env.exemple
 backups/
 sauvegardes/
 ancien/

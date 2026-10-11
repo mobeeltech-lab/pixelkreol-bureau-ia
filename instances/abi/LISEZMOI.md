@@ -1,0 +1,166 @@
+# Instance de TEST « ABI Holding » — Bureau IA
+
+> **Environnement de test, données fictives.** Cette instance sert à valider les 9 agents, le routage et les
+> règles de feux (vert / orange / rouge) sur le serveur de PixelKréol, avec des modèles en ligne et le jeu de
+> données du dossier `donnees-fictives/`. **Ne jamais y mettre de données réelles d'ABI Holding.**
+> Le produit final sera installé chez ABI Holding sur un Mac Pro avec des modèles locaux : ici on ne teste
+> pas la performance de ces modèles.
+
+## Ce que contient l'instance
+
+| Conteneur | Rôle | Mémoire max |
+|---|---|---|
+| `abi_orchestrateur` | les 9 agents + `pk-auto` + `pk-equipe` (le même programme que l'instance PixelKréol) | 256 Mo |
+| `abi_postgres` | sa propre base (journal des échanges) | 256 Mo |
+| `abi_openwebui` | son propre chat et ses propres comptes, sur `127.0.0.1:3101` | 1 Go |
+
+- Aucun port n'est ouvert sur Internet : seul le chat écoute sur `127.0.0.1:3101`, et c'est le nginx du serveur qui
+  le publie en HTTPS sur `https://abi.mebeeltech.online`.
+- L'orchestrateur appelle le LiteLLM de l'instance PixelKréol (conteneur `pk_litellm`) : l'instance PixelKréol
+  doit donc être démarrée.
+- Mémoire réelle attendue : environ 0,8 à 1,2 Go au repos (voir le rapport). Tester avec `docker stats --no-stream`.
+
+**Où taper les commandes :** toutes dans le **terminal Hostinger** (hPanel → VPS → *Terminal*), connecté en
+administrateur (`root`). Elles se tapent une par une ; ne jamais coller de mot de passe dans un chat.
+
+## Installation pas à pas
+
+### 1. Vérifier le serveur *(terminal Hostinger)*
+```bash
+docker ps --format '{{.Names}}' | grep pk_litellm     # doit afficher pk_litellm
+free -h                                              # mémoire disponible : viser au moins 1,5 Go libres
+```
+Si la mémoire est juste, ajouter un fichier d'échange (swap) de 2 Go avant de continuer :
+```bash
+fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
+echo '/swapfile none swap sw 0 0' >> /etc/fstab
+```
+
+### 2. Nom de domaine *(chez le gestionnaire du DNS de `mebeeltech.online`)*
+Créer un enregistrement **A** : `abi` → adresse IP du VPS. Vérifier ensuite *(terminal Hostinger)* :
+```bash
+getent hosts abi.mebeeltech.online
+```
+
+### 3. Récupérer le code *(terminal Hostinger)*
+Après la fusion de la pull request, utiliser la branche `serveur-propre` (avant : `abi-tests`).
+```bash
+cd /opt
+git clone --branch serveur-propre https://github.com/mobeeltech-lab/pixelkreol-bureau-ia.git pk-abi
+cd /opt/pk-abi/instances/abi
+```
+
+### 4. Créer le fichier de réglages `.env` *(terminal Hostinger)*
+```bash
+cd /opt/pk-abi/instances/abi
+cp .env.exemple .env && chmod 600 .env
+for V in ABI_API_KEY ABI_ADMIN_KEY ABI_POSTGRES_PASSWORD ABI_WEBUI_SECRET_KEY; do
+  sed -i "s|^$V=.*|$V=$(openssl rand -hex 24)|" .env
+done
+```
+Ces quatre valeurs sont maintenant des secrets aléatoires. **Ne pas afficher le fichier à l'écran.**
+
+### 5. La clé qui ouvre le LiteLLM *(terminal Hostinger)*
+`ABI_LITELLM_KEY` est la clé que l'orchestrateur ABI présente au LiteLLM de PixelKréol.
+- **Idéal (à faire plus tard)** : une clé dédiée à ABI, avec une limite de dépense. Le LiteLLM actuel n'a pas de
+  base de données et ne sait donc pas créer de clés dédiées : il faudra d'abord lui en ajouter une.
+- **Pour démarrer les essais** : réutiliser la clé maître du LiteLLM (même pouvoir que PixelKréol ; acceptable pour
+  un essai, à remplacer ensuite). La copie se fait sans l'afficher :
+```bash
+K=$(grep '^LITELLM_MASTER_KEY=' /opt/pixelkreol-bureau-ia/.env | cut -d= -f2-)
+sed -i "s|^ABI_LITELLM_KEY=.*|ABI_LITELLM_KEY=$K|" .env && unset K
+```
+
+### 6. Démarrer *(terminal Hostinger)*
+```bash
+cd /opt/pk-abi/instances/abi
+docker compose config -q && echo "réglages OK"
+docker compose up -d --build
+docker compose ps
+```
+Les trois conteneurs doivent être `running` (et `healthy` pour la base et l'orchestrateur). Si
+`ghcr.io/open-webui/open-webui:v0.6.18` est introuvable, prendre une version qui existe (jamais `latest`) :
+`docker inspect pk_openwebui --format '{{.Config.Image}}'` donne celle de l'instance PixelKréol ; l'écrire dans `.env`
+sous `ABI_OPENWEBUI_IMAGE=`, puis relancer `docker compose up -d`.
+
+Vérifier que les 9 agents sont chargés :
+```bash
+docker exec abi_orchestrateur python -c "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:4001/health').read().decode())"
+```
+La réponse doit contenir `"agents":9` et `"litellm":true`.
+
+### 7. Publier en HTTPS *(terminal Hostinger)*
+```bash
+cp /opt/pk-abi/instances/abi/nginx/abi.mebeeltech.online.conf /etc/nginx/sites-available/
+ln -sf /etc/nginx/sites-available/abi.mebeeltech.online.conf /etc/nginx/sites-enabled/abi.mebeeltech.online.conf
+nginx -t && systemctl reload nginx
+certbot --nginx -d abi.mebeeltech.online -m mobeeltech@gmail.com --agree-tos --redirect
+```
+(Si le dossier `/etc/nginx/sites-available` n'existe pas, copier le fichier dans `/etc/nginx/conf.d/` et
+ne pas faire la ligne `ln`.) Ouvrir ensuite `https://abi.mebeeltech.online` : la page de connexion s'affiche.
+
+### 8. Créer le compte administrateur, puis fermer les inscriptions *(terminal + navigateur)*
+Les inscriptions sont **fermées par défaut**. Le temps de créer le compte administrateur :
+```bash
+cd /opt/pk-abi/instances/abi
+sed -i 's|^ABI_OPENWEBUI_SIGNUP=.*|ABI_OPENWEBUI_SIGNUP=true|' .env && docker compose up -d
+```
+Dans le navigateur, créer le compte (le premier compte est administrateur). Puis refermer **tout de suite** :
+```bash
+sed -i 's|^ABI_OPENWEBUI_SIGNUP=.*|ABI_OPENWEBUI_SIGNUP=false|' .env && docker compose up -d
+```
+Vérifier en navigation privée que la page n'offre plus de création de compte. Les autres testeurs sont créés
+depuis l'administration d'Open WebUI.
+
+### 9. Premiers essais
+Dans le chat, choisir le modèle `pk-auto` (ou `pk-equipe` pour plusieurs agents) et coller le contenu des fichiers de
+`donnees-fictives/` selon l'essai (échéancier, mails, baux…). Exemples :
+- « Prépare l'appel de fonds hors d'eau pour les Oliviers » (colle `echeancier-vefa.md` et `attestations-avancement.md`) ;
+- « Trie ces mails » (colle `mails-entrants.md`) ; « Révise le loyer de BAIL-A selon l'IRL » (colle `baux-et-quittances.md`).
+
+## Démarrage, arrêt, mise à jour *(terminal Hostinger, dossier `/opt/pk-abi/instances/abi`)*
+
+| Action | Commande | Effet sur les données |
+|---|---|---|
+| Démarrer | `docker compose up -d` | — |
+| Mettre en pause | `docker compose stop` | rien n'est perdu |
+| Arrêter (retirer les conteneurs) | `docker compose down` | comptes et historique conservés (volumes) |
+| Mettre à jour | `cd /opt/pk-abi && git pull && cd instances/abi && docker compose up -d --build` | conservées |
+| Voir les journaux | `docker compose logs --tail 50 abi_orchestrateur` | — |
+
+## Retour arrière *(terminal Hostinger)*
+Avant une mise à jour, sauvegarder le chat :
+```bash
+D=$(date +%Y%m%d-%H%M); mkdir -p /opt/pk-sauvegardes
+docker run --rm -v abi_openwebui_data:/d:ro -v /opt/pk-sauvegardes:/s alpine:3 tar -czf /s/abi-openwebui-$D.tgz -C /d .
+```
+Pour revenir à la version précédente du code :
+```bash
+cd /opt/pk-abi && git log --oneline -5          # repérer l'ancienne version
+git checkout <numéro-de-la-version-précédente>
+cd instances/abi && docker compose up -d --build
+```
+(Pour repartir de la version courante : `git checkout serveur-propre`.)
+
+## Désinstallation complète *(terminal Hostinger)*
+Attention : `down -v` efface **les données de l'instance ABI** (comptes, historique, base). Il ne touche jamais aux
+volumes de l'instance PixelKréol (leurs noms commencent par `pixelkreol-`).
+```bash
+cd /opt/pk-abi/instances/abi
+docker compose down -v
+docker image rm abi/orchestrateur:2
+rm -f /etc/nginx/sites-enabled/abi.mebeeltech.online.conf /etc/nginx/sites-available/abi.mebeeltech.online.conf
+nginx -t && systemctl reload nginx
+certbot delete --cert-name abi.mebeeltech.online
+cd /opt && rm -rf pk-abi
+```
+Il reste ensuite à supprimer l'enregistrement DNS `abi`.
+
+## Limites connues
+- **Clé LiteLLM dédiée** : impossible tant que le LiteLLM n'a pas de base de données (voir étape 5).
+- **Agents en lecture seule** : le dossier `agents/` est monté en lecture seule ; l'ajout d'un agent par l'API
+  (`/admin/agents`) est donc refusé. Modifier `agents/registre.yaml` puis `docker compose restart abi_orchestrateur`.
+- **Les agents ne lisent pas les dossiers du serveur** : ils travaillent sur ce qui est collé ou joint dans le chat.
+- **Noms des modèles** : ils gardent le préfixe technique `pk-` (`pk-auto`, `pk-04-appels-de-fonds`…).
+- **Modèles en ligne** : c'est le contraire de la promesse finale (« aucune donnée dans le cloud ») ; d'où les données fictives.
+- **Plafonds R261-14 et taux** : rappelés dans les consignes pour le test ; à faire valider par le conseil d'ABI Holding.

@@ -1,0 +1,113 @@
+# =====================================================================
+#  Bureau IA — instance de TEST « ABI Holding » (données FICTIVES, modèles en ligne)
+#
+#  Légère : 3 conteneurs (orchestrateur, base de données, interface de chat).
+#  Elle réutilise le LiteLLM de l'instance PixelKréol (réseau externe pixelkreol_net) :
+#  l'instance PixelKréol doit donc tourner.
+#  Aucun port publié sauf l'interface, sur 127.0.0.1:3101 (le nginx du serveur fait le HTTPS).
+#  Tout se règle dans .env (voir .env.exemple).
+#  Démarrage : docker compose up -d --build        Arrêt : docker compose down
+# =====================================================================
+name: abi-bureau-ia
+
+x-journaux: &journaux
+  logging:
+    driver: json-file
+    options: {max-size: "10m", max-file: "3"}
+
+networks:
+  abi_net:
+    name: abi_net
+  pixelkreol_net:            # réseau de l'instance principale : sert UNIQUEMENT à joindre pk_litellm:4000
+    name: pixelkreol_net
+    external: true
+
+volumes:
+  abi_postgres_data:
+    name: abi_postgres_data
+  abi_openwebui_data:
+    name: abi_openwebui_data
+
+services:
+  # ---------------------------------------------------------------- base de données (journal de l'orchestrateur)
+  abi_postgres:
+    image: ${ABI_PG_IMAGE:-postgres:17.5-alpine}
+    container_name: abi_postgres
+    restart: unless-stopped
+    <<: *journaux
+    environment:
+      POSTGRES_USER: ${ABI_POSTGRES_USER:-abi}
+      POSTGRES_PASSWORD: ${ABI_POSTGRES_PASSWORD:?ABI_POSTGRES_PASSWORD manquant dans .env}
+      POSTGRES_DB: abi_bureau
+    volumes:
+      - abi_postgres_data:/var/lib/postgresql/data
+    networks: [abi_net]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${ABI_POSTGRES_USER:-abi} -d abi_bureau"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    mem_limit: 256m
+
+  # ---------------------------------------------------------------- orchestrateur (même code que PixelKréol)
+  abi_orchestrateur:
+    build: ../../orchestrateur
+    image: abi/orchestrateur:2
+    container_name: abi_orchestrateur
+    restart: unless-stopped
+    <<: *journaux
+    depends_on:
+      abi_postgres: {condition: service_healthy}
+    environment:
+      LITELLM_URL: http://pk_litellm:4000
+      LITELLM_MASTER_KEY: ${ABI_LITELLM_KEY:?ABI_LITELLM_KEY manquant dans .env}
+      PK_API_KEY: ${ABI_API_KEY:?ABI_API_KEY manquant dans .env}
+      PK_ADMIN_KEY: ${ABI_ADMIN_KEY:?ABI_ADMIN_KEY manquant dans .env}
+      PK_ROUTAGE_IA: ${ABI_ROUTAGE_IA:-true}
+      PK_ANNONCE_AGENT: ${ABI_ANNONCE_AGENT:-true}
+      PK_AGENTS_DIR: /app/agents
+      PK_MARQUE: ABI Holding
+      PK_LIEU: en Corse
+      PK_FUSEAU: Europe/Paris
+      PK_PATRON: la direction d'ABI Holding
+      PK_VITRINE_PIED: environnement de test · données fictives
+      PK_PROPRIETAIRE: abi
+      DATABASE_URL: postgresql://${ABI_POSTGRES_USER:-abi}:${ABI_POSTGRES_PASSWORD}@abi_postgres:5432/abi_bureau
+    volumes:
+      - ./agents:/app/agents:ro
+    networks: [abi_net, pixelkreol_net]
+    mem_limit: 256m
+
+  # ---------------------------------------------------------------- interface de chat (comptes propres à ABI)
+  abi_openwebui:
+    image: ${ABI_OPENWEBUI_IMAGE:-ghcr.io/open-webui/open-webui:v0.6.18}
+    container_name: abi_openwebui
+    restart: unless-stopped
+    <<: *journaux
+    depends_on:
+      abi_orchestrateur: {condition: service_healthy}
+    environment:
+      OPENAI_API_BASE_URLS: http://abi_orchestrateur:4001/v1
+      OPENAI_API_KEYS: ${ABI_API_KEY}
+      ENABLE_OLLAMA_API: "false"
+      WEBUI_SECRET_KEY: ${ABI_WEBUI_SECRET_KEY:?ABI_WEBUI_SECRET_KEY manquant dans .env}
+      WEBUI_NAME: "ABI Holding — Bureau IA (TEST)"
+      WEBUI_URL: https://${ABI_DOMAINE:-abi.mebeeltech.online}
+      # Inscriptions : ouvertes seulement le temps de créer le compte administrateur (voir LISEZMOI.md)
+      ENABLE_SIGNUP: ${ABI_OPENWEBUI_SIGNUP:-false}
+      DEFAULT_USER_ROLE: pending
+      # Les réglages du .env l'emportent toujours (sinon Open WebUI garde ses premiers réglages en base)
+      ENABLE_PERSISTENT_CONFIG: "false"
+      DEFAULT_MODELS: pk-auto
+      DEFAULT_LOCALE: fr-FR
+      ENABLE_COMMUNITY_SHARING: "false"
+      ANONYMIZED_TELEMETRY: "false"
+      SCARF_NO_ANALYTICS: "true"
+      DO_NOT_TRACK: "true"
+      TASK_MODEL_EXTERNAL: pk-rapide
+    volumes:
+      - abi_openwebui_data:/app/backend/data
+    ports:
+      - "127.0.0.1:${ABI_PORT_WEBUI:-3101}:8080"
+    networks: [abi_net]
+    mem_limit: 1g

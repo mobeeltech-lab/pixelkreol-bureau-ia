@@ -1,0 +1,3 @@
+# Agents personnalisés (même format que registre.yaml). Rechargé à chaud.
+# Instance de test ABI Holding : ce dossier est monté en lecture seule, ajouter un agent = modifier ce fichier sur le serveur.
+agents: []
