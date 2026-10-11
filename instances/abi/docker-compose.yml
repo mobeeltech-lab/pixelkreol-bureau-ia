@@ -67,7 +67,7 @@ services:
       PK_ANNONCE_AGENT: ${ABI_ANNONCE_AGENT:-true}
       PK_AGENTS_DIR: /app/agents
       PK_MARQUE: ABI Holding
-      PK_LIEU: en Corse
+      PK_LIEU: à Ajaccio
       PK_FUSEAU: Europe/Paris
       PK_PATRON: la direction d'ABI Holding
       PK_VITRINE_PIED: environnement de test · données fictives

@@ -75,8 +75,8 @@ DATABASE_URL = cfg("DATABASE_URL", "")
 # Textes propres à une installation (valeurs par défaut = celles de l'instance PixelKréol, inchangées).
 # Une autre instance (ex. ABI Holding, tests) les remplace par des variables d'environnement.
 MARQUE = cfg("PK_MARQUE", "PixelKréol")                       # « Bureau IA <marque> »
-LIEU = cfg("PK_LIEU", "à La Réunion")                         # « Date et heure <lieu> : … »
-FUSEAU = cfg("PK_FUSEAU", "Indian/Reunion")                   # fuseau horaire donné aux agents
+LIEU = cfg("PK_LIEU", "à Ajaccio")                            # « Date et heure <lieu> : … »
+FUSEAU = cfg("PK_FUSEAU", "Europe/Paris")                      # fuseau horaire donné aux agents
 PATRON = cfg("PK_PATRON", "Will")                             # « Demande de <patron> : … » (synthèse d'équipe)
 VITRINE_PIED = cfg("PK_VITRINE_PIED", "LLM gratuits · La Réunion")
 PROPRIETAIRE = cfg("PK_PROPRIETAIRE", "pixelkreol")           # champ owned_by du catalogue /v1/models
@@ -88,8 +88,8 @@ OUTILS_CONNUS = {"documents"}
 try:
     TZ = ZoneInfo(FUSEAU)
 except (ZoneInfoNotFoundError, ValueError):
-    LOG.warning("PK_FUSEAU « %s » inconnu : fuseau Indian/Reunion utilisé", FUSEAU)
-    TZ = ZoneInfo("Indian/Reunion")
+    LOG.warning("PK_FUSEAU « %s » inconnu : fuseau Europe/Paris utilisé", FUSEAU)
+    TZ = ZoneInfo("Europe/Paris")
 
 
 # =====================================================================
