@@ -13,12 +13,14 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+import importlib.util
 import hmac
 import html
 import json
 import logging
 import os
 import re
+import sys
 import tempfile
 import time
 import unicodedata
@@ -78,6 +80,11 @@ FUSEAU = cfg("PK_FUSEAU", "Indian/Reunion")                   # fuseau horaire d
 PATRON = cfg("PK_PATRON", "Will")                             # « Demande de <patron> : … » (synthèse d'équipe)
 VITRINE_PIED = cfg("PK_VITRINE_PIED", "LLM gratuits · La Réunion")
 PROPRIETAIRE = cfg("PK_PROPRIETAIRE", "pixelkreol")           # champ owned_by du catalogue /v1/models
+# Outil « documents » (lecture seule d'un NAS monté). DÉSACTIVÉ par défaut : sans PK_NAS_ACTIF=1, rien ne change.
+NAS_ACTIF = cfg("PK_NAS_ACTIF", "0").strip().lower() in ("1", "true", "oui", "yes", "on")
+DOCS = None            # instance de documents.Documents quand l'outil est actif
+DOCUMENTS = None       # module documents.py (chargé seulement si l'outil est actif)
+OUTILS_CONNUS = {"documents"}
 try:
     TZ = ZoneInfo(FUSEAU)
 except (ZoneInfoNotFoundError, ValueError):
@@ -230,6 +237,9 @@ class Registre:
         mots = a.get("mots_cles")
         if mots is not None and (not isinstance(mots, list) or not all(isinstance(m, str) for m in mots)):
             return "mots_cles doit être une liste de textes"
+        outils = a.get("outils")
+        if outils is not None and (not isinstance(outils, list) or not all(isinstance(o, str) and o in OUTILS_CONNUS for o in outils)):
+            return f"outils doit être une liste parmi : {', '.join(sorted(OUTILS_CONNUS))}"
         regles = a.get("routage_prioritaire")
         if regles is not None and not Registre.regles_valides(regles):
             return ("routage_prioritaire doit être une liste de règles ; chaque règle est une liste de groupes ; "
@@ -364,6 +374,8 @@ class Registre:
         parties = [self.socle,
                    f"## Ton poste : {a['emoji']} {a['nom']}\n{a['description']}\n\n{a['consignes'].strip()}",
                    f"Date et heure {LIEU} : {date}."]
+        if DOCS is not None and "documents" in (a.get("outils") or []):
+            parties.append(DOCUMENTS.INSTRUCTIONS_AGENT)
         if a["id"] == "orchestrateur":
             equipe = "\n".join(f"- {x['emoji']} {x['nom']} ({x['id']}) : {x['description']}"
                                for x in self.agents.values() if x["id"] != "orchestrateur")
@@ -761,6 +773,146 @@ ETAT = {"litellm": None}   # dernier état connu de LiteLLM, pour ne journaliser
 
 
 # =====================================================================
+#  Outil « documents » : NAS en lecture seule (désactivé par défaut)
+# =====================================================================
+def charger_module_documents():
+    spec = importlib.util.spec_from_file_location("pk_documents", Path(__file__).with_name("documents.py"))
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["pk_documents"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def demarrer_nas(app: FastAPI) -> None:
+    """Prépare l'outil documents. Un échec est journalisé et laisse l'outil éteint : jamais de panne générale."""
+    global DOCS, DOCUMENTS
+    try:
+        DOCUMENTS = charger_module_documents()
+        DOCS = DOCUMENTS.Documents(DOCUMENTS.Config.depuis_env())
+    except Exception as e:  # noqa: BLE001
+        LOG.error("Outil documents NON démarré (%s : %s) — les agents travaillent sans le NAS", type(e).__name__, masquer(str(e))[:200])
+        DOCS = None
+        return
+    LOG.info("Outil documents actif (lecture seule) : NAS %s, index %s", DOCS.racine, DOCS.cfg.index)
+    app.state.taches.append(asyncio.create_task(boucle_indexation(app)))
+
+
+async def indexer_nas() -> dict:
+    bilan = await asyncio.to_thread(DOCS.indexer)
+    LOG.info("Indexation du NAS : %s", bilan)
+    return bilan
+
+
+async def boucle_indexation(app: FastAPI) -> None:
+    """Indexation au démarrage si l'index est vide, puis chaque nuit à l'heure réglée."""
+    try:
+        await asyncio.sleep(5)
+        if DOCS.etat()["fichiers_indexes"] == 0:
+            await indexer_nas()
+        while True:
+            maintenant = dt.datetime.now(TZ)
+            cible = DOCUMENTS.prochaine_execution(maintenant, DOCS.cfg.nuit)
+            await asyncio.sleep(max(1.0, (cible - maintenant).total_seconds()))
+            await indexer_nas()
+    except asyncio.CancelledError:
+        raise
+    except Exception:  # noqa: BLE001
+        LOG.exception("Boucle d'indexation du NAS arrêtée")
+
+
+def utilise_outils(agent: dict, corps: dict) -> bool:
+    return DOCS is not None and "documents" in (agent.get("outils") or []) and not corps.get("tools")
+
+
+def demandeur_de(request: Request, corps: dict) -> str:
+    """Qui demande (pour le journal des consultations) : utilisateur d'Open WebUI si transmis, sinon champ user, sinon « api »."""
+    h = request.headers
+    nom, ident = h.get("x-openwebui-user-name", "").strip(), h.get("x-openwebui-user-id", "").strip()
+    if nom or ident:
+        return f"{nom or '?'} ({ident or '?'})"[:120]
+    u = corps.get("user") if isinstance(corps, dict) else None
+    return u.strip()[:80] if isinstance(u, str) and u.strip() else "api"
+
+
+def avec_contexte_repli(corps: dict, contexte: str) -> dict:
+    messages = [dict(m) for m in corps["messages"]]
+    if messages and messages[0].get("role") == "system":
+        messages[0]["content"] = f"{messages[0]['content']}\n\n{contexte}"
+    else:
+        messages.insert(0, {"role": "system", "content": contexte})
+    return {**{k: v for k, v in corps.items() if k not in ("tools", "tool_choice")}, "messages": messages}
+
+
+async def appeler_repli(client, corps, chaine, agent, demandeur):
+    """Sans appel d'outils : recherche dans l'index d'après la demande, extraits trouvés injectés dans le contexte."""
+    demande = dernier_message_utilisateur(corps["messages"])
+    contexte = await asyncio.to_thread(DOCUMENTS.contexte_repli, DOCS, demande, demandeur, agent["id"])
+    return await appeler(client, avec_contexte_repli(corps, contexte), chaine)
+
+
+def verifier_chemins(reponse: dict) -> None:
+    """Ajoute un avertissement visible si la réponse cite un nom de document qui n'existe pas dans le NAS."""
+    try:
+        msg = reponse["choices"][0]["message"]
+        contenu = msg.get("content") or ""
+    except (KeyError, IndexError, TypeError, AttributeError):
+        return
+    inconnus = []
+    for nom in DOCUMENTS.chemins_cites(contenu):
+        if nom not in inconnus and not DOCS.nom_existe(nom):
+            inconnus.append(nom)
+    if inconnus:
+        LOG.warning("Réponse citant des documents absents du NAS : %s", ", ".join(inconnus[:5]))
+        msg["content"] = (contenu + "\n\n⚠️ **Non vérifié dans le NAS** : " + ", ".join(inconnus[:5])
+                          + " — ce nom n'a pas été trouvé dans le NAS ; ne pas s'y fier.")
+
+
+async def appeler_agent(client: httpx.AsyncClient, corps: dict, chaine: list[str], agent: dict,
+                        demandeur: str = "api") -> tuple[dict, str]:
+    """Comme appeler(), avec l'outil « documents » si l'agent y a droit et que le NAS est actif (sinon : strictement appeler())."""
+    if not utilise_outils(agent, corps):
+        return await appeler(client, corps, chaine)
+    mode = DOCS.cfg.mode
+    if mode == "repli":
+        rep, cerveau = await appeler_repli(client, corps, chaine, agent, demandeur)
+        verifier_chemins(rep)
+        return rep, cerveau
+    corps_o = {**corps, "tools": DOCUMENTS.OUTILS_OPENAI, "tool_choice": "auto", "messages": [dict(m) for m in corps["messages"]]}
+    usage: dict[str, int] = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+    try:
+        for _ in range(DOCS.cfg.tours_max):
+            rep, cerveau = await appeler(client, corps_o, chaine)
+            cumuler_usage(usage, rep)
+            msg = rep["choices"][0]["message"]
+            appels = msg.get("tool_calls") or []
+            if not appels:
+                break
+            corps_o["messages"].append({"role": "assistant", "content": msg.get("content"), "tool_calls": appels})
+            for appel in appels:
+                fonction = appel.get("function") or {}
+                resultat = await asyncio.wait_for(
+                    asyncio.to_thread(DOCS.executer, str(fonction.get("name", "")), fonction.get("arguments"), demandeur, agent["id"]),
+                    DOCS.cfg.delai + 5)
+                corps_o["messages"].append({"role": "tool", "tool_call_id": appel.get("id", ""), "content": resultat})
+        else:  # le modèle réclame encore des outils : dernier appel pour qu'il conclue avec ce qu'il a
+            corps_o["tool_choice"] = "none"
+            rep, cerveau = await appeler(client, corps_o, chaine)
+            cumuler_usage(usage, rep)
+    except EchecCerveaux as e:
+        if mode == "auto" and e.statut in (400, 422, 501):
+            LOG.warning("Le cerveau n'accepte pas l'appel d'outils (%s) : repli sur la recherche dans l'index", e.statut)
+            rep, cerveau = await appeler_repli(client, corps, chaine, agent, demandeur)
+            verifier_chemins(rep)
+            return rep, cerveau
+        raise
+    except asyncio.TimeoutError:
+        raise EchecCerveaux(504, "la lecture du NAS a dépassé le délai", [agent["cerveau"]]) from None
+    rep["usage"] = usage
+    verifier_chemins(rep)
+    return rep, cerveau
+
+
+# =====================================================================
 #  Application
 # =====================================================================
 @asynccontextmanager
@@ -769,7 +921,12 @@ async def cycle_de_vie(app: FastAPI):
     if not API_KEY:
         LOG.error("Aucune clé (PK_API_KEY / LITELLM_MASTER_KEY) : l'API reste FERMÉE tant qu'elle n'est pas définie")
     await JOURNAL.demarrer()
+    app.state.taches = []
+    if NAS_ACTIF:
+        demarrer_nas(app)
     yield
+    for t in getattr(app.state, "taches", []):
+        t.cancel()
     await app.state.client.aclose()
     await JOURNAL.arreter()
 
@@ -808,8 +965,18 @@ async def sante(request: Request):
     if litellm_ok and ETAT["litellm"] is False:
         LOG.info("LiteLLM de nouveau joignable")
     ETAT["litellm"] = litellm_ok
-    return {"ok": bool(REGISTRE.agents), "version": VERSION, "agents": len(REGISTRE.agents),
-            "litellm": litellm_ok, "avertissements": REGISTRE.avertissements}
+    sortie = {"ok": bool(REGISTRE.agents), "version": VERSION, "agents": len(REGISTRE.agents),
+              "litellm": litellm_ok, "avertissements": REGISTRE.avertissements}
+    if NAS_ACTIF:   # clé ajoutée seulement quand l'outil est demandé : /health reste identique pour PixelKréol
+        dispo = False
+        if DOCS is not None:
+            try:
+                with os.scandir(DOCS.racine) as it:
+                    dispo = next(it, None) is not None       # partage monté et non vide
+            except OSError:
+                dispo = False
+        sortie["nas"] = {"actif": DOCS is not None, "disponible": dispo}
+    return sortie
 
 
 @app.get("/v1/models")
@@ -886,7 +1053,7 @@ async def chat(request: Request):
         return vide
 
     if modele in ("pk-equipe", "equipe"):
-        return await mode_equipe(client, corps, flux)
+        return await mode_equipe(client, corps, flux, demandeur_de(request, corps))
 
     annonce = ""
     mode = "direct"
@@ -902,10 +1069,14 @@ async def chat(request: Request):
 
     corps_final, chaine = preparer_corps(corps, agent)
     debut = time.monotonic()
+    avec_outils = utilise_outils(agent, corps_final)
 
-    if not flux:
+    if not flux or avec_outils:
         try:
-            reponse, cerveau = await appeler(client, corps_final, chaine)
+            if avec_outils:
+                reponse, cerveau = await appeler_agent(client, corps_final, chaine, agent, demandeur_de(request, corps))
+            else:
+                reponse, cerveau = await appeler(client, corps_final, chaine)
         except EchecCerveaux as e:
             await JOURNAL.ecrire(agent["id"], mode, "-", debut, False, e.detail)
             return erreur(e.statut if e.statut >= 400 else 502, e.message(agent["nom"]), "cerveaux_indisponibles")
@@ -914,6 +1085,11 @@ async def chat(request: Request):
             msg = reponse["choices"][0].setdefault("message", {})
             msg["content"] = annonce + (msg.get("content") or "")
         await JOURNAL.ecrire(agent["id"], mode, cerveau, debut, True)
+        if flux:  # l'agent a travaillé avec l'outil documents : la réponse complète est envoyée en flux, d'un bloc
+            texte = texte_de_la_reponse(reponse)
+            return StreamingResponse(flux_texte(agent["modele"], texte), media_type="text/event-stream",
+                                     headers={"X-PK-Agent": agent["id"], "X-PK-Cerveau": cerveau,
+                                              "Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
         return JSONResponse(reponse, headers={"X-PK-Agent": agent["id"], "X-PK-Cerveau": cerveau})
 
     try:
@@ -978,12 +1154,12 @@ def extraire_json(texte: str) -> dict | None:
 
 
 async def executer_agent(client: httpx.AsyncClient, agent: dict, messages: list[dict],
-                         usage: dict | None = None) -> tuple[str, bool]:
+                         usage: dict | None = None, demandeur: str = "api") -> tuple[str, bool]:
     """Fait travailler un agent. Ne lève jamais d'exception : renvoie (texte, réussi)."""
     corps, chaine = preparer_corps({"messages": messages, "max_tokens": 1200}, agent)
     debut = time.monotonic()
     try:
-        rep, cerveau = await asyncio.wait_for(appeler(client, corps, chaine), DELAI_AGENT)
+        rep, cerveau = await asyncio.wait_for(appeler_agent(client, corps, chaine, agent, demandeur), DELAI_AGENT)
         cumuler_usage(usage, rep)
         texte = texte_de_la_reponse(rep)
         await JOURNAL.ecrire(agent["id"], "equipe", cerveau, debut, bool(texte.strip()))
@@ -1020,7 +1196,7 @@ def choisir_taches(plan: Any, demande: str, ids: list[str]) -> list[tuple[dict, 
     return taches
 
 
-async def mode_equipe(client: httpx.AsyncClient, corps: dict, flux: bool):
+async def mode_equipe(client: httpx.AsyncClient, corps: dict, flux: bool, demandeur: str = "api"):
     messages = [m for m in corps["messages"] if isinstance(m, dict) and m.get("role") != "system"]
     demande = dernier_message_utilisateur(messages)
     directeur = REGISTRE.agents.get("orchestrateur")
@@ -1034,7 +1210,7 @@ async def mode_equipe(client: httpx.AsyncClient, corps: dict, flux: bool):
         f"{MAX_EQUIPE} tâches confiées aux agents les plus adaptés. Réponds UNIQUEMENT avec un objet JSON "
         '{"taches":[{"agent":"<id>","consigne":"<ce que cet agent doit produire>"}]}. '
         f"Identifiants autorisés : {', '.join(ids)}.\n\nDemande : {demande}")
-    plan_txt, ok = await executer_agent(client, directeur, [{"role": "user", "content": consigne_plan}], usage)
+    plan_txt, ok = await executer_agent(client, directeur, [{"role": "user", "content": consigne_plan}], usage, demandeur)
     plan = extraire_json(plan_txt) if ok else None
     taches = choisir_taches(plan, demande, ids)
     notes: list[str] = []
@@ -1044,7 +1220,7 @@ async def mode_equipe(client: httpx.AsyncClient, corps: dict, flux: bool):
 
     historique = messages[:-1][-6:]
     resultats = await asyncio.gather(*[
-        executer_agent(client, a, historique + [{"role": "user", "content": f"{c}\n\n(Demande d'origine : {demande})"}], usage)
+        executer_agent(client, a, historique + [{"role": "user", "content": f"{c}\n\n(Demande d'origine : {demande})"}], usage, demandeur)
         for a, c in taches])
 
     muets = [a for (a, _), (_, reussi) in zip(taches, resultats) if not reussi]
@@ -1058,7 +1234,7 @@ async def mode_equipe(client: httpx.AsyncClient, corps: dict, flux: bool):
         prompt_synthese += ("ATTENTION : " + ", ".join(a["nom"] for a in muets) + " n'a pas pu répondre (indisponible). "
                             "N'invente pas leur partie : dis clairement ce qui manque et ce qu'il faudra redemander.\n\n")
     prompt_synthese += "Fais la synthèse finale : réponse directe et exploitable, puis les actions et qui s'en charge."
-    synthese_txt, ok_s = await executer_agent(client, directeur, [{"role": "user", "content": prompt_synthese}], usage)
+    synthese_txt, ok_s = await executer_agent(client, directeur, [{"role": "user", "content": prompt_synthese}], usage, demandeur)
 
     entete = "*👥 Équipe mobilisée : " + ", ".join(
         f"{a['emoji']} {a['nom']}" + (" ⚠️" if a in muets else "") for a, _ in taches) + "*\n\n"
@@ -1196,6 +1372,28 @@ async def retirer_agent(agent_id: str, request: Request):
         return erreur(500, "Écriture de perso.yaml impossible. Rien n'a été modifié.", "config")
     REGISTRE.recharger(force=True)
     return {"ok": True, "retire": agent_id}
+
+
+@app.get("/admin/nas")
+async def etat_nas(request: Request):
+    if not autorise(request, ADMIN_KEY):
+        return erreur(401, "Clé admin invalide", "auth")
+    if DOCS is None:
+        return erreur(404, "L'outil documents (NAS) n'est pas activé", "introuvable")
+    return await asyncio.to_thread(DOCS.etat)
+
+
+@app.post("/admin/nas/reindexer")
+async def reindexer_nas(request: Request):
+    """Lance une mise à jour de l'index en arrière-plan (à la demande, en plus de celle de la nuit)."""
+    if not autorise(request, ADMIN_KEY):
+        return erreur(401, "Clé admin invalide", "auth")
+    if DOCS is None:
+        return erreur(404, "L'outil documents (NAS) n'est pas activé", "introuvable")
+    if DOCS.verrou.locked():
+        return erreur(409, "Une indexation est déjà en cours", "conflit")
+    request.app.state.taches.append(asyncio.create_task(indexer_nas()))
+    return JSONResponse(status_code=202, content={"ok": True, "message": "Indexation lancée en arrière-plan : suivre avec GET /admin/nas"})
 
 
 # =====================================================================

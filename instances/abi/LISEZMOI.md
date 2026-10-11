@@ -156,6 +156,10 @@ cd /opt && rm -rf pk-abi
 ```
 Il reste ensuite à supprimer l'enregistrement DNS `abi`.
 
+## Lecture du NAS du client (facultatif, éteinte par défaut)
+L'Archiviste peut chercher et lire des extraits de documents d'un NAS, **en lecture seule**, via Tailscale et un montage SMB.
+Procédure complète, coupure d'urgence et désinstallation : **[NAS-LISEZMOI.md](NAS-LISEZMOI.md)**.
+
 ## Règle de routage particulière
 - **Bail + relecture → Juriste.** Dès qu'une demande contient « bail » (ou « baux ») ET un verbe de relecture (relis, relire, relecture,
   « vérifie les clauses »…), `pk-auto` choisit le Juriste, même si la demande parle aussi de loyer, de locataire ou d'IRL

@@ -1,0 +1,19 @@
+# =====================================================================
+#  Instance de TEST ABI Holding — AJOUT « lecture du NAS » (à n'utiliser que si le NAS est activé)
+#
+#  Ce fichier n'est lu que si COMPOSE_FILE=docker-compose.yml:docker-compose.nas.yml figure dans .env
+#  (voir NAS-LISEZMOI.md). Sans lui, le conteneur ne voit AUCUN dossier du serveur.
+#  - le partage monté sur le serveur (ABI_NAS_CHEMIN) est vu dans le conteneur sous /nas, en LECTURE SEULE (:ro) ;
+#  - l'index (SQLite) et le journal des consultations vivent dans un volume dédié à ABI ;
+#  - un peu plus de mémoire pour lire les PDF.
+# =====================================================================
+services:
+  abi_orchestrateur:
+    mem_limit: 384m
+    volumes:
+      - ${ABI_NAS_CHEMIN:?ABI_NAS_CHEMIN manquant dans .env (chemin du partage monté sur le serveur)}:/nas:ro
+      - abi_nas_index:/app/data
+
+volumes:
+  abi_nas_index:
+    name: abi_nas_index
