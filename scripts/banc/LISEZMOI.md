@@ -14,7 +14,7 @@ Rien à installer (Python 3 seulement). Il lit la clé dans le `.env` du dossier
 |---|---|
 | Un essai rapide (3 questions par agent, ≈ 10 min) | `python3 scripts/banc_agents.py --rapide` |
 | Un seul agent ou deux | `python3 scripts/banc_agents.py --agent devis,commercial` |
-| Voir les vérifications ratées cas par cas | `python3 scripts/banc_agents.py --detail` |
+| Voir les vérifications ratées cas par cas, **avec un extrait de la réponse réelle** (350 caractères ; `--extrait 800` pour plus, `--extrait 0` pour aucun) | `python3 scripts/banc_agents.py --detail` |
 | **Mesurer avant / après un changement de fiche** | 1) `python3 scripts/banc_agents.py --sauver /root/banc-avant.json` 2) copier les nouvelles fiches (voir `DEPLOIEMENT.md` : le dossier du serveur n'est pas une copie git ; l'orchestrateur relit `agents/` à chaud, sans redémarrage) 3) `python3 scripts/banc_agents.py --comparer /root/banc-avant.json --sauver /root/banc-apres.json` |
 | Ajouter l'avis d'un modèle (« juge ») | `python3 scripts/banc_agents.py --juge` |
 | Vérifier aussi que `pk-auto` choisit le bon agent | `python3 scripts/banc_agents.py --routage` |
@@ -29,6 +29,14 @@ Rien à installer (Python 3 seulement). Il lit la clé dans le `.env` du dossier
   séparée et ne change jamais le score des règles. La réponse de l'agent lui est donnée comme une donnée à évaluer, jamais comme une consigne.
 - **Routage (`--routage`)** : appelle `/route` de l'orchestrateur pour chaque question qui doit atteindre un agent précis.
 - **Non automatique** : le fond (une réponse juste mais mal tournée), le ton, la pertinence métier. Lire les réponses enregistrées (`--sauver`, fichier JSON) pour les cas qui comptent.
+
+## Ce que les règles tolèrent (pour ne pas punir une bonne réponse)
+- **Écritures des nombres** : espaces insécables et fines (U+00A0, U+202F, U+2009…), « 4 050 » / « 4050 » / « 4.050 » / « 4,050 », « 1 % » / « 1,0 % » / « 1 pour cent », et la notation **LaTeX** (`$1\,200 + 1\,500 = 2\,700$`, `25\,\%`, `\times`, `\text{€}`) : tout est normalisé avant la comparaison.
+- **Montants** : la règle « aucun montant inventé » accepte les prix de la grille ET ceux qui en **dérivent par une opération simple** : mensualité × nombre de mois usuel (25 € × 12 = 300 €),
+  taux journalier 600 € × jours, TVA (8,5 % ou 20 %) et TTC, échéances 30 / 40 % (HT ou TTC), somme de deux prix de la grille. Limite assumée : un montant faux qui coïncide avec une dérivation possible
+  n'est pas détecté par cette règle seule ; les prix clés restent vérifiés un par un (`prix(...)`).
+- **Feu** : « Feu : ORANGE » est reconnu n'importe où dans une ligne (entre parenthèses, en gras, après du texte, avec une pastille).
+- **Meta** (agent Rédacteur SEO) : la longueur RÉELLE du texte est comptée (title ≤ 60, description ≤ 155) ; un nombre de caractères annoncé doit être exact (à 3 près) ; ne rien annoncer est accepté.
 
 ## Variance et coût
 Les modèles gratuits ne répondent pas deux fois la même chose : sur 8 questions par agent, **un écart de ±10 points est du bruit**. Ne conclure qu'à partir de l'ensemble (ligne GLOBAL) ou d'écarts répétés.

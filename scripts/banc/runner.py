@@ -135,7 +135,13 @@ def resume_par_agent(resultats: list[Resultat]) -> dict[str, dict]:
     return agents
 
 
-def afficher(resultats: list[Resultat], avant: list[Resultat] | None = None, detail: bool = False, sortie=print) -> None:
+def extrait_de(reponse: str, n: int) -> str:
+    """Début de la réponse, sur une seule ligne, tronqué à n caractères."""
+    ligne = re.sub(r"\s+", " ", reponse or "").strip()
+    return ligne if len(ligne) <= n else ligne[:n].rstrip() + " […]"
+
+
+def afficher(resultats: list[Resultat], avant: list[Resultat] | None = None, detail: bool = False, sortie=print, extrait: int = 350) -> None:
     a, b = resume_par_agent(resultats), resume_par_agent(avant) if avant else {}
     avec_juge = any(x["juges"] for x in a.values())
     avec_route = any(x["routes"] for x in a.values())
@@ -171,6 +177,8 @@ def afficher(resultats: list[Resultat], avant: list[Resultat] | None = None, det
                 sortie(f"- {r.cle} : ERREUR {r.erreur}")
             elif r.echecs:
                 sortie(f"- {r.cle} ({r.score * 100:.0f} %) : " + " | ".join(r.echecs))
+                if extrait > 0:
+                    sortie(f"    réponse : « {extrait_de(r.reponse, extrait)} »")
     if avant:
         anc = {r.cle: r for r in avant}
         ecarts = sorted(((r.score - anc[r.cle].score, r) for r in resultats if r.cle in anc and not r.erreur and not anc[r.cle].erreur), key=lambda t: t[0])

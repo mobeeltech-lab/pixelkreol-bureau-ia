@@ -43,7 +43,8 @@ def main(argv=None) -> int:
     p.add_argument("--delai", type=float, default=180.0, help="délai maximal d'une réponse, en secondes")
     p.add_argument("--sauver", metavar="FICHIER", help="enregistre réponses et notes (JSON) pour les comparer plus tard")
     p.add_argument("--comparer", metavar="FICHIER", help="compare avec un passage enregistré (avant/après)")
-    p.add_argument("--detail", action="store_true", help="liste les vérifications ratées, cas par cas")
+    p.add_argument("--detail", action="store_true", help="liste les vérifications ratées, cas par cas, avec un extrait de la réponse")
+    p.add_argument("--extrait", type=int, default=350, help="longueur de l'extrait de réponse affiché par --detail (0 = aucun)")
     p.add_argument("--juge", action="store_true", help="ajoute l'avis d'un modèle (pk-costaud via LiteLLM) : NON déterministe, en plus des règles")
     p.add_argument("--juge-url", default=os.environ.get("PK_LITELLM_URL", "http://127.0.0.1:4000"))
     p.add_argument("--routage", action="store_true", help="vérifie aussi que pk-auto choisit le bon agent pour chaque question (/route)")
@@ -87,7 +88,7 @@ def main(argv=None) -> int:
         print("\nInterrompu.")
         return 130
     print(f"\nTerminé en {(time.monotonic() - t0) / 60:.1f} min.")
-    runner.afficher(res, avant, a.detail)
+    runner.afficher(res, avant, a.detail, extrait=a.extrait)
     if a.sauver:
         runner.sauver(res, a.sauver, {"date": time.strftime("%Y-%m-%d %H:%M"), "url": a.url, "juge": bool(juge), "rapide": a.rapide})
         print(f"\nRésultats enregistrés dans {a.sauver}")

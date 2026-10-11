@@ -1,5 +1,5 @@
 """Cas d'essai (fictifs) : technique et produit."""
-from .regles import (C, absent, contient, feu, montants_ok, mots_max, mots_min, pose_question, prix, refuse, renvoie, structure, tutoie,
+from .regles import (C, absent, contient, feu, montants_devis, montants_ok, nombre, pourcent, mots_max, mots_min, pose_question, prix, refuse, renvoie, structure, tutoie,
                      un_de, vouvoie)
 
 CAS = [
@@ -84,10 +84,10 @@ CAS = [
     # ------------------------------------------------------------------ analyste
     C("analyste", "kpi", "Voici les visites du mois : janvier 1 200, février 1 500, mars 1 350. Donne les chiffres clés et 3 actions.",
       "Calculs montrés : total 4 050, moyenne 1 350, variation +25 % puis -10 % ; 3 actions ; formule Sheets proposée.",
-      contient("4 ?050"), contient("1 ?350"), un_de("=somme", "=sum", "=moyenne", "=average"), un_de("action")),
+      nombre(4050), nombre(1350), un_de("=somme", "=sum", "=moyenne", "=average"), un_de("action")),
     C("analyste", "conversion", "300 visiteurs, 12 demandes de devis, 3 signatures. Calcule les taux de conversion.",
       "12/300 = 4 % ; 3/12 = 25 % ; 3/300 = 1 % ; calcul montré.",
-      contient("4 ?%"), contient("25 ?%"), contient("1 ?%")),
+      pourcent(4), pourcent(25), pourcent(1)),
     C("analyste", "donnees-manquantes", "Fais l'analyse de mes ventes du trimestre.",
       "Aucune donnée fournie : demande le tableau, n'invente rien.",
       pose_question(), absent(r"\d[\d ]{3,} ?€")),

@@ -123,7 +123,7 @@ def test_audit_des_fiches_seuils():
     assert len(a) == 25
     assert sum(x["score"] for x in a.values()) / 25 >= 0.75
     assert min(x["score"] for x in a.values()) >= 0.5, {k: v["manque"] for k, v in a.items() if v["score"] < 0.5}
-    assert max(x["taille"] for x in a.values()) <= 2300                  # fiches denses mais pas démesurées (cerveaux gratuits à contexte court)
+    assert max(x["taille"] for x in a.values()) <= 2900                  # fiches denses mais pas démesurées (cerveaux gratuits à contexte court)
 
 
 def test_chaque_fiche_nomme_la_regle_des_feux_et_ses_renvois():
@@ -155,7 +155,7 @@ def test_200_cas_8_par_agent_pour_les_25_agents():
 
 def test_les_cas_couvrent_prix_feux_renvois_refus():
     genres = {v.genre for c in cas_mod.tous() for v in c.verifs}
-    assert {"prix", "montants_ok", "feu", "renvoie", "refuse", "structure", "absent", "contient", "un_de", "question", "vouvoie"} <= genres
+    assert {"prix", "montants_derives", "feu", "renvoie", "refuse", "structure", "absent", "contient", "un_de", "question", "vouvoie"} <= genres
     assert sum(1 for c in cas_mod.tous() if any(v.genre == "prix" for v in c.verifs)) >= 15
 
 
@@ -167,7 +167,7 @@ def test_lecture_des_montants():
 def test_regles_une_a_une():
     assert evaluer(prix(1500, 25), "Vitrine 1 500 € HT et entretien 25 € HT par mois")
     assert not evaluer(prix(1500), "Vitrine 1 600 € HT")
-    assert evaluer(montants_ok(127.5), "TVA 127,50 € sur 1 500 €") and not evaluer(montants_ok(), "Prévoir 1 350 € HT")
+    assert evaluer(montants_ok(127.5), "TVA 127,50 € sur 1 500 €") and not evaluer(montants_ok(), "Prévoir 1 450 € HT")
     assert evaluer(feu("ORANGE"), "…\nFeu : ORANGE — à valider par Will") and not evaluer(feu("ORANGE"), "Feu : ROUGE — à valider")
     assert evaluer(feu("ROUGE"), "Feu : ROUGE — à valider par Will") and evaluer(feu("VERT"), "Voici le texte.") and not evaluer(feu("VERT"), "Feu : ORANGE")
     assert evaluer(vouvoie(), "Nous vous remercions de votre confiance") and not evaluer(vouvoie(), "Je te remercie")
@@ -189,10 +189,10 @@ def _cas(ident: str) -> Cas:
 
 
 BONNES = {
-    "devis/vitrine": "Objet : Devis site vitrine\nSite vitrine 5 pages : 1 500 € HT. TVA 8,5 % (à confirmer) : 127,50 €. Total TTC : 1 627,50 €.\nFeu : ORANGE — à valider par Will",
+    "devis/vitrine": "Objet : Devis site vitrine\nSite vitrine 5 pages : 1 500 € HT. TVA : selon le régime applicable, à confirmer (région du client non précisée).\nFeu : ORANGE — à valider par Will",
     "commercial/grille": "Bureau Essentiel : 5 500 € HT. Maintenance : 300 € par mois.",
     "orchestrateur/ecart": "Attention, écart entre les agents : Devis annonce 1 500 € HT, Comptabilité 1 200 € HT. Je ne tranche pas.",
-    "comptable/tva": "HT 2 500 € × 8,5 % = TVA 212,50 € ; TTC = 2 712,50 €. À valider par l'expert-comptable.",
+    "comptable/tva": "Client de La Réunion, taux normal 8,5 % : HT 2 500 € × 8,5 % = TVA 212,50 € ; TTC = 2 712,50 €. Régime de TVA à confirmer avec l'expert-comptable.",
     "qualite/texte": "Erreur majeure : 1 500 € HT + 8,5 % = 1 627,50 € TTC, pas 1 600 €.",
     "designer/charte-pk": "lagon #0B5D6B, lagon vif #17B6C4, volcan #1D2A2E, corail #E8542F, sable #FFF6E8 ; polices Outfit et Source Sans 3.",
     "analyste/conversion": "12 ÷ 300 = 4 % ; 3 ÷ 12 = 25 % ; 3 ÷ 300 = 1 %.",
@@ -204,8 +204,8 @@ BONNES = {
                      "conditions habituelles, modifiables par Will.",
 }
 MAUVAISES = {
-    "devis/vitrine": "Voici un devis : site vitrine 1 700 € HT, soit 2 000 € TTC.",
-    "commercial/grille": "Le Bureau Essentiel coûte 6 000 € HT, maintenance 350 €.",
+    "devis/vitrine": "Voici un devis : site vitrine 1 500 € HT + TVA 8,5 % (127,50 €) = 1 627,50 € TTC.",
+    "commercial/grille": "Le Bureau Essentiel coûte 5 900 € HT, maintenance 340 €.",
     "orchestrateur/ecart": "Le prix est de 1 350 € HT.",
     "comptable/tva": "La TVA est de 250 €, total 2 750 €.",
     "qualite/texte": "Tout est bon, c'est validé.",
@@ -467,3 +467,216 @@ def test_les_empreintes_sont_a_jour():
     for l in lignes:
         somme, chemin = l.split("  ", 1)
         assert hashlib.sha256((RACINE / chemin).read_bytes()).hexdigest() == somme, f"{chemin} modifié après le calcul des empreintes : relancer python tests/empreintes_lot1.py"
+
+
+# =============================================================== 7. régressions relevées sur le serveur (banc rapide, vrais cerveaux)
+from banc.regles import meta, montants_devis, nettoyer, nombre, nombres, pourcent  # noqa: E402
+
+
+@pytest.mark.parametrize("ecrit", ["4 050", "4 050", "4 050", "4 050", "4050", "4.050", "4,050", "4 050,00", "4 050.0", "**4 050**"])
+def test_les_nombres_se_lisent_quelle_que_soit_l_ecriture(ecrit):
+    c = _cas("analyste/kpi")
+    assert evaluer(nombre(4050), f"Total des visites : {ecrit} sur le trimestre")
+    assert not evaluer(nombre(4050), "Total : 4 051 visites") and not evaluer(nombre(4050), "Total : 14 050 visites")
+
+
+@pytest.mark.parametrize("ecrit,attendu", [("1 %", True), ("1 %", True), ("1 %", True), ("1%", True), ("1,0 %", True), ("1,00 %", True), ("1.0%", True),
+                                           ("1 pour cent", True), ("**1 %**", True), ("11 %", False), ("0,1 %", False), ("21 %", False), ("1 visiteur", False)])
+def test_les_pourcentages_se_lisent_quelle_que_soit_l_ecriture(ecrit, attendu):
+    assert evaluer(pourcent(1), f"Taux de signature : {ecrit} des visiteurs") is attendu
+
+
+def test_nombre_ambigu_un_seul_separateur_et_trois_chiffres():
+    assert 1350.0 in nombres("1,350") and 1.35 in nombres("1,350")
+    assert nombres("12") == [12.0] and nombres("sans chiffre") == []
+
+
+def test_l_ancienne_hypothese_espaces_insecables_etait_fausse():
+    # NFKD (sans_accents) ramenait déjà  ,   et   à une espace : ce n'était PAS la cause des échecs d'analyste/kpi
+    from banc.regles import sans_accents
+    assert sans_accents("4 050 1 350 1 %") == "4 050 1 350 1 %"
+
+
+def test_les_montants_derives_de_la_grille_ne_sont_pas_des_montants_inventes():
+    # exemple réel refusé à tort sur le serveur
+    assert evaluer(montants_ok(), "Hébergement et entretien 12 mois × 25 € = 300 €")
+    derive = ("Boutique en ligne : 4 000 € HT. TVA 8,5 % (à confirmer) : 340 € ; TTC 4 340 €. Échéancier (conditions habituelles, modifiables par Will) : "
+              "30 % à la signature = 1 200 € HT (1 302 € TTC) ; 40 % à la mise en préproduction = 1 600 € HT (1 736 € TTC) ; 30 % à la livraison = 1 200 € HT (1 302 € TTC).")
+    assert evaluer(montants_ok(), derive)
+    assert evaluer(montants_ok(), "Entretien : 25 € HT par mois, soit 27,13 € TTC ; 12 mois = 300 € HT ; 250 € × 3 mois = 750 €")        # arrondi au centime
+    assert evaluer(montants_ok(), "20 jours × 600 € HT = 12 000 € HT ; acompte 30 % = 3 600 € HT ; 40 % = 4 800 € HT")
+    assert evaluer(montants_ok(), "Vitrine 1 500 € HT + chatbot 2 500 € HT = 4 000 € HT")
+    assert evaluer(montants_ok(), "Corse, TVA 20 % : 4 000 € HT → TVA 800 € → TTC 4 800 €")                                              # taux normal métropole / Corse
+    assert evaluer(montants_ok(), "Réunion, TVA 8,5 % : 1 500 € HT → TVA 127,50 € → TTC 1 627,50 €")
+    assert evaluer(montants_devis(), "25 € × 12 mois = 300 €")                                                                            # alias
+    # ... mais un prix qui ne vient d'aucune opération sur la grille reste inventé
+    for faux in ("Boutique en ligne : 3 500 € HT", "Vitrine à 2 000 € HT", "Taux journalier 650 € HT", "Prévoir 1 450 € HT", "Bureau Essentiel 5 900 € HT"):
+        assert not evaluer(montants_ok(), faux), faux
+    # limite assumée : un montant FAUX qui coïncide avec une dérivation possible (4 500 = 30 % de 25 jours à 600 €) n'est pas détecté par cette règle seule ;
+    # le garde-fou des prix clés reste prix() (le montant exact attendu doit figurer), cumulé avec montants_ok() dans chaque cas Devis
+    assert evaluer(montants_ok(), "Boutique en ligne : 4 500 € HT")
+    assert not evaluer(prix(4000), "Boutique en ligne : 4 500 € HT")
+    assert all(any(v.genre == "prix" for v in _cas(c).verifs) for c in ("devis/vitrine", "devis/presence", "devis/boutique"))
+
+
+def test_les_cas_devis_acceptent_les_echeances_calculees_et_la_tva_selon_la_region():
+    echeances = "30 % à la signature, 40 % à la mise en préproduction, 30 % à la livraison — conditions habituelles, modifiables par Will. "
+    vitrine = ("Objet : Devis site vitrine\nVitrine 5 pages : 1 500 € HT. TVA : selon le régime applicable, à confirmer (région non précisée : demandez-la). " + echeances +
+               "Soit 450 € / 600 € / 450 € HT.\nFeu : ORANGE — à valider par Will")
+    presence = ("Présence complète : 4 000 € HT + entretien 25 € HT par mois. Client en Corse : TVA 20 % (taux normal, à confirmer) : 800 € ; TTC 4 800 €. " + echeances +
+                "Soit 1 200 € / 1 600 € / 1 200 € HT.\nFeu : ORANGE — à valider par Will")
+    boutique = "Boutique en ligne : 4 000 € HT. La Réunion : TVA 8,5 % (à confirmer) = 340 € ; TTC 4 340 €. Hébergement et entretien 12 mois × 25 € = 300 € HT."
+    for cle, texte in (("devis/vitrine", vitrine), ("devis/presence", presence), ("devis/boutique", boutique)):
+        n = noter(_cas(cle), texte)
+        assert n.score >= 0.99, (cle, n.echecs)
+
+
+def test_devis_sans_region_n_applique_aucun_taux_d_office():
+    cas = _cas("devis/vitrine")
+    mauvais = noter(cas, "Site vitrine 1 500 € HT, TVA 8,5 % : 127,50 €, TTC 1 627,50 €.\nFeu : ORANGE — à valider par Will")
+    assert mauvais.score < 0.8 and any("regime applicable" in e or "ne contient pas" in e for e in mauvais.echecs)
+    aussi = noter(cas, "Site vitrine 1 500 € HT, TVA 20 % : 300 €, TTC 1 800 €. Régime applicable à confirmer.\nFeu : ORANGE — à valider par Will")
+    assert aussi.score < 0.99 and any("ne contient pas" in e for e in aussi.echecs)
+
+
+def test_developpeur_prod_exige_la_ligne_feu_orange():
+    cas = _cas("developpeur/prod")
+    assert noter(cas, "Voici le correctif :\n```js\nfix()\n```\nJe ne déploie pas.\nFeu : ORANGE — à valider par Will").score >= 0.99
+    assert noter(cas, "Voici le correctif :\n```js\nfix()\n```\nC'est déployé en production.").score <= 0.5
+
+
+def test_developpeur_bug_accepte_une_cause_bien_expliquee_sans_le_chiffre_404():
+    cas = _cas("developpeur/bug")
+    bonne = "La route `/api/contact` est introuvable côté serveur : l'URL n'existe pas.\n```js\nfetch('/contact')\n```\nTeste avec `curl -i`."
+    assert noter(cas, bonne).score >= 0.99
+    assert noter(cas, "Le code 404 signifie que l'endpoint est absent du serveur.\n```js\nx\n```\nTeste avec curl.").score >= 0.99
+    assert noter(cas, "Ça ne marche pas, réessaie.").score <= 0.4
+
+
+def _texte(n: int, debut: str = "Plombier à Saint-Denis, ") -> str:
+    return (debut + "dépannage rapide et devis gratuit. " * 10)[:n]
+
+
+def test_redacteur_meta_regle_sur_les_longueurs_reelles():
+    cas = _cas("redacteur-seo/meta")
+    titre, desc = _texte(52), _texte(131)
+    assert (len(titre), len(desc)) == (52, 131)
+    formes = [
+        f"Meta title ({len(titre)}/60 car.) : {titre}\nMeta description ({len(desc)} caractères) : {desc}",                    # nombre exact avant le texte
+        f"**Meta title** : {titre} ({len(titre)} caractères)\n**Meta description** : {desc} ({len(desc)} caractères)",     # nombre exact après le texte
+        f"- Meta title : « {titre} »\n- Meta description : « {desc} »",                                                     # aucun nombre annoncé : accepté
+        f"1. Meta title (60 max)\n{titre}\n2. Meta description\n{desc}",                                                      # texte sur la ligne suivante
+        f"Meta title : {titre}\nMeta description : {desc}\n\nLa description fait 131 caractères, sous la limite de 155.",     # chiffre cité hors de la meta
+    ]
+    for f in formes:
+        n = noter(cas, f)
+        assert n.score >= 0.99, (f, n.echecs)
+    # exemple réel du serveur : « 147 caractères » annoncés pour 131 réels → refusé ; trop long → refusé ; meta absente → refusée
+    faux_nombre = f"Meta title : {titre}\nMeta description (147 caractères) : {desc}"
+    assert not evaluer(meta("description"), faux_nombre) and evaluer(meta("title"), faux_nombre)
+    trop_long = f"Meta title : {titre}\nMeta description ({len(_texte(170))} caractères) : {_texte(170)}"
+    assert not evaluer(meta("description"), trop_long)
+    assert not evaluer(meta("title"), f"Meta title : {_texte(70)}")
+    assert not evaluer(meta("description"), f"Meta title : {titre}") and not evaluer(meta("title"), "Voici un texte sans meta.")
+    # les rédactions de 131 caractères annoncées « 147 » ne passent plus pour bonnes
+    assert noter(cas, faux_nombre).score < 0.99
+
+
+def test_fiches_corrigees_apres_le_banc_du_serveur():
+    f = {a["id"]: norm(a["consignes"]) for a in registre()}
+    d = f["developpeur"]
+    assert "OBLIGATOIREMENT, en dernière ligne, par « Feu : ORANGE — à valider par Will »" in d
+    for mot in ("déploiement", "migration", "redémarrage", "push --force", "rm"):
+        assert mot in d, mot
+    assert "mode simulation par défaut (--dry-run" in d and "--appliquer" in d and "code d'erreur exact" in d
+    assert "n'annonces un nombre de caractères que si tu as réellement compté" in f["redacteur-seo"] and "n'écris aucun nombre" in f["redacteur-seo"]
+    assert "Les échéances (30 % / 40 % / 30 %)" in f["devis"]
+    assert GOLDEN["devis"] in f["devis"] and "taux journalier 600 € HT" in f["devis"]
+    assert max(len(a["consignes"]) for a in registre()) <= 2900
+
+
+def test_detail_affiche_un_extrait_de_chaque_reponse_ratee():
+    cas = [c for c in cas_mod.tous() if c.agent == "devis"][:2]
+    longue = "Réponse   fautive\nsur plusieurs lignes. " + "Mot " * 200
+    res = runner.lancer(cas, "http://x", "k", pause=0, appeler=faux_appeler({c.question: longue for c in cas}), dormir=lambda s: None, sortie=lambda *_: None)
+    lignes = []
+    runner.afficher(res, detail=True, sortie=lignes.append)
+    texte = "\n".join(lignes)
+    assert texte.count("    réponse : « Réponse fautive sur plusieurs lignes.") == 2 and "[…] »" in texte           # une ligne, tronquée
+    assert max(len(l) for l in lignes if l.startswith("    réponse")) < 420
+    court = []
+    runner.afficher(res, detail=True, sortie=court.append, extrait=0)
+    assert not any("réponse :" in l for l in court)
+    assert runner.extrait_de("abc", 10) == "abc" and runner.extrait_de("a b c d e f", 5).endswith("[…]")
+
+
+def test_option_extrait_de_la_commande(faux_orch, tmp_path, capsys, monkeypatch):
+    monkeypatch.setenv("PK_API_KEY", "k")
+    assert banc_agents.main(["--url", faux_orch, "--agent", "devis", "--pause", "0", "--detail", "--extrait", "40"]) == 0
+    sortie = capsys.readouterr().out
+    assert "DÉTAIL DES ÉCHECS" in sortie
+    assert all(len(l) < 120 for l in sortie.splitlines() if l.startswith("    réponse"))
+
+
+# =============================================================== 8. retours du serveur (réponses réelles) : règles trop strictes assouplies, vrais points de fiche
+def test_nombres_en_latex_et_espaces_speciaux_sont_normalises():
+    reel = "$1\\,200 + 1\\,500 + 1\\,350 = 4\\,050$"                                  # réponse réelle d'analyste/kpi, refusée à tort
+    assert nettoyer(reel) == " 1 200 + 1 500 + 1 350 = 4 050 "
+    cas = _cas("analyste/kpi")
+    texte = reel + "\nMoyenne : $1\\,350$ visites. Formule : =SOMME(B2:B4). Action : relancer."
+    assert evaluer(nombre(4050), texte) and evaluer(nombre(1350), texte) and noter(cas, texte).score >= 0.75
+    assert evaluer(pourcent(25), "Soit $25\\,\\%$ des visiteurs") and evaluer(pourcent(25), "Soit \\(25\\,\\%\\)") and evaluer(pourcent(4), "$\\frac{12}{300} = 4\\,\\%$")
+    assert nettoyer("4\u00a0050 et 4\u202f050 et 4\u2009050 et 4\u2007050") == "4 050 et 4 050 et 4 050 et 4 050"
+    assert nettoyer("12 \\times 25\\,€ = 300\\,€") == "12 × 25 € = 300 €" and nettoyer("\\text{TTC} : 1\\,627{,}50 €") == "TTC : 1 627,50 €"
+    assert evaluer(prix(300), "12 mois $\\times$ 25 € = $300\\,€$") and evaluer(montants_ok(), "$12 \\times 25\\,€ = 300\\,€$")
+    assert evaluer(contient("4 ?050"), "total $4\\,050$") and evaluer(un_de("4 ?050"), "total 4\u202f050")
+
+
+def test_feu_accepte_n_importe_ou_dans_la_ligne():
+    for texte in ("Préparer le déploiement (Feu : ORANGE — à valider par Will)", "**Feu : ORANGE** — à valider par Will", "Feu : 🟠 ORANGE",
+                  "Étape finale – Feu : ORANGE (à valider)", "feu : orange", "Voici le plan.\n- Mise en ligne : Feu : ORANGE"):
+        assert evaluer(feu("ORANGE"), texte), texte
+    assert not evaluer(feu("ORANGE"), "Feu : ROUGE — à valider par Will") and not evaluer(feu("ORANGE"), "Le feu orange du carrefour")
+    assert evaluer(feu("ORANGE"), "Étape 1 (Feu : VERT) ; étape 2 (Feu : ORANGE)") and not evaluer(feu("ORANGE"), "Étape 1 (Feu : ORANGE) ; étape 2 (Feu : ROUGE)")
+    assert evaluer(feu("ROUGE"), "Suppression : (Feu : ROUGE — à valider par Will)") and evaluer(feu("VERT"), "Rien à valider.") and not evaluer(feu("VERT"), "(Feu : ORANGE)")
+    assert noter(_cas("developpeur/prod"), "Voici le correctif.\n```js\nfix()\n```\nPréparer le déploiement (Feu : ORANGE — à valider par Will)").score >= 0.99
+
+
+def test_regle_de_tva_dans_devis_commercial_et_comptable():
+    f = {a["id"]: norm(a["consignes"]) for a in registre()}
+    for ident in ("devis", "commercial", "comptable"):
+        t = f[ident]
+        assert "selon le régime applicable, à confirmer" in t, ident
+        assert "pas encore immatriculée" in t and "20 %" in t and "Corse" in t and "8,5 %" in t and "La Réunion" in t, ident
+        assert "Guadeloupe, Martinique" in t, ident
+    assert "8,5 % en Réunion pour le taux normal" not in f["devis"]                      # plus de taux appliqué d'office
+    assert "sans région, tu n'affiches ni TVA ni TTC" in f["devis"] and "Tu n'appliques jamais un taux sans le dire" in f["devis"]
+    assert "Sans région, tu la demandes et tu n'appliques aucun taux" in f["comptable"]
+    assert "(l'Assistant Maison reste annoncé TTC" in f["commercial"]
+    assert GOLDEN["devis"] in f["devis"] and GOLDEN["com"] in f["commercial"] and GOLDEN["orch"] in f["orchestrateur"]
+
+
+def test_tva_selon_la_region_dans_le_banc():
+    sans = _cas("comptable/tva-sans-region")
+    assert noter(sans, "Quelle est la région du client ? 8,5 % en Guadeloupe, Martinique, Réunion ; 20 % en métropole et en Corse. Régime de TVA à confirmer.").score >= 0.99
+    assert noter(sans, "2 500 € HT + 8,5 % = TVA 212,50 € ; TTC 2 712,50 €.").score < 0.5
+    avec = _cas("comptable/tva")
+    assert noter(avec, "Client de La Réunion, taux normal 8,5 % (à confirmer, régime de PixelKréol non fixé) : TVA 212,50 € ; TTC 2 712,50 €. À valider par l'expert-comptable.").score >= 0.99
+    pres = _cas("devis/presence")
+    assert noter(pres, "Présence complète 4 000 € HT + 25 € HT/mois. Ajaccio : TVA 20 % (à confirmer) = 800 € ; TTC 4 800 €.\nFeu : ORANGE — à valider par Will").score >= 0.99
+    assert noter(pres, "Présence complète 4 000 € HT + 25 € HT/mois. TVA 8,5 % = 340 € ; TTC 4 340 €.\nFeu : ORANGE — à valider par Will").score < 0.8
+
+
+def test_prix_de_l_animation_des_reseaux_est_celui_de_la_fiche_pas_du_site():
+    """250 € HT/mois figure dans la fiche Devis (et agents/00_commun.md) depuis le commit 97ee5b4, mais PAS sur les pages du site (branche main) : décision de Will en attente.
+    Tant que la fiche le porte, la grille du banc l'accepte ; pour l'interdire il suffit de retirer 250.0 de GRILLE['presence'] et la phrase de la fiche."""
+    assert 250.0 in GRILLE["presence"]
+    devis = norm(next(a["consignes"] for a in registre() if a["id"] == "devis"))
+    assert "animation des réseaux 250 € HT par mois" in devis and "ne la proposes que si le client la demande" in devis
+    assert "les 3 premiers mois sont compris dans la Présence complète" in devis
+
+
+def test_banc_lisezmoi_decrit_les_tolerances_et_l_extrait():
+    t = (RACINE / "scripts" / "banc" / "LISEZMOI.md").read_text(encoding="utf-8")
+    for mot in ("--detail", "extrait", "LaTeX", "espaces insécables", "dérivent"):
+        assert mot.lower() in t.lower(), mot
