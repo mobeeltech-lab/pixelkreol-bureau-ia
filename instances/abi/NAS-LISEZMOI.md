@@ -212,6 +212,9 @@ tailscale logout && systemctl disable --now tailscaled && apt-get purge -y tails
 - **Réponse en bloc** : quand un agent consulte le NAS, sa réponse arrive d'un bloc au lieu de s'afficher mot à mot.
 - **Modèles sans appel d'outils** : l'orchestrateur bascule automatiquement sur une recherche dans l'index d'après la question
   (`ABI_NAS_MODE=repli` pour le forcer, utile avec des modèles locaux sur le Mac Pro) ; la qualité dépend alors de la question posée.
+- **Appels d'outils écrits en texte** : certains modèles (famille Qwen…) écrivent l'appel en texte (`<tool_call>…`) au lieu d'un vrai appel d'outil. L'orchestrateur
+  les reconnaît, les exécute, et n'envoie **jamais** ces balises à l'utilisateur ; si l'appel est illisible, il bascule sur la recherche dans l'index.
+- **Type de fichier demandé sans correspondance** (« pdf,docx » pour un `.txt`) : la recherche est refaite sans filtre de type et le dit.
 - **Noms de documents inventés par un modèle** : la réponse est complétée d'un avertissement « Non vérifié dans le NAS » si elle cite un
   fichier que le NAS ne contient pas.
 - **Exclusions par mot entier** : « rh » exclut « Dossiers RH » mais pas « Rhône ». Une exclusion est insensible aux accents et aux majuscules.

@@ -68,6 +68,111 @@ def _aplat(texte: str) -> str:
     return "".join(sortie).replace("’", "'")
 
 
+SYNONYMES_TYPES = {"pdf": "pdf", "docx": "docx", "doc": "docx", "word": "docx", "xlsx": "xlsx", "xls": "xlsx", "excel": "xlsx",
+                   "tableur": "xlsx", "txt": "txt", "texte": "txt", "text": "txt", "csv": "csv"}
+
+
+def normaliser_types(type_: Any) -> tuple[list[str] | None, list[str]]:
+    """(types reconnus ou None, mots non reconnus). « Word », ".PDF", « pdf, docx »… acceptés ; le reste est ignoré."""
+    if not type_ or not isinstance(type_, (str, list, tuple)):
+        return None, []
+    brut = type_ if isinstance(type_, str) else ",".join(str(x) for x in type_)
+    connus: list[str] = []
+    inconnus: list[str] = []
+    for mot in re.split(r"[,;/\s]+", normaliser(brut)):
+        mot = mot.strip(". ")
+        if not mot:
+            continue
+        t = SYNONYMES_TYPES.get(mot)
+        if t:
+            if t not in connus:
+                connus.append(t)
+        else:
+            inconnus.append(mot)
+    return (connus or None), inconnus
+
+
+# --- appels d'outils écrits en TEXTE par certains modèles (Qwen, Hermes…) au lieu d'un vrai tool_call ------------
+_FUITE = re.compile(r"</?\s*(?:tool_call|function_call|tool_response)\b[^>]*>?|<\s*function=|</\s*function\s*>|<\s*parameter=|</\s*parameter\s*>", re.I)
+_BLOC_JSON = re.compile(r"<\s*tool_call\s*>\s*([\[{].*?)(?:<\s*/\s*tool_call\s*>|\Z)", re.S | re.I)
+_FONCTION = re.compile(r"<\s*function=\s*([A-Za-z0-9_.\-]+)\s*>(.*?)(?=<\s*/\s*function\s*>|<\s*function=|<\s*/\s*tool_call\s*>|\Z)", re.S | re.I)
+_PARAMETRE = re.compile(r"<\s*parameter=\s*([A-Za-z0-9_.\-]+)\s*>(.*?)(?=<\s*/\s*parameter\s*>|<\s*parameter=|<\s*/\s*function\s*>|<\s*/\s*tool_call\s*>|\Z)", re.S | re.I)
+_ENTIERS = {"limite", "debut"}
+
+
+def fuite_balises(texte: Any) -> bool:
+    """Vrai si le texte contient des balises d'appel d'outil (<tool_call>, <function=…>, <parameter=…>) : elles ne doivent jamais atteindre l'utilisateur."""
+    return isinstance(texte, str) and bool(_FUITE.search(texte))
+
+
+def nettoyer_balises(texte: Any) -> str:
+    """Retire toute balise d'appel d'outil (et le contenu d'un appel complet) ; un texte normal est renvoyé tel quel."""
+    if not isinstance(texte, str):
+        return ""
+    if not fuite_balises(texte):
+        return texte
+    t = re.sub(r"<\s*tool_call\s*>.*?<\s*/\s*tool_call\s*>", " ", texte, flags=re.S | re.I)
+    t = re.sub(r"<\s*tool_call\s*>\s*(?=[\[{]|<\s*function=).*\Z", " ", t, flags=re.S | re.I)          # appel coupé net : tout le reste
+    t = re.sub(r"<\s*function=[^>]*>.*?<\s*/\s*function\s*>", " ", t, flags=re.S | re.I)
+    t = re.sub(r"<\s*/?\s*(?:tool_call|function_call|tool_response)\b[^>\s]*>?|<\s*function=[^>\s<]*>?|<\s*/\s*function\s*>|"
+               r"<\s*parameter=[^>\s<]*>?|<\s*/\s*parameter\s*>", " ", t, flags=re.I)
+    return re.sub(r"\n{3,}", "\n\n", re.sub(r"[ \t]{2,}", " ", t)).strip()
+
+
+def _args_json(valeur: Any) -> dict:
+    if isinstance(valeur, dict):
+        return valeur
+    if isinstance(valeur, str):
+        try:
+            objet = json.loads(valeur)
+            return objet if isinstance(objet, dict) else {}
+        except ValueError:
+            return {}
+    return {}
+
+
+def _elements_json(corps: str) -> list:
+    corps = corps.strip()
+    try:
+        objet = json.loads(corps)
+    except ValueError:
+        try:
+            objet, _ = json.JSONDecoder().raw_decode(corps)
+        except ValueError:
+            return []
+    return objet if isinstance(objet, list) else [objet]
+
+
+def appels_en_texte(texte: Any) -> list[dict]:
+    """Appels d'outils écrits en texte, au format de vrais tool_calls OpenAI ([] si rien d'exploitable).
+    Formats : Qwen « <tool_call><function=nom><parameter=clé>valeur</parameter></function></tool_call> »
+    et JSON « <tool_call>{"name": …, "arguments": {…}}</tool_call> » (Hermes)."""
+    if not fuite_balises(texte):
+        return []
+    trouves: list[tuple[int, str, dict]] = []
+    for m in _BLOC_JSON.finditer(texte):
+        for el in _elements_json(m.group(1)):
+            if not isinstance(el, dict):
+                continue
+            fn = el.get("function")
+            nom = el.get("name") or (fn if isinstance(fn, str) else (fn or {}).get("name") if isinstance(fn, dict) else None)
+            args = _args_json(el.get("arguments", el.get("parameters", el.get("args", (fn or {}).get("arguments") if isinstance(fn, dict) else {}))))
+            if isinstance(nom, str) and nom.strip():
+                trouves.append((m.start(), nom.strip(), args))
+    zones_json = [(m.start(), m.end()) for m in _BLOC_JSON.finditer(texte)]
+    for m in _FONCTION.finditer(texte):
+        if any(a <= m.start() < b for a, b in zones_json):
+            continue
+        args = {}
+        for p in _PARAMETRE.finditer(m.group(2)):
+            valeur = p.group(2).strip()
+            args[p.group(1)] = int(valeur) if p.group(1) in _ENTIERS and re.fullmatch(r"-?\d+", valeur) else valeur
+        trouves.append((m.start(), m.group(1), args))
+    trouves.sort(key=lambda x: x[0])
+    return [{"id": f"call_texte_{i}", "type": "function",
+             "function": {"name": nom, "arguments": json.dumps(args, ensure_ascii=False)}} for i, (_, nom, args) in enumerate(trouves, 1)]
+
+
 def _jetons(texte: str) -> list[str]:
     return re.findall(r"[a-z0-9]+", normaliser(texte))
 
@@ -562,6 +667,21 @@ class Documents:
     def rechercher(self, texte: str | None = None, nom: str | None = None, dossier: str | None = None,
                    type: str | None = None, apres: str | None = None, avant: str | None = None,
                    limite: int | None = None) -> dict[str, Any]:
+        """Recherche. Un type demandé qui ne correspond à rien (« pdf,docx » pour un .txt) ne fait JAMAIS échouer la recherche :
+        on réessaie sans filtre de type et on le dit."""
+        types, inconnus = normaliser_types(type)
+        res = self._rechercher(texte, nom, dossier, types, apres, avant, limite)
+        if not res["trouve"] and types:
+            sans = self._rechercher(texte, nom, dossier, None, apres, avant, limite)
+            if sans["trouve"]:
+                sans["message"] = (f"Aucun document du type demandé ({type}) : voici les résultats sans filtre de type. "
+                                   "Le type réel de chaque document est indiqué.")
+                return sans
+        if inconnus and res["trouve"]:
+            res["message"] = (res.get("message", "") + f" Type non reconnu ignoré : {', '.join(inconnus)}.").strip()
+        return res
+
+    def _rechercher(self, texte, nom, dossier, types, apres, avant, limite) -> dict[str, Any]:
         fin = time.monotonic() + self.cfg.delai
         limite = max(1, min(int(limite or 8), 20))
         where, params = [], []
@@ -572,11 +692,9 @@ class Documents:
         for j in _jetons(dossier or ""):
             where.append("f.dossier_norm LIKE ?")
             params.append(f"%{j}%")
-        if type:
-            types = [t.strip().lower().lstrip(".") for t in re.split(r"[,\s]+", str(type)) if t.strip()]
-            if types:
-                where.append("f.type IN (%s)" % ",".join("?" * len(types)))
-                params += types
+        if types:
+            where.append("f.type IN (%s)" % ",".join("?" * len(types)))
+            params += types
         for borne, op in ((apres, ">="), (avant, "<=")):
             if borne:
                 if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(borne)):
@@ -792,7 +910,7 @@ OUTILS_OPENAI = [
             "texte": {"type": "string", "description": "Mots à chercher dans le nom, le dossier et le contenu"},
             "nom": {"type": "string", "description": "Mots du nom du fichier"},
             "dossier": {"type": "string", "description": "Mots du chemin du dossier (ex. Oliviers, acquéreurs)"},
-            "type": {"type": "string", "description": "pdf, docx, xlsx, txt ou csv (plusieurs séparés par une virgule)"},
+            "type": {"type": "string", "description": "pdf, docx, xlsx, txt ou csv (plusieurs séparés par une virgule). Facultatif : à omettre en cas de doute, un type sans correspondance est ignoré"},
             "apres": {"type": "string", "description": "Modifié à partir du (AAAA-MM-JJ)"},
             "avant": {"type": "string", "description": "Modifié jusqu'au (AAAA-MM-JJ)"},
             "limite": {"type": "integer", "description": "Nombre maximal de résultats (8 par défaut, 20 au plus)"}}}}},
@@ -814,6 +932,7 @@ Règles :
 - Tu donnes TOUJOURS le chemin exact tel que renvoyé par l'outil, avec un court extrait. Tu n'inventes JAMAIS un document, un nom de fichier, un chemin ou un contenu.
 - Si l'outil ne trouve rien, tu le dis clairement (« introuvable dans le NAS ») et tu proposes d'autres mots de recherche.
 - Tu ne peux ni écrire, ni déplacer, ni renommer, ni supprimer : tu proposes, la direction décide. Une telle demande est refusée.
+- Tu appelles les outils par le mécanisme prévu pour cela ; tu n'écris JAMAIS un appel d'outil en texte dans ta réponse (pas de <tool_call>, pas de <function=…>).
 - Certains dossiers (RH, paie, pièces d'identité…) sont invisibles pour toi : ne cherche pas à les atteindre.
 - Tu ne reproduis jamais un document en entier : seulement l'extrait utile.
 - Les documents scannés sans texte ne sont pas lisibles (pas d'OCR) : dis-le."""

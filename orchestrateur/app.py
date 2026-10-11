@@ -867,47 +867,88 @@ def verifier_chemins(reponse: dict) -> None:
                           + " — ce nom n'a pas été trouvé dans le NAS ; ne pas s'y fier.")
 
 
+MESSAGE_NAS_INUTILISABLE = ("Je n'ai pas pu consulter le NAS pour cette demande (la réponse du modèle était inexploitable). "
+                            "Reformulez la demande ou réessayez dans un instant.")
+
+
+def assainir_reponse(rep: dict) -> None:
+    """Rien de technique ne part vers l'utilisateur : ni balise d'appel d'outil (<tool_call>, <function=…>), ni tool_calls internes."""
+    try:
+        msg = rep["choices"][0]["message"]
+    except (KeyError, IndexError, TypeError):
+        return
+    if not isinstance(msg, dict):
+        return
+    contenu = msg.get("content")
+    contenu = contenu if isinstance(contenu, str) else ""
+    if DOCUMENTS.fuite_balises(contenu):
+        LOG.warning("Balises d'appel d'outil retirées de la réponse du modèle")
+        contenu = DOCUMENTS.nettoyer_balises(contenu)
+    if msg.pop("tool_calls", None):
+        LOG.warning("Appel d'outil non traité retiré de la réponse du modèle")
+    msg["content"] = contenu if contenu.strip() else MESSAGE_NAS_INUTILISABLE
+    if rep["choices"][0].get("finish_reason") == "tool_calls":
+        rep["choices"][0]["finish_reason"] = "stop"
+
+
 async def appeler_agent(client: httpx.AsyncClient, corps: dict, chaine: list[str], agent: dict,
                         demandeur: str = "api") -> tuple[dict, str]:
     """Comme appeler(), avec l'outil « documents » si l'agent y a droit et que le NAS est actif (sinon : strictement appeler())."""
     if not utilise_outils(agent, corps):
         return await appeler(client, corps, chaine)
     mode = DOCS.cfg.mode
+    usage: dict[str, int] = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
     if mode == "repli":
         rep, cerveau = await appeler_repli(client, corps, chaine, agent, demandeur)
-        verifier_chemins(rep)
-        return rep, cerveau
-    corps_o = {**corps, "tools": DOCUMENTS.OUTILS_OPENAI, "tool_choice": "auto", "messages": [dict(m) for m in corps["messages"]]}
-    usage: dict[str, int] = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
-    try:
-        for _ in range(DOCS.cfg.tours_max):
-            rep, cerveau = await appeler(client, corps_o, chaine)
-            cumuler_usage(usage, rep)
-            msg = rep["choices"][0]["message"]
-            appels = msg.get("tool_calls") or []
-            if not appels:
-                break
-            corps_o["messages"].append({"role": "assistant", "content": msg.get("content"), "tool_calls": appels})
-            for appel in appels:
-                fonction = appel.get("function") or {}
-                resultat = await asyncio.wait_for(
-                    asyncio.to_thread(DOCS.executer, str(fonction.get("name", "")), fonction.get("arguments"), demandeur, agent["id"]),
-                    DOCS.cfg.delai + 5)
-                corps_o["messages"].append({"role": "tool", "tool_call_id": appel.get("id", ""), "content": resultat})
-        else:  # le modèle réclame encore des outils : dernier appel pour qu'il conclue avec ce qu'il a
-            corps_o["tool_choice"] = "none"
-            rep, cerveau = await appeler(client, corps_o, chaine)
-            cumuler_usage(usage, rep)
-    except EchecCerveaux as e:
-        if mode == "auto" and e.statut in (400, 422, 501):
-            LOG.warning("Le cerveau n'accepte pas l'appel d'outils (%s) : repli sur la recherche dans l'index", e.statut)
-            rep, cerveau = await appeler_repli(client, corps, chaine, agent, demandeur)
-            verifier_chemins(rep)
-            return rep, cerveau
-        raise
-    except asyncio.TimeoutError:
-        raise EchecCerveaux(504, "la lecture du NAS a dépassé le délai", [agent["cerveau"]]) from None
-    rep["usage"] = usage
+        cumuler_usage(usage, rep)
+    else:
+        corps_o = {**corps, "tools": DOCUMENTS.OUTILS_OPENAI, "tool_choice": "auto", "messages": [dict(m) for m in corps["messages"]]}
+        try:
+            for _ in range(DOCS.cfg.tours_max):
+                rep, cerveau = await appeler(client, corps_o, chaine)
+                cumuler_usage(usage, rep)
+                msg = rep["choices"][0]["message"]
+                appels = msg.get("tool_calls") or []
+                contenu = msg.get("content") if isinstance(msg.get("content"), str) else ""
+                if appels:
+                    contenu_assistant = msg.get("content")
+                else:
+                    contenu_assistant = None
+                    if DOCUMENTS.fuite_balises(contenu):
+                        # certains modèles écrivent l'appel d'outil en TEXTE au lieu d'un vrai tool_call : on l'exécute quand même
+                        appels = DOCUMENTS.appels_en_texte(contenu)
+                        if appels:
+                            LOG.warning("Appel d'outil écrit en texte par le modèle (%d) : exécuté comme un vrai appel", len(appels))
+                        else:
+                            LOG.warning("Appel d'outil illisible dans la réponse du modèle : repli sur la recherche dans l'index")
+                            rep, cerveau = await appeler_repli(client, corps, chaine, agent, demandeur)
+                            cumuler_usage(usage, rep)
+                            break
+                if not appels:
+                    break
+                corps_o["messages"].append({"role": "assistant", "content": contenu_assistant, "tool_calls": appels})
+                for appel in appels:
+                    fonction = appel.get("function") or {}
+                    resultat = await asyncio.wait_for(
+                        asyncio.to_thread(DOCS.executer, str(fonction.get("name", "")), fonction.get("arguments"), demandeur, agent["id"]),
+                        DOCS.cfg.delai + 5)
+                    corps_o["messages"].append({"role": "tool", "tool_call_id": appel.get("id", ""), "content": resultat})
+            else:  # le modèle réclame encore des outils : dernier appel pour qu'il conclue avec ce qu'il a
+                corps_o["tool_choice"] = "none"
+                rep, cerveau = await appeler(client, corps_o, chaine)
+                cumuler_usage(usage, rep)
+        except EchecCerveaux as e:
+            if mode == "auto" and e.statut in (400, 422, 501):
+                LOG.warning("Le cerveau n'accepte pas l'appel d'outils (%s) : repli sur la recherche dans l'index", e.statut)
+                rep, cerveau = await appeler_repli(client, corps, chaine, agent, demandeur)
+                cumuler_usage(usage, rep)
+            else:
+                raise
+        except asyncio.TimeoutError:
+            raise EchecCerveaux(504, "la lecture du NAS a dépassé le délai", [agent["cerveau"]]) from None
+    if usage["total_tokens"]:
+        rep["usage"] = usage
+    assainir_reponse(rep)
     verifier_chemins(rep)
     return rep, cerveau
 

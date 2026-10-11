@@ -249,15 +249,15 @@ def test_admin_nas_etat_et_reindexation(client_nas):
     assert client_nas.get("/admin/nas", headers={"Authorization": f"Bearer {CLE_API}"}).status_code == 401      # clé API ≠ clé admin
     h = {"Authorization": f"Bearer {CLE_ADMIN}"}
     etat = client_nas.get("/admin/nas", headers=h).json()
-    assert etat["actif"] and etat["fichiers_indexes"] == 10 and etat["fts5"]
+    assert etat["actif"] and etat["fichiers_indexes"] == 11 and etat["fts5"]
     (client_nas.nas / "Nouveau.txt").write_text("DONNÉES FICTIVES — TEST nouveau", encoding="utf-8")
     assert client_nas.post("/admin/nas/reindexer").status_code == 401
     assert client_nas.post("/admin/nas/reindexer", headers=h).status_code == 202
     for _ in range(50):
-        if client_nas.get("/admin/nas", headers=h).json()["fichiers_indexes"] == 11:
+        if client_nas.get("/admin/nas", headers=h).json()["fichiers_indexes"] == 12:
             break
         time.sleep(0.1)
-    assert client_nas.get("/admin/nas", headers=h).json()["fichiers_indexes"] == 11
+    assert client_nas.get("/admin/nas", headers=h).json()["fichiers_indexes"] == 12
 
 
 def test_sante_signale_le_nas_et_son_absence(client_nas):
@@ -357,3 +357,161 @@ def test_champ_outils_du_registre_valide():
     assert app.Registre.valider(dict(base), set(), set()) is None
     for mauvais in ("documents", ["autre"], [1], {"a": 1}):
         assert "outils" in app.Registre.valider(dict(base, outils=mauvais), set(), set())
+
+
+# =============================================================== appels d'outils écrits en TEXTE (modèles type Qwen)
+BALISES = ("<tool_call", "</tool_call", "<function=", "</function", "<parameter=", "</parameter")
+COMPROMIS = "Oliviers/juridique/compromis-vente-A05.txt"
+APPEL_QWEN = ("<tool_call> <function=rechercher_documents> <parameter=texte> compromis </parameter> "
+              "<parameter=type> pdf,docx </parameter> </function> </tool_call>")           # le texte exact observé sur le serveur
+
+
+def texte_stream(r):
+    return "".join(json.loads(l[6:])["choices"][0]["delta"].get("content") or "" for l in r.text.splitlines() if l.startswith("data: {"))
+
+
+def sans_balise(texte):
+    return not any(b in texte for b in BALISES)
+
+
+def test_cas_reel_appel_qwen_en_texte_execute_puis_reponse_propre(client_nas):
+    f = client_nas.faux
+    f.scenarios["pk-long"] = [OK(APPEL_QWEN), OK(f"Le compromis est ici : {COMPROMIS}")]
+    r = demande(client_nas, "Retrouve le compromis de vente")
+    contenu = r.json()["choices"][0]["message"]["content"]
+    assert r.status_code == 200 and sans_balise(contenu) and COMPROMIS in contenu and "Non vérifié" not in contenu
+    assert len(f.appels) == 2
+    second = f.appels[1]["messages"]
+    appel = [m for m in second if m["role"] == "assistant" and m.get("tool_calls")][0]["tool_calls"][0]
+    assert appel["function"]["name"] == "rechercher_documents" and json.loads(appel["function"]["arguments"])["type"] == "pdf,docx"
+    outil = [m for m in second if m["role"] == "tool"][0]
+    assert outil["tool_call_id"] == appel["id"]
+    resultat = json.loads(outil["content"])
+    assert resultat["trouve"] and resultat["resultats"][0]["chemin"] == COMPROMIS            # type « pdf,docx » ignoré : le .txt est trouvé
+    assert r.json()["usage"]["total_tokens"] == 24
+    assert any(l["action"] == "recherche" for l in journal(client_nas))
+
+
+def test_appel_json_entre_balises_execute(client_nas):
+    f = client_nas.faux
+    f.scenarios["pk-long"] = [OK('<tool_call>{"name": "lire_document", "arguments": {"chemin": "%s"}}</tool_call>' % COMPROMIS), OK("Prix : 171 500,00 euros")]
+    r = demande(client_nas, "Quel est le prix du compromis ?")
+    assert sans_balise(r.json()["choices"][0]["message"]["content"]) and "171 500,00" in r.json()["choices"][0]["message"]["content"]
+    tool = [m for m in f.appels[1]["messages"] if m["role"] == "tool"][0]["content"]
+    assert "171 500,00" in tool and COMPROMIS in tool
+    assert [l["action"] for l in journal(client_nas)] == ["lecture"]
+
+
+def test_appel_en_texte_avec_phrase_avant_l_appel(client_nas):
+    f = client_nas.faux
+    f.scenarios["pk-long"] = [OK("Je vais chercher dans le NAS.\n" + APPEL_QWEN), OK(f"Trouvé : {COMPROMIS}")]
+    contenu = demande(client_nas).json()["choices"][0]["message"]["content"]
+    assert sans_balise(contenu) and COMPROMIS in contenu and len(f.appels) == 2
+
+
+def test_appels_en_texte_en_serie_puis_reponse(client_nas):
+    f = client_nas.faux
+    lecture = '<tool_call><function=lire_document><parameter=chemin>%s</parameter></function></tool_call>' % COMPROMIS
+    f.scenarios["pk-long"] = [OK(APPEL_QWEN), OK(lecture), OK("Voilà, tout est dit.")]
+    contenu = demande(client_nas).json()["choices"][0]["message"]["content"]
+    assert contenu == "Voilà, tout est dit." and len(f.appels) == 3
+    assert [l["action"] for l in journal(client_nas)] == ["recherche", "lecture"]
+
+
+def test_boucle_d_appels_en_texte_bornee_et_jamais_de_balise_a_l_utilisateur(client_nas):
+    f = client_nas.faux
+    f.par_defaut = OK(APPEL_QWEN)                       # le modèle ne fait que réclamer des outils, en texte
+    r = demande(client_nas)
+    contenu = r.json()["choices"][0]["message"]["content"]
+    assert r.status_code == 200 and sans_balise(contenu) and contenu.strip()
+    assert len(f.appels) <= 4 + 1 + 1                   # 4 tours, un dernier appel pour conclure, au plus un repli
+
+
+def test_appel_en_texte_illisible_utilise_le_repli_sur_l_index(client_nas):
+    f = client_nas.faux
+
+    def repond(corps):
+        if "tools" in corps:
+            return OK('<tool_call>{"name": "rechercher_documents", "arguments": {broken </tool_call>')
+        return OK(f"D'après l'index : {COMPROMIS}")
+    f.par_defaut = repond
+    contenu = demande(client_nas, "Retrouve le compromis de vente du lot A05").json()["choices"][0]["message"]["content"]
+    assert sans_balise(contenu) and COMPROMIS in contenu
+    assert len(f.appels) == 2 and "tools" in f.appels[0] and "tools" not in f.appels[1]
+    assert "Documents trouvés dans le NAS" in f.appels[1]["messages"][0]["content"] and COMPROMIS in f.appels[1]["messages"][0]["content"]
+
+
+def test_repli_dont_la_reponse_contient_encore_des_balises_est_nettoyee(client_nas):
+    f = client_nas.faux
+    f.par_defaut = OK("<tool_call>{cassé}</tool_call>")
+    r = demande(client_nas, "Retrouve le compromis")
+    contenu = r.json()["choices"][0]["message"]["content"]
+    assert r.status_code == 200 and sans_balise(contenu)
+    assert "NAS" in contenu and "pas pu" in contenu                  # message clair plutôt qu'un texte vide ou des balises
+
+
+def test_balises_restantes_apres_du_texte_utile_sont_retirees(client_nas):
+    f = client_nas.faux
+    f.par_defaut = OK("Le prix est de 171 500,00 euros. <tool_call> <function=lire_document> </function> </tool_call>")
+    contenu = demande(client_nas).json()["choices"][0]["message"]["content"]
+    assert sans_balise(contenu) and "171 500,00" in contenu
+
+
+def test_jamais_de_balise_en_flux(client_nas):
+    f = client_nas.faux
+    f.scenarios["pk-long"] = [OK(APPEL_QWEN), OK(f"Trouvé : {COMPROMIS}")]
+    r = demande(client_nas, stream=True)
+    texte = texte_stream(r)
+    assert sans_balise(texte) and COMPROMIS in texte and r.text.rstrip().endswith("data: [DONE]")
+    f.appels.clear()
+    f.par_defaut = OK("<tool_call>{cassé}</tool_call>")
+    assert sans_balise(texte_stream(demande(client_nas, stream=True)))
+
+
+def test_jamais_de_balise_en_mode_repli_force(monkeypatch, tmp_path, nas, faux):
+    app = monter(monkeypatch, tmp_path, nas, faux, PK_NAS_MODE="repli")
+    with TestClient(app.app) as tc:
+        tc.app.state.client = httpx.AsyncClient(transport=httpx.MockTransport(faux))
+        app.DOCS.indexer()
+        faux.par_defaut = OK("<tool_call><function=rechercher_documents><parameter=texte>x</parameter></function></tool_call>")
+        contenu = demande(tc, "compromis").json()["choices"][0]["message"]["content"]
+        assert sans_balise(contenu) and contenu.strip()
+
+
+def test_pk_equipe_aussi(client_nas):
+    f = client_nas.faux
+
+    def repond(corps):
+        user = corps["messages"][-1]["content"]
+        if "PLANIFICATION_JSON" in user:
+            return OK(json.dumps({"taches": [{"agent": "archiviste", "consigne": "retrouve le compromis"}]}))
+        if "contributions de l'équipe" in user:
+            return OK("Synthèse")
+        if any(m["role"] == "tool" for m in corps["messages"]):
+            return OK(f"Trouvé {COMPROMIS}")
+        return OK(APPEL_QWEN)
+    f.par_defaut = repond
+    r = client_nas.post("/v1/chat/completions", headers=H, json={"model": "pk-equipe", "messages": [{"role": "user", "content": "Retrouve le compromis"}]})
+    assert r.status_code == 200 and sans_balise(r.json()["choices"][0]["message"]["content"]) and COMPROMIS in r.json()["choices"][0]["message"]["content"]
+
+
+def test_les_vrais_tool_calls_continuent_de_marcher(client_nas):
+    f = client_nas.faux
+    f.scenarios["pk-long"] = [reponse_outil("rechercher_documents", {"texte": "compromis", "type": "pdf,docx"}), OK(f"Trouvé : {COMPROMIS}")]
+    contenu = demande(client_nas).json()["choices"][0]["message"]["content"]
+    assert COMPROMIS in contenu and len(f.appels) == 2
+    resultat = json.loads([m for m in f.appels[1]["messages"] if m["role"] == "tool"][0]["content"])
+    assert resultat["resultats"][0]["chemin"] == COMPROMIS
+
+
+def test_nas_eteint_aucun_traitement_des_balises(monkeypatch, tmp_path, faux):
+    """Instance sans NAS : la réponse du modèle est transmise telle quelle (comportement PixelKréol inchangé)."""
+    import shutil
+    agents = tmp_path / "agents"
+    shutil.copytree(AGENTS_ABI, agents)
+    app = charger_app(monkeypatch, agents, **ENV_ABI)
+    with TestClient(app.app) as tc:
+        tc.app.state.client = httpx.AsyncClient(transport=httpx.MockTransport(faux))
+        faux.par_defaut = OK("texte avec <tool_call> inattendu </tool_call>")
+        assert demande(tc).json()["choices"][0]["message"]["content"] == "texte avec <tool_call> inattendu </tool_call>"
+        assert len(faux.appels) == 1

@@ -102,21 +102,21 @@ def test_index_contient_les_documents_visibles_et_rien_d_autre(docs):
     attendu = {"Oliviers/acquereurs/FICTIF-DURAND/acte-vefa-A02.pdf", "Oliviers/chantier/situation-travaux-4.xlsx",
                "Oliviers/chantier/planning-v3.docx", "Cypres/livraison/PV-livraison-CYP-B12.txt", "Cypres/baux/bail-A.csv",
                "Rapport d'achèvement 2026.txt", "Archives/enorme.txt", "Archives/scan-sans-texte.pdf",
-               "Archives/corrompu.pdf", "Archives/photo.png"}
+               "Archives/corrompu.pdf", "Archives/photo.png", "Oliviers/juridique/compromis-vente-A05.txt"}
     assert chemins_indexes(docs) == attendu
 
 
 def test_reprise_sans_tout_relire(nas, tmp_path):
     D = d.Documents(cfg_de(nas, tmp_path))
     premier = D.indexer()
-    assert premier["indexes"] == 10 and premier["complet"]
+    assert premier["indexes"] == 11 and premier["complet"]
     second = D.indexer()
-    assert second["indexes"] == 0 and second["inchanges"] == 10
+    assert second["indexes"] == 0 and second["inchanges"] == 11
     (nas / "Cypres/baux/bail-A.csv").write_text("DONNÉES FICTIVES — TEST\nlocataire;loyer\nTEST-LOCATAIRE;659,75\n", encoding="utf-8")
     ajout = nas / "Nouveau-document.txt"
     ajout.write_text("DONNÉES FICTIVES — TEST nouveau", encoding="utf-8")
     troisieme = D.indexer()
-    assert troisieme["indexes"] == 2 and troisieme["inchanges"] == 9
+    assert troisieme["indexes"] == 2 and troisieme["inchanges"] == 10
     assert "659,75" in appel(D, "lire_document", chemin="Cypres/baux/bail-A.csv")["extrait"]
     assert appel(D, "rechercher_documents", texte="659,75")["trouve"]
 
@@ -133,9 +133,9 @@ def test_indexation_interrompue_reprend_ou_elle_s_est_arretee_sans_rien_purger(n
     D = d.Documents(cfg_de(nas, tmp_path))
     coupee = D.indexer(delai=0)                      # délai écoulé tout de suite
     assert coupee["complet"] is False and coupee["purges"] == 0
-    assert coupee["indexes"] < 10
+    assert coupee["indexes"] < 11
     suite = D.indexer()
-    assert suite["complet"] and len(chemins_indexes(D)) == 10
+    assert suite["complet"] and len(chemins_indexes(D)) == 11
 
 
 def test_nas_non_monte_ou_vide_ne_vide_pas_l_index(nas, tmp_path):
@@ -230,7 +230,7 @@ def test_requetes_bizarres_ne_cassent_rien(docs, requete):
     r = appel(docs, "rechercher_documents", texte=requete)
     assert "resultats" in r
     with docs._base() as con:
-        assert con.execute("SELECT COUNT(*) FROM fichiers").fetchone()[0] == 10
+        assert con.execute("SELECT COUNT(*) FROM fichiers").fetchone()[0] == 11
 
 
 def test_limite_de_resultats_et_de_caracteres(nas, tmp_path):
@@ -331,7 +331,7 @@ def test_racine_elle_meme_derriere_un_lien_est_resolue_une_fois(nas, tmp_path):
     D = d.Documents(cfg_de(tmp_path / "montage", tmp_path))
     D.indexer()
     assert appel(D, "lire_document", chemin="Cypres/baux/bail-A.csv")["lisible"]
-    assert len(chemins_indexes(D)) == 10
+    assert len(chemins_indexes(D)) == 11
 
 
 def test_dossier_et_chemin_inexistant_refuses(docs):
@@ -539,3 +539,133 @@ def test_un_document_exclu_present_par_erreur_dans_l_index_ne_sort_jamais(docs):
         assert "fantome" not in json.dumps(r) and fab.SECRET_PAIE not in json.dumps(r), requete
     assert docs.nom_existe("fantome.txt") is False
     assert docs.indexer()["purges"] == 1                              # et la passe suivante le retire de l'index
+
+
+# =============================================================== appels d'outils écrits en TEXTE par le modèle
+QWEN = """<tool_call>
+<function=rechercher_documents>
+<parameter=texte>
+compromis
+</parameter>
+<parameter=type>
+pdf,docx
+</parameter>
+</function>
+</tool_call>"""
+QWEN_UNE_LIGNE = ("<tool_call> <function=rechercher_documents> <parameter=texte> compromis </parameter> "
+                  "<parameter=type> pdf,docx </parameter> </function> </tool_call>")
+
+
+def noms_args(appels):
+    return [(a["function"]["name"], json.loads(a["function"]["arguments"])) for a in appels]
+
+
+@pytest.mark.parametrize("texte", [QWEN, QWEN_UNE_LIGNE, "Je cherche.\n" + QWEN + "\nMerci"])
+def test_appel_au_format_qwen_reconnu(texte):
+    appels = d.appels_en_texte(texte)
+    assert noms_args(appels) == [("rechercher_documents", {"texte": "compromis", "type": "pdf,docx"})]
+    assert appels[0]["type"] == "function" and appels[0]["id"]
+
+
+def test_appel_qwen_sans_balise_externe_ou_non_ferme_ou_valeurs_entieres():
+    assert noms_args(d.appels_en_texte("<function=lire_document><parameter=chemin>a/b.txt</parameter></function>")) == \
+        [("lire_document", {"chemin": "a/b.txt"})]
+    assert noms_args(d.appels_en_texte("<tool_call><function=rechercher_documents><parameter=texte>acte</parameter><parameter=limite>3")) == \
+        [("rechercher_documents", {"texte": "acte", "limite": 3})]                            # coupé net : on garde ce qui est lisible
+    assert noms_args(d.appels_en_texte("<tool_call><function=lire_document><parameter=chemin>x.txt</parameter><parameter=debut>0"
+                                       "</parameter><parameter=mots>prix total</parameter></function></tool_call>"))[0][1] == \
+        {"chemin": "x.txt", "debut": 0, "mots": "prix total"}
+
+
+def test_plusieurs_appels_qwen_dans_le_meme_message():
+    texte = QWEN + "\n" + "<tool_call><function=lire_document><parameter=chemin>Cypres/baux/bail-A.csv</parameter></function></tool_call>"
+    assert [n for n, _ in noms_args(d.appels_en_texte(texte))] == ["rechercher_documents", "lire_document"]
+
+
+@pytest.mark.parametrize("texte", [
+    '<tool_call>{"name": "rechercher_documents", "arguments": {"texte": "compromis", "type": "pdf,docx"}}</tool_call>',
+    '<tool_call>\n{"name": "rechercher_documents", "arguments": "{\\"texte\\": \\"compromis\\", \\"type\\": \\"pdf,docx\\"}"}\n</tool_call>',
+    '<tool_call>{"name": "rechercher_documents", "parameters": {"texte": "compromis", "type": "pdf,docx"}}',
+    '<tool_call>{"function": {"name": "rechercher_documents", "arguments": {"texte": "compromis", "type": "pdf,docx"}}}</tool_call>',
+    'Voici : <tool_call>{"name": "rechercher_documents", "arguments": {"texte": "compromis", "type": "pdf,docx"}}</tool_call> fin'])
+def test_appel_au_format_json_entre_balises_reconnu(texte):
+    assert noms_args(d.appels_en_texte(texte)) == [("rechercher_documents", {"texte": "compromis", "type": "pdf,docx"})]
+
+
+def test_plusieurs_appels_json_et_liste():
+    a = '<tool_call>{"name": "rechercher_documents", "arguments": {"texte": "a"}}</tool_call><tool_call>{"name": "lire_document", "arguments": {"chemin": "b.txt"}}</tool_call>'
+    assert [n for n, _ in noms_args(d.appels_en_texte(a))] == ["rechercher_documents", "lire_document"]
+    b = '<tool_call>[{"name": "rechercher_documents", "arguments": {"texte": "a"}}, {"name": "lire_document", "arguments": {"chemin": "b"}}]</tool_call>'
+    assert len(d.appels_en_texte(b)) == 2
+
+
+@pytest.mark.parametrize("texte", ["", None, "Bonjour, voici la réponse.", "Le fichier acte.pdf est dans Oliviers/.", "a < b et c > d",
+                                   "Écris `<function>` dans le code HTML", '{"name": "rechercher_documents", "arguments": {}}'])
+def test_un_texte_normal_n_est_jamais_pris_pour_un_appel(texte):
+    assert d.appels_en_texte(texte) == [] and d.fuite_balises(texte) is False
+    assert d.nettoyer_balises(texte) == (texte or "")
+
+
+@pytest.mark.parametrize("texte", [QWEN, QWEN_UNE_LIGNE, "<tool_call>", "</tool_call>", "<function=", "xx <parameter=texte> y", "</function>",
+                                   '<tool_call>{"name": cassé</tool_call>', "<tool_call><function=><parameter=a>b</parameter></function></tool_call>"])
+def test_fuite_de_balises_detectee_et_nettoyee(texte):
+    assert d.fuite_balises(texte) is True
+    propre = d.nettoyer_balises("Avant. " + texte + " Après.")
+    for balise in ("<tool_call", "</tool_call", "<function=", "</function", "<parameter=", "</parameter"):
+        assert balise not in propre
+    assert propre.startswith("Avant.") and propre.endswith("Après.")
+
+
+def test_appel_illisible_n_est_pas_execute():
+    assert d.appels_en_texte('<tool_call>{"name": cassé</tool_call>') == []
+    assert d.appels_en_texte("<tool_call><function=><parameter=a>b</parameter></function></tool_call>") == []
+    assert d.appels_en_texte('<tool_call>{"arguments": {"texte": "x"}}</tool_call>') == []            # pas de nom d'outil
+
+
+def test_appel_texte_avec_un_outil_d_ecriture_reste_refuse(docs):
+    appels = d.appels_en_texte("<tool_call><function=supprimer_document><parameter=chemin>Cypres/baux/bail-A.csv</parameter></function></tool_call>")
+    assert noms_args(appels)[0][0] == "supprimer_document"                   # reconnu... puis refusé à l'exécution
+    r = json.loads(docs.executer(appels[0]["function"]["name"], appels[0]["function"]["arguments"], "t", "a"))
+    assert "LECTURE SEULE" in r["erreur"]
+
+
+# =============================================================== type demandé sans correspondance : on réessaie sans filtre
+def test_type_sans_correspondance_ne_fait_pas_echouer_la_recherche(docs):
+    r = appel(docs, "rechercher_documents", texte="compromis", type="pdf,docx")       # le compromis est un .txt
+    assert r["trouve"] and r["resultats"][0]["chemin"] == "Oliviers/juridique/compromis-vente-A05.txt"
+    assert r["resultats"][0]["type"] == "txt"
+    assert "type" in r["message"].lower() and "pdf,docx" in r["message"]
+
+
+def test_type_qui_correspond_n_est_pas_modifie(docs):
+    r = appel(docs, "rechercher_documents", texte="compromis", type="txt")
+    assert r["trouve"] and "message" not in r
+    pdf = appel(docs, "rechercher_documents", texte="achèvement", type="pdf")
+    assert pdf["trouve"] and {x["type"] for x in pdf["resultats"]} == {"pdf"} and "message" not in pdf
+
+
+@pytest.mark.parametrize("type_", ["word", "Word", "excel", "tableur", "texte", ".PDF", "pdf, docx", "contrat", "n'importe quoi", "???"])
+def test_types_en_langage_courant_ou_inconnus_ne_cassent_rien(docs, type_):
+    r = appel(docs, "rechercher_documents", texte="compromis", type=type_)
+    assert r["trouve"] and r["resultats"][0]["chemin"].endswith("compromis-vente-A05.txt")
+
+
+def test_synonymes_de_type_reconnus(docs):
+    assert {x["type"] for x in appel(docs, "rechercher_documents", dossier="chantier", type="excel")["resultats"]} == {"xlsx"}
+    assert {x["type"] for x in appel(docs, "rechercher_documents", dossier="chantier", type="word")["resultats"]} == {"docx"}
+
+
+def test_rien_trouve_meme_sans_filtre_reste_un_vrai_introuvable(docs):
+    r = appel(docs, "rechercher_documents", texte="licorne-introuvable-xyz", type="pdf")
+    assert r["trouve"] is False and r["resultats"] == [] and "Aucun document" in r["message"]
+
+
+def test_le_type_ignore_n_ouvre_pas_les_dossiers_exclus(docs):
+    r = appel(docs, "rechercher_documents", texte="bulletin paie " + fab.SECRET_PAIE, type="pdf")
+    assert fab.SECRET_PAIE not in json.dumps(r) and not any("paie" in x["chemin"].lower() for x in r.get("resultats", []))
+
+
+def test_dates_et_type_ensemble(docs):
+    aujourdhui = datetime.now(ZoneInfo("Europe/Paris")).strftime("%Y-%m-%d")
+    assert appel(docs, "rechercher_documents", texte="compromis", type="pdf", apres=aujourdhui)["trouve"]
+    assert appel(docs, "rechercher_documents", texte="compromis", type="pdf", avant="2001-01-01")["trouve"] is False   # une date fausse reste un filtre
