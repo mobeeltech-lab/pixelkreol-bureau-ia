@@ -44,7 +44,7 @@ CAS = [
     ("Rédige le post LinkedIn pour annoncer notre nouveau site", "community-manager"),
     ("Écris la légende d'une photo Facebook pour un salon de beauté", "community-manager"),
     # --- gestion -------------------------------------------------------------
-    ("Rédige une relance pour la facture 2026-014 impayée depuis 45 jours", "comptable"),
+    ("Rédige une relance pour la facture 2026-014 impayée depuis 45 jours", "relances"),
     ("Où en est la trésorerie ce mois-ci ?", "comptable"),
     ("Calcule la TVA à reverser pour le trimestre", "comptable"),
     ("Je dois déclarer mes charges à l'URSSAF ce mois-ci", "comptable"),
