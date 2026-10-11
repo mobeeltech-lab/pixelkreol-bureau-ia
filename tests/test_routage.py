@@ -179,3 +179,55 @@ def test_jeu_de_controle_pas_de_regression(appli, ia_en_panne):
 def test_phrases_mixtes_ne_plantent_pas(appli, ia_en_panne, garde):
     agent, _ = router(appli, ia_en_panne, garde)
     assert agent["id"] in appli.REGISTRE.agents
+
+
+# ---------------------------------------------------------------- règles de routage prioritaires (champ facultatif)
+def test_registre_pixelkreol_n_a_aucune_regle_prioritaire_donc_rien_ne_change(appli, ia_en_panne):
+    from cas_routage import CAS_CONTROLE
+    assert all(not a["_regles"] for a in appli.REGISTRE.agents.values())
+    for texte, _ in CAS + CAS_CONTROLE:
+        assert router(appli, ia_en_panne, texte)[1] != "règle"
+
+
+REGLE = {"id": "relecteur", "num": 140, "nom": "Relecteur", "cerveau": "pk-rapide", "description": "d", "consignes": "c",
+         "mots_cles": ["relecture"], "routage_prioritaire": [[["bail", "baux"], ["relis", "relire", "relecture"]]]}
+
+
+@pytest.fixture
+def appli_regle(monkeypatch, agents_dir):
+    import yaml
+    (agents_dir / "perso.yaml").write_text(yaml.safe_dump({"agents": [REGLE]}), encoding="utf-8")
+    return __import__("conftest").charger_app(monkeypatch, agents_dir)
+
+
+@pytest.mark.parametrize("texte,attendu", [
+    ("Relis le bail", "relecteur"), ("RELIS LE BAIL", "relecteur"), ("relecture des baux", "relecteur"),
+    ("Peux-tu relire ce bail avec le loyer, la quittance et le locataire ?", "relecteur"),
+    ("Le bail est signé", "!relecteur"), ("Relis ce courrier", "!relecteur"),            # il faut les DEUX groupes
+])
+def test_regle_prioritaire_exige_tous_les_groupes(appli_regle, ia_en_panne, texte, attendu):
+    agent, methode = router(appli_regle, ia_en_panne, texte)
+    if attendu.startswith("!"):
+        assert agent["id"] != attendu[1:] and methode != "règle"
+    else:
+        assert (agent["id"], methode) == (attendu, "règle")
+
+
+def test_regle_prioritaire_visible_dans_route(monkeypatch, agents_dir, h_api, faux):
+    import httpx
+    import yaml
+    from fastapi.testclient import TestClient
+    (agents_dir / "perso.yaml").write_text(yaml.safe_dump({"agents": [REGLE]}), encoding="utf-8")
+    app = __import__("conftest").charger_app(monkeypatch, agents_dir)
+    with TestClient(app.app) as tc:
+        tc.app.state.client = httpx.AsyncClient(transport=httpx.MockTransport(faux))
+        r = tc.post("/route", headers=h_api, json={"texte": "relis le bail"}).json()
+    assert r["agent"] == "relecteur" and r["methode"] == "règle" and not faux.appels
+
+
+@pytest.mark.parametrize("regles", ["bail", [["bail"]], [[[]]], [[["bail", ""]]], [[[1]]], [[]], {"a": 1}])
+def test_regle_prioritaire_mal_formee_est_refusee_sans_toucher_aux_agents(client, h_admin, h_api, regles):
+    import yaml
+    r = client.post("/admin/agents", headers=h_admin, content=yaml.safe_dump(dict(REGLE, routage_prioritaire=regles)))
+    assert r.status_code == 422 and "routage_prioritaire" in r.json()["error"]["message"]
+    assert len(client.get("/v1/models", headers=h_api).json()["data"]) == 27

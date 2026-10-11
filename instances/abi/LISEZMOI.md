@@ -156,6 +156,11 @@ cd /opt && rm -rf pk-abi
 ```
 Il reste ensuite à supprimer l'enregistrement DNS `abi`.
 
+## Règle de routage particulière
+- **Bail + relecture → Juriste.** Dès qu'une demande contient « bail » (ou « baux ») ET un verbe de relecture (relis, relire, relecture,
+  « vérifie les clauses »…), `pk-auto` choisit le Juriste, même si la demande parle aussi de loyer, de locataire ou d'IRL
+  (règle `routage_prioritaire` du Juriste dans `agents/registre.yaml`). Sans verbe de relecture, un bail reste au Gestionnaire locatif.
+
 ## Limites connues
 - **Clé LiteLLM dédiée** : impossible tant que le LiteLLM n'a pas de base de données (voir étape 5).
 - **Agents en lecture seule** : le dossier `agents/` est monté en lecture seule ; l'ajout d'un agent par l'API

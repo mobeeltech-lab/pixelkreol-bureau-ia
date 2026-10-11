@@ -230,7 +230,19 @@ class Registre:
         mots = a.get("mots_cles")
         if mots is not None and (not isinstance(mots, list) or not all(isinstance(m, str) for m in mots)):
             return "mots_cles doit être une liste de textes"
+        regles = a.get("routage_prioritaire")
+        if regles is not None and not Registre.regles_valides(regles):
+            return ("routage_prioritaire doit être une liste de règles ; chaque règle est une liste de groupes ; "
+                    "chaque groupe est une liste de textes non vides")
         return None
+
+    @staticmethod
+    def regles_valides(regles: Any) -> bool:
+        return (isinstance(regles, list) and all(
+            isinstance(regle, list) and regle and all(
+                isinstance(groupe, list) and groupe and all(isinstance(m, str) and m.strip() for m in groupe)
+                for groupe in regle)
+            for regle in regles))
 
     # ------------------------------------------------------------------
     def _lire_agents(self, nom: str, avert: list[str]) -> list | None:
@@ -296,6 +308,8 @@ class Registre:
                 a["source"] = nom
                 a["modele"] = f"pk-{a['num']:02d}-{a['id']}"
                 a["_mots"] = [normaliser(m).strip() for m in a["mots_cles"] if m.strip()]
+                a["_regles"] = [[[normaliser(m).strip() for m in groupe] for groupe in regle]
+                                for regle in a.get("routage_prioritaire") or []]
                 agents[a["id"]] = a
                 ids.add(a["id"])
                 nums.add(a["num"])
@@ -382,6 +396,29 @@ def score_agent(a: dict, texte_norm: str) -> float:
     return score
 
 
+def phrase_presente(mot: str, texte_norm: str) -> bool:
+    """Même logique de reconnaissance que les mots-clés : expression = sous-chaîne, mot seul = mot entier (pluriel toléré)."""
+    if not mot:
+        return False
+    if " " in mot or "'" in mot:
+        return mot in texte_norm
+    return bool(re.search(rf"(?<![a-z0-9]){re.escape(mot)}s?(?![a-z0-9])", f" {texte_norm} "))
+
+
+def regle_prioritaire(texte: str) -> dict | None:
+    """Agent dont une règle de routage prioritaire s'applique (champ facultatif `routage_prioritaire` du registre).
+
+    Une règle = liste de groupes ; elle s'applique quand CHAQUE groupe contient au moins une de ses expressions
+    dans le message (ex. un mot de « bail » ET un verbe de relecture). Elle l'emporte sur le score des mots-clés.
+    Si plusieurs agents ont une règle qui s'applique, le premier (numéro le plus bas) est choisi."""
+    tn = POLITESSES.sub(" ", normaliser(texte))
+    for a in REGISTRE.agents.values():
+        for regle in a.get("_regles") or []:
+            if all(any(phrase_presente(m, tn) for m in groupe) for groupe in regle):
+                return a
+    return None
+
+
 def classement_mots_cles(texte: str) -> list[tuple[float, dict]]:
     tn = POLITESSES.sub(" ", normaliser(texte))
     notes = [(score_agent(a, tn), a) for a in REGISTRE.agents.values()]
@@ -436,6 +473,9 @@ async def routage_ia(client: httpx.AsyncClient, texte: str) -> dict | None:
 async def choisir_agent(client: httpx.AsyncClient, messages: list[dict]) -> tuple[dict, str]:
     messages = [m for m in messages if isinstance(m, dict)]
     texte = dernier_message_utilisateur(messages)
+    prioritaire = regle_prioritaire(texte)
+    if prioritaire:
+        return prioritaire, "règle"
     notes = classement_mots_cles(texte)
     meilleur, a1 = notes[0] if notes else (0.0, None)
     second = notes[1][0] if len(notes) > 1 else 0.0

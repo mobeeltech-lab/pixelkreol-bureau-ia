@@ -93,7 +93,7 @@ def test_le_registre_abi_suit_le_meme_format_que_pixelkreol():
     ref = yaml.safe_load((RACINE / "agents" / "registre.yaml").read_text(encoding="utf-8"))["agents"]
     cles_ref = set(ref[0])
     for a in charge("registre.yaml")["agents"]:
-        assert set(a) == cles_ref, f"{a['id']} : champs différents du registre PixelKréol"
+        assert set(a) - {"routage_prioritaire"} == cles_ref, f"{a['id']} : champs différents du registre PixelKréol"
 
 
 def test_perso_abi_vide_et_valide():
@@ -499,3 +499,38 @@ def test_donnees_fictives_ne_citent_pas_pixelkreol_ni_de_vraies_coordonnees():
         assert "pixelkreol" not in t and "mebeeltech" not in t, f.name
         assert not re.search(r"\b(?:0|\+33)\s?[1-9](?:[\s.]?\d{2}){4}\b", t), f"numéro de téléphone dans {f.name}"
         assert not re.search(r"\bFR\d{2}[ ]?\d{4}", t.upper()), f"IBAN dans {f.name}"
+
+
+# =============================================================== bail + relecture -> Juriste
+@pytest.mark.parametrize("texte", [
+    "relis le bail", "Relis le bail", "RELIS LE BAIL", "relire le bail", "relire un bail", "relire ce bail",
+    "relecture du bail", "relecture de bail", "relecture des baux", "relecture du bail de M. Fictif",
+    "vérifie les clauses du bail", "verifier les clauses du bail", "vérifie les clauses du contrat",
+    "vérifie les clauses de ce contrat de bail", "Relis le bail avant que le locataire signe",
+    "Relis le bail du locataire du lot B07 et dis-moi s'il y a un risque",
+    "Peux-tu relire le bail du locataire ?", "Relisez ce bail, le loyer et l'IRL sont-ils bien écrits ?",
+])
+def test_bail_et_relecture_vont_au_juriste(app_abi, ia_panne, texte):
+    agent, methode = router(app_abi, ia_panne, texte)
+    assert agent["id"] == "juriste", f"{texte} -> {agent['id']}"
+    assert methode in ("règle", "mots-clés") and not ia_panne.appels      # tranché sans dépendre de l'IA
+
+
+@pytest.mark.parametrize("texte", [t for t in [
+    "relis le bail", "relire un bail", "relecture du bail", "vérifie les clauses du bail", "Relisez ce bail, le loyer et l'IRL sont-ils bien écrits ?",
+    "Relis le bail du locataire du lot B07, vérifie le loyer, la quittance, les charges locatives et l'IRL",
+    "vérifie le bail", "contrôler les baux",
+]])
+def test_regle_prioritaire_bail_plus_relecture_l_emporte_sur_tous_les_mots_du_locatif(app_abi, ia_panne, texte):
+    agent, methode = router(app_abi, ia_panne, texte)
+    assert (agent["id"], methode) == ("juriste", "règle")
+    assert not ia_panne.appels
+
+
+@pytest.mark.parametrize("texte", [
+    "Prépare le renouvellement du bail du lot A03", "Quel est le loyer prévu au bail de Mme Test-Locataire ?",
+    "Le locataire du bail BAIL-B demande sa quittance", "Révise le loyer du bail BAIL-A selon l'IRL",
+    "Quelle est la date anniversaire du bail du lot CYP-B07 ?", "Prépare l'état des lieux de sortie du locataire",
+])
+def test_les_questions_de_gestion_du_bail_restent_au_gestionnaire_locatif(app_abi, ia_panne, texte):
+    assert router(app_abi, ia_panne, texte)[0]["id"] == "locatif"

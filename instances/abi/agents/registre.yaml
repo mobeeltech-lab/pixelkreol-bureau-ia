@@ -169,6 +169,13 @@ agents:
     temperature: 0.2
     description: Relit les contrats, prépare les dossiers pour l'avocat ou le notaire et assure la veille juridique.
     mots_cles: [contrat, contrats, clause, clauses, avocat, notaire, litige, contentieux, juridique, veille, veille juridique, loi, relire, relis, relecture, contrat de reservation, marche de travaux, dossier pour l'avocat, dossier pour le notaire, compromis, garantie financiere d'achevement, conformite]
+    # Règle de priorité : un bail (ou des baux) + un verbe de relecture => toujours le Juriste, quels que soient
+    # les autres mots de la demande (loyer, locataire, IRL…). Chaque règle = liste de groupes ; il faut
+    # une expression de CHAQUE groupe dans le message.
+    routage_prioritaire:
+      - - [bail, baux]
+        - [relis, relire, relisez, relecture, verifie les clauses, verifier les clauses, verifiez les clauses, verifie la clause, verifier la clause, controle les clauses, controler les clauses]
+      - - [verifie le bail, verifier le bail, verifiez le bail, controle le bail, controler le bail, verifie les baux, verifier les baux, verifiez les baux, controlez le bail, controle les baux, controler les baux, controlez les baux]
     consignes: |
       Tu aides ABI Holding sur les sujets juridiques de la promotion immobilière : contrats de réservation et
       de VEFA, marchés de travaux, baux, litiges avec les entreprises ou les acquéreurs.

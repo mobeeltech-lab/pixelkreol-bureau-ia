@@ -49,6 +49,16 @@ CAS = [
     ("Prépare le dossier pour l'avocat sur le litige avec l'entreprise de gros œuvre", "juriste"),
     ("Fais une veille sur les nouveautés de la loi sur la VEFA", "juriste"),
     ("Quelles clauses faut-il vérifier dans ce marché de travaux ?", "juriste"),
+    # bail + relecture : le Juriste l'emporte sur le Gestionnaire locatif
+    ("Relis le bail du lot CYP-A03", "juriste"),
+    ("Peux-tu relire ce bail avant que je le fasse signer ?", "juriste"),
+    ("Relecture du bail de Mme Test-Locataire", "juriste"),
+    ("Fais la relecture du bail commercial", "juriste"),
+    ("Vérifie les clauses du bail", "juriste"),
+    ("Vérifie les clauses du contrat de VEFA", "juriste"),
+    ("Relis le contrat de bail avant signature", "juriste"),
+    ("Relisez les baux des trois logements loués", "juriste"),
+    ("Relis le bail et dis-moi si la clause de révision est correcte", "juriste"),
     # --- suivi de programme ----------------------------------------------------
     ("Mets à jour le planning du chantier", "suivi-programme"),
     ("Prépare le tableau de bord hebdomadaire du programme", "suivi-programme"),
