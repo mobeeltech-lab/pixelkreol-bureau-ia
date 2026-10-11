@@ -10,7 +10,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from conftest import FauxLiteLLM, charger_app
+from conftest import NB_AGENTS, FauxLiteLLM, charger_app
 
 OK = FauxLiteLLM.ok
 VARIABLES = ("PK_MARQUE", "PK_LIEU", "PK_FUSEAU", "PK_PATRON", "PK_VITRINE_PIED", "PK_PROPRIETAIRE")
@@ -44,7 +44,7 @@ def test_valeurs_par_defaut_identiques_a_avant(appli):
 def test_pixelkreol_pages_et_textes_inchanges(client, h_api, faux):
     page = client.get("/").text
     assert "<title>Bureau IA PixelKréol</title>" in page
-    assert "<header><h1>Bureau IA PixelKréol</h1>29 agents · LLM gratuits · La Réunion</header>" in page
+    assert f"<header><h1>Bureau IA PixelKréol</h1>{NB_AGENTS} agents · LLM gratuits · La Réunion</header>" in page
     assert client.app.title == "Bureau IA PixelKréol — Orchestrateur"
     modeles = client.get("/v1/models", headers=h_api).json()["data"]
     assert {m["owned_by"] for m in modeles} == {"pixelkreol"}

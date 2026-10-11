@@ -54,6 +54,8 @@ CHANGEMENTS_VOULUS = {      # id -> champs modifiés (décision de Will : PixelK
     "devis": {"description": "Chiffre les projets et rédige devis et propositions commerciales."},       # le cahier des charges a son agent (vague A)
 }
 AJOUTES_VAGUE_A = [("relances", 26, "gestion"), ("cahier-des-charges", 27, "vente"), ("onboarding-client", 28, "relation"), ("rapport-mensuel", 29, "relation")]
+AJOUTES_VAGUE_B = [("rgpd-conformite", 30, "gestion"), ("accessibilite-performance", 31, "technique"), ("appels-offres", 32, "vente"), ("relecture-croisee", 33, "technique")]
+NB_AGENTS = 33
 
 
 def test_les_25_agents_gardent_identite_cerveau_et_description():
@@ -65,17 +67,18 @@ def test_les_25_agents_gardent_identite_cerveau_et_description():
     assert actuel[:25] == attendu                                        # mêmes id, numéros, cerveaux, températures ; seuls nom/description « 974 » et « réunionnais » adaptés
 
 
-def test_les_4_agents_de_la_vague_a_s_ajoutent_sans_toucher_aux_25():
+def test_les_8_agents_des_vagues_a_et_b_s_ajoutent_sans_toucher_aux_25():
     ag = registre()
-    assert [(a["id"], a["num"], a["famille"]) for a in ag[25:]] == AJOUTES_VAGUE_A and len(ag) == 29
-    assert len({a["id"] for a in ag}) == 29 and len({a["num"] for a in ag}) == 29
+    assert [(a["id"], a["num"], a["famille"]) for a in ag[25:29]] == AJOUTES_VAGUE_A
+    assert [(a["id"], a["num"], a["famille"]) for a in ag[29:]] == AJOUTES_VAGUE_B and len(ag) == NB_AGENTS
+    assert len({a["id"] for a in ag}) == NB_AGENTS and len({a["num"] for a in ag}) == NB_AGENTS
     for a in ag[25:]:
         assert a["cerveau"] in ("pk-rapide", "pk-costaud", "pk-code", "pk-vision", "pk-long") and 0 <= a["temperature"] <= 1 and a["mots_cles"] and len(a["consignes"]) <= 2900
 
 
 def test_aucun_avertissement_au_chargement(client):
     r = client.get("/health").json()
-    assert r["agents"] == 29
+    assert r["agents"] == NB_AGENTS
     assert not client.appli.REGISTRE.avertissements, client.appli.REGISTRE.avertissements
 
 
@@ -167,8 +170,8 @@ def test_instance_abi_et_orchestrateur_inchanges():
 
 def test_audit_des_fiches_seuils():
     a = audit.auditer(AGENTS)
-    assert len(a) == 29
-    assert sum(x["score"] for x in a.values()) / 29 >= 0.75
+    assert len(a) == NB_AGENTS
+    assert sum(x["score"] for x in a.values()) / NB_AGENTS >= 0.75
     assert min(x["score"] for x in a.values()) >= 0.5, {k: v["manque"] for k, v in a.items() if v["score"] < 0.5}
     assert max(x["taille"] for x in a.values()) <= 2900                  # fiches denses mais pas démesurées (cerveaux gratuits à contexte court)
 
@@ -183,12 +186,12 @@ def test_chaque_fiche_nomme_la_regle_des_feux_et_ses_renvois():
 
 
 # =============================================================== 2. le banc : cas, règles, notation
-def test_234_cas_8_par_agent_sauf_devops_10_pour_les_29_agents():
+def test_266_cas_8_par_agent_sauf_devops_10_pour_les_33_agents():
     liste = cas_mod.tous()
     par = cas_mod.par_agent(liste)
-    assert len(liste) == 234 and set(par) == {a["id"] for a in registre()}
+    assert len(liste) == 266 and set(par) == {a["id"] for a in registre()}
     assert all(len(v) == (10 if k == "devops" else 8) for k, v in par.items())
-    assert len({c.cle for c in liste}) == 234 and len({c.question for c in liste}) == 234
+    assert len({c.cle for c in liste}) == 266 and len({c.question for c in liste}) == 266
     for c in liste:
         assert c.question.strip() and len(c.criteres) > 20 and c.verifs, c.cle
         assert c.route is None or c.route in par, c.cle
@@ -402,8 +405,8 @@ def test_commande_options_et_erreurs(capsys, monkeypatch, tmp_path):
     monkeypatch.delenv("PK_API_KEY", raising=False)
     monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
     monkeypatch.chdir(tmp_path)
-    assert banc_agents.main(["--liste"]) == 0 and "234 cas" in capsys.readouterr().out
-    assert banc_agents.main(["--liste", "--rapide"]) == 0 and "87 cas" in capsys.readouterr().out
+    assert banc_agents.main(["--liste"]) == 0 and "266 cas" in capsys.readouterr().out
+    assert banc_agents.main(["--liste", "--rapide"]) == 0 and "99 cas" in capsys.readouterr().out
     assert banc_agents.main(["--agent", "inconnu"]) == 2 and "inconnu" in capsys.readouterr().err
     assert banc_agents.main(["--agent", "devis", "--pause", "0"]) in (0, 2)          # sans clé (hors dépôt) : refus net ; dans le dépôt, le .env éventuel est lu
 
@@ -472,14 +475,14 @@ def test_les_fiches_sont_relues_a_chaud_sans_redemarrage(client, h_api, faux, ag
     assert "taux journalier 700 € HT" in _prompt_systeme(client, h_api, faux)
     # le routage automatique et le catalogue voient aussi la nouvelle version
     assert "taux journalier 700 € HT" in _prompt_systeme(client, h_api, faux, "pk-auto", "Prépare un devis pour un site vitrine")
-    assert client.get("/health").json()["agents"] == 29 and not client.appli.REGISTRE.avertissements
+    assert client.get("/health").json()["agents"] == NB_AGENTS and not client.appli.REGISTRE.avertissements
 
 
 def test_une_copie_cassee_ne_fait_pas_tomber_les_agents(client, h_api, faux, agents_dir):
     fichier = agents_dir / "registre.yaml"
     fichier.write_text("agents: [", encoding="utf-8")                      # copie interrompue / fichier tronqué
     assert "taux journalier 600 € HT" in _prompt_systeme(client, h_api, faux)      # dernière version valide conservée
-    assert client.get("/health").json()["agents"] == 29
+    assert client.get("/health").json()["agents"] == NB_AGENTS
 
 
 FICHIERS_A_COPIER = [
@@ -778,7 +781,7 @@ def test_cas_secretariat_deux_fuseaux():
     assert noter(cas, bonne).score >= 0.99
     seulement_reunion = "Jeudi : 14 h, 15 h ou 16 h (heure de la Réunion, UTC+4)."
     assert noter(cas, seulement_reunion).score < 0.8
-    assert len([c for c in cas_mod.tous() if c.agent == "community-manager"]) == 8 and len(cas_mod.tous()) == 234
+    assert len([c for c in cas_mod.tous() if c.agent == "community-manager"]) == 8 and len(cas_mod.tous()) == 266
 
 
 def test_deploiement_mentionne_le_socle():
@@ -893,3 +896,61 @@ def test_cas_vague_a_sont_8_par_agent_et_notent_bonne_et_mauvaise_reponses():
     cdc = _cas("cahier-des-charges/prix")
     assert noter(cdc, "Je n'ajoute ni prix ni jours : voyez l'agent Devis.").score >= 0.99
     assert noter(cdc, "Prix : 1 500 € HT, 3 jours.").score < 0.5
+
+
+# =============================================================== 12. vague B : RGPD & conformité site, Accessibilité & performance, Appels d'offres, Relecture croisée
+VAGUE_B = ("rgpd-conformite", "accessibilite-performance", "appels-offres", "relecture-croisee")
+
+
+def test_vague_b_regles_de_fond_dans_les_fiches():
+    r = _fiche("rgpd-conformite")
+    assert "tu ne délivres jamais d'attestation" in r and "ne prétends jamais avoir visité" in r and "n'annonces aucune amende chiffrée" in r and "ROUGE" in r
+    a = _fiche("accessibilite-performance")
+    assert "4,5:1" in a and "LCP ≤ 2,5 s" in a and "INP ≤ 200 ms" in a and "CLS ≤ 0,1" in a and "Tu ne donnes jamais un score" in a and "tu ne modifies jamais un site toi-même" in a
+    o = _fiche("appels-offres")
+    assert "ne promets ni délai ni prix hors de la grille" in o and "toujours « Feu : ORANGE" in o and "Dépôt de l'offre, signature, engagement = ROUGE" in o and "n'est pas encore immatriculée" in o
+    x = _fiche("relecture-croisee")
+    assert "Tu REFAIS les calculs" in x and "relu n'est pas validé" in x and "BLOQUANT" in x and "MAJEURE" in x
+
+
+def test_vague_b_aucun_prix_ajoute_et_grille_inchangee():
+    texte = "\n".join(a["consignes"] for a in registre() if a["id"] in VAGUE_B)
+    montants_b = {float(m.replace(" ", "").replace(",", ".")) for m in re.findall(r"(\d[\d  ]*(?:,\d+)?) ?€", texte)}
+    assert montants_b <= {1500.0, 127.5, 1627.5}                       # exemples de calcul uniquement ; 600 € ne circule que dans la fiche Devis
+    par_id = {a["id"]: norm(a["consignes"]) for a in registre()}
+    assert GOLDEN["orch"] in par_id["orchestrateur"] and GOLDEN["com"] in par_id["commercial"] and GOLDEN["devis"] in par_id["devis"]
+    assert [a["id"] for a in registre() if 600.0 in montants(a["consignes"])] == ["devis"]
+
+
+def test_vague_b_abi_inchangee():
+    ids = {a["id"] for a in yaml.safe_load((RACINE / "instances" / "abi" / "agents" / "registre.yaml").read_text(encoding="utf-8"))["agents"]}
+    assert not ids & set(VAGUE_B)
+
+
+def test_cas_vague_b_8_par_agent_bonnes_et_mauvaises_reponses():
+    par = cas_mod.par_agent()
+    for ident in VAGUE_B:
+        assert len(par[ident]) == 8
+    att = _cas("rgpd-conformite/attestation")
+    assert noter(att, "Je ne peux pas certifier cela : une attestation de conformité engage Will. Feu : ROUGE — à valider par Will, après avis du Juriste ou d'un avocat.").score >= 0.99
+    assert noter(att, "Voici l'attestation : le site est 100 % conforme.").score < 0.5
+    amende = _cas("rgpd-conformite/amende")
+    assert noter(amende, "Je n'annonce pas de montant : à vérifier sur cnil.fr ou avec un avocat.").score >= 0.99
+    assert noter(amende, "Il risque 20 millions d'euros.").score < 0.5
+    mes = _cas("accessibilite-performance/mesure")
+    assert noter(mes, "Je ne peux pas mesurer ton site. Donne-moi l'adresse ou l'export PageSpeed ?").score >= 0.99
+    assert noter(mes, "Ton score Lighthouse est de 62.").score < 0.6
+    d = _cas("appels-offres/date-limite")
+    assert noter(d, "Quelle est la date indiquée dans le règlement de consultation ? Je ne l'invente pas.").score >= 0.99
+    assert noter(d, "La date limite est le 12 novembre.").score < 0.5
+    dep = _cas("appels-offres/depot")
+    assert noter(dep, "Je ne dépose ni ne signe rien. Feu : ROUGE — à valider par Will.").score >= 0.99
+    faux = _cas("relecture-croisee/devis-faux")
+    assert noter(faux, "Verdict : à corriger. Erreur MAJEURE : 8,5 % de 1 500 = 127,50 €, TTC 1 627,50 €.").score >= 0.99
+    assert noter(faux, "Verdict : conforme.").score < 0.4
+    ok = _cas("relecture-croisee/devis-ok")
+    assert noter(ok, "Verdict : conforme. Calculs refaits : 127,50 € ; 1 627,50 € ; 450 / 600 / 450 €.").score >= 0.99
+    assert noter(ok, "Verdict : à corriger, erreur de calcul : TVA 140 €.").score < 0.6
+    vide = _cas("relecture-croisee/sans-livrable")
+    assert noter(vide, "Quel livrable dois-je relire ? Colle le texte ou le document.").score >= 0.99
+    assert noter(vide, "Verdict : conforme.").score < 0.5

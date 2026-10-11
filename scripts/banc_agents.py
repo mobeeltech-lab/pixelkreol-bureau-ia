@@ -3,7 +3,7 @@
 
     cd /opt/pixelkreol-bureau-ia && python3 scripts/banc_agents.py
 
-Il pose ~234 questions fictives aux 29 agents (modèle = id de l'agent) via l'orchestrateur local (127.0.0.1:4001), note chaque réponse par
+Il pose ~266 questions fictives aux 33 agents (modèle = id de l'agent) via l'orchestrateur local (127.0.0.1:4001), note chaque réponse par
 des règles automatiques (prix exacts, feux, renvois, refus, format…) et affiche le score par agent. Bibliothèque standard seulement.
 Voir scripts/banc/LISEZMOI.md pour les options (--rapide, --agent, --sauver, --comparer, --juge, --routage, --detail).
 """
@@ -38,7 +38,7 @@ def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--url", default=os.environ.get("PK_ORCH_URL", "http://127.0.0.1:4001"), help="adresse de l'orchestrateur")
     p.add_argument("--agent", help="un ou plusieurs ids d'agents, séparés par des virgules (ex. devis,commercial)")
-    p.add_argument("--rapide", action="store_true", help="3 questions par agent (≈ 87 appels)")
+    p.add_argument("--rapide", action="store_true", help="3 questions par agent (≈ 99 appels)")
     p.add_argument("--pause", type=float, default=1.0, help="secondes entre deux questions (fournisseurs gratuits : ne pas descendre sous 1)")
     p.add_argument("--delai", type=float, default=180.0, help="délai maximal d'une réponse, en secondes")
     p.add_argument("--sauver", metavar="FICHIER", help="enregistre réponses et notes (JSON) pour les comparer plus tard")
