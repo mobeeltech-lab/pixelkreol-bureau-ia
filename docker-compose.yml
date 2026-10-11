@@ -160,8 +160,8 @@ services:
       N8N_EDITOR_BASE_URL: https://${PK_DOMAINE_N8N:-agents-n8n.mebeeltech.online}/
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?N8N_ENCRYPTION_KEY manquant dans .env}
       N8N_PROXY_HOPS: 1
-      GENERIC_TIMEZONE: Indian/Reunion
-      TZ: Indian/Reunion
+      GENERIC_TIMEZONE: ${PK_FUSEAU:-Europe/Paris}
+      TZ: ${PK_FUSEAU:-Europe/Paris}
       N8N_DEFAULT_LOCALE: fr
       N8N_RUNNERS_ENABLED: "true"
       N8N_DIAGNOSTICS_ENABLED: "false"
