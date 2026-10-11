@@ -10,7 +10,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from cas_routage import CAS  # noqa: E402
-from conftest import FauxLiteLLM  # noqa: E402
+from conftest import NB_AGENTS, FauxLiteLLM  # noqa: E402
 
 
 def router(appli, faux, texte, messages=None):
@@ -230,4 +230,4 @@ def test_regle_prioritaire_mal_formee_est_refusee_sans_toucher_aux_agents(client
     import yaml
     r = client.post("/admin/agents", headers=h_admin, content=yaml.safe_dump(dict(REGLE, routage_prioritaire=regles)))
     assert r.status_code == 422 and "routage_prioritaire" in r.json()["error"]["message"]
-    assert len(client.get("/v1/models", headers=h_api).json()["data"]) == 31
+    assert len(client.get("/v1/models", headers=h_api).json()["data"]) == NB_AGENTS + 2

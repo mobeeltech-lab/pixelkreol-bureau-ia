@@ -8,7 +8,7 @@ import pytest
 import yaml
 from fastapi.testclient import TestClient
 
-from conftest import charger_app
+from conftest import NB_AGENTS, charger_app
 
 NOUVEL = {"id": "garagiste", "nom": "Garagiste", "emoji": "🔧", "cerveau": "pk-rapide",
           "description": "Aide un garage automobile.", "consignes": "Tu aides un garage.",
@@ -25,7 +25,7 @@ def ecrire(agents_dir: Path, nom: str, contenu):
 
 # ---------------------------------------------------------------- lecture à chaud
 def test_29_agents_au_depart(client, h_api):
-    assert nb_agents(client, h_api) == 29
+    assert nb_agents(client, h_api) == NB_AGENTS
 
 
 @pytest.mark.parametrize("contenu", [
@@ -44,8 +44,8 @@ def test_perso_casse_ne_fait_jamais_tomber_les_29_agents(client, h_api, agents_d
     ecrire(agents_dir, "perso.yaml", contenu)
     os.utime(agents_dir / "perso.yaml", None)
     r = client.get("/v1/models", headers=h_api)
-    assert r.status_code == 200 and len(r.json()["data"]) - 2 == 29
-    assert client.get("/health").json()["agents"] == 29
+    assert r.status_code == 200 and len(r.json()["data"]) - 2 == NB_AGENTS
+    assert client.get("/health").json()["agents"] == NB_AGENTS
     assert client.get("/health").json()["avertissements"]      # le problème est signalé
     # le routage et la conversation fonctionnent encore
     assert client.post("/route", headers=h_api, json={"texte": "fais un devis"}).status_code == 200
@@ -55,32 +55,32 @@ def test_perso_casse_ne_fait_jamais_tomber_les_29_agents(client, h_api, agents_d
 
 def test_perso_corrige_apres_erreur_redevient_lisible(client, h_api, agents_dir):
     ecrire(agents_dir, "perso.yaml", "agents: [cassé : :")
-    assert nb_agents(client, h_api) == 29
+    assert nb_agents(client, h_api) == NB_AGENTS
     ecrire(agents_dir, "perso.yaml", yaml.safe_dump({"agents": [dict(NOUVEL, num=130)]}))
     os.utime(agents_dir / "perso.yaml", ns=(1, 2_000_000_000_000_000_000))
-    assert nb_agents(client, h_api) == 30
+    assert nb_agents(client, h_api) == NB_AGENTS + 1
 
 
 def test_perso_valide_puis_casse_garde_les_agents_clients_deja_charges(client, h_api, agents_dir):
     ecrire(agents_dir, "perso.yaml", yaml.safe_dump({"agents": [dict(NOUVEL, num=130)]}))
     os.utime(agents_dir / "perso.yaml", ns=(1, 2_000_000_000_000_000_000))
-    assert nb_agents(client, h_api) == 30
+    assert nb_agents(client, h_api) == NB_AGENTS + 1
     ecrire(agents_dir, "perso.yaml", "agents: [une faute de frappe : :")
     os.utime(agents_dir / "perso.yaml", ns=(1, 3_000_000_000_000_000_000))
-    assert nb_agents(client, h_api) == 30                      # l'agent du client n'a pas disparu
+    assert nb_agents(client, h_api) == NB_AGENTS + 1                      # l'agent du client n'a pas disparu
     assert any("dernière version valide" in w for w in client.get("/health").json()["avertissements"])
 
 
 def test_registre_vide_par_erreur_ne_vide_pas_les_agents(client, h_api, agents_dir):
     ecrire(agents_dir, "registre.yaml", "agents: []\n")
     os.utime(agents_dir / "registre.yaml", ns=(1, 2_000_000_000_000_000_000))
-    assert nb_agents(client, h_api) == 29
+    assert nb_agents(client, h_api) == NB_AGENTS
 
 
 def test_registre_casse_en_service_garde_la_version_precedente(client, h_api, agents_dir):
     ecrire(agents_dir, "registre.yaml", "agents: [cassé")
     os.utime(agents_dir / "registre.yaml", ns=(1, 2_000_000_000_000_000_000))
-    assert nb_agents(client, h_api) == 29
+    assert nb_agents(client, h_api) == NB_AGENTS
 
 
 @pytest.mark.parametrize("contenu", ["- id: a\n", "texte", b"\xff\xfe\x81", "agents: [cassé"])
@@ -109,7 +109,7 @@ def test_doublons_id_et_numero_dans_perso_sont_ignores_sans_toucher_aux_29(clien
     ]}))
     os.utime(agents_dir / "perso.yaml", ns=(1, 2_000_000_000_000_000_000))
     ids = [m["id"] for m in client.get("/v1/models", headers=h_api).json()["data"]]
-    assert "pk-02-commercial" in ids and "pk-142-ok-one" in ids and len(ids) == 2 + 30
+    assert "pk-02-commercial" in ids and "pk-142-ok-one" in ids and len(ids) == 2 + NB_AGENTS + 1
     assert len(client.get("/health").json()["avertissements"]) == 3
 
 
@@ -122,7 +122,7 @@ def test_ajout_valide(client, h_api, h_admin, agents_dir):
     r = poster(client, h_admin, NOUVEL)
     assert r.status_code == 201, r.text
     assert r.json()["modele"] == "pk-101-garagiste"
-    assert nb_agents(client, h_api) == 30
+    assert nb_agents(client, h_api) == NB_AGENTS + 1
     sauve = yaml.safe_load((agents_dir / "perso.yaml").read_text(encoding="utf-8"))
     assert [a["id"] for a in sauve["agents"]] == ["garagiste"]
     # le nouvel agent est atteignable par pk-auto et en direct
@@ -161,7 +161,7 @@ def test_ajout_refuse_proprement(client, h_api, h_admin, agents_dir, modif, mot)
     assert r.status_code == 422, r.text
     assert mot in r.json()["error"]["message"]
     assert (agents_dir / "perso.yaml").read_bytes() == avant      # rien n'a été écrit
-    assert nb_agents(client, h_api) == 29
+    assert nb_agents(client, h_api) == NB_AGENTS
     assert client.post("/route", headers=h_api, json={"texte": "devis"}).status_code == 200  # le routage tient
 
 
@@ -185,7 +185,7 @@ def test_ajout_corps_trop_gros_refuse(client, h_admin):
 def test_ajout_plusieurs_agents_a_la_fois_est_signale(client, h_admin, h_api):
     r = poster(client, h_admin, {"agents": [dict(NOUVEL, id="p1"), dict(NOUVEL, id="p2")]})
     assert r.status_code == 422 and "un seul" in r.json()["error"]["message"].lower()
-    assert nb_agents(client, h_api) == 29
+    assert nb_agents(client, h_api) == NB_AGENTS
 
 
 def test_ajout_quand_perso_est_illisible_refuse_sans_ecraser(client, h_admin, agents_dir):
@@ -218,9 +218,9 @@ def test_ecriture_garde_un_fichier_valide_apres_chaque_ajout(client, h_admin, ag
 def test_retrait_d_un_agent_perso_et_refus_pour_un_agent_du_registre(client, h_admin, h_api):
     poster(client, h_admin, NOUVEL)
     assert client.delete("/admin/agents/garagiste", headers=h_admin).status_code == 200
-    assert nb_agents(client, h_api) == 29
+    assert nb_agents(client, h_api) == NB_AGENTS
     r = client.delete("/admin/agents/commercial", headers=h_admin)
-    assert r.status_code == 404 and nb_agents(client, h_api) == 29
+    assert r.status_code == 404 and nb_agents(client, h_api) == NB_AGENTS
 
 
 def test_retrait_quand_perso_illisible_ne_plante_pas(client, h_admin, agents_dir):
@@ -234,7 +234,7 @@ def test_un_agent_perso_mal_forme_deja_present_ne_casse_pas_pk_auto(client, h_ap
     ecrire(agents_dir, "perso.yaml", yaml.safe_dump({"agents": [dict(NOUVEL, num=150, nom=["x"], consignes=12)]}))
     os.utime(agents_dir / "perso.yaml", ns=(1, 2_000_000_000_000_000_000))
     assert client.post("/route", headers=h_api, json={"texte": "un devis"}).status_code == 200
-    assert nb_agents(client, h_api) == 29
+    assert nb_agents(client, h_api) == NB_AGENTS
 
 
 # ---------------------------------------------------------------- aucun agent chargé

@@ -19,6 +19,14 @@ import pytest
 
 RACINE = Path(__file__).resolve().parent.parent
 APP_PY = RACINE / "orchestrateur" / "app.py"
+
+
+def _compter_agents() -> int:
+    import yaml
+    return len(yaml.safe_load((RACINE / "agents" / "registre.yaml").read_text(encoding="utf-8"))["agents"])
+
+
+NB_AGENTS = _compter_agents()          # nombre d'agents du registre du dépôt (les tests ne le figent plus en dur)
 CLE_API = "cle-api-de-test"
 CLE_ADMIN = "cle-admin-de-test"
 CLE_LITELLM = "cle-litellm-de-test"
