@@ -1,0 +1,191 @@
+MODÈLES DE DEMANDES — Bureau IA PixelKréol (15 modèles)
+====================================================================
+Chaque modèle donne : un titre, l'agent à choisir (nom EXACT du modèle dans Open WebUI) et un texte à copier.
+Remplacez ce qui est entre crochets [ ... ]. Rien n'est chiffré ici : les prix viennent toujours de l'agent Devis.
+Données d'exemple fictives. Pour une demande qui ne ressemble à aucun modèle, écrivez « améliore ma demande : … »
+au Spécialiste Prompt (pk-34-specialiste-prompt) : il choisit l'agent et réécrit la demande.
+
+Comment les enregistrer dans Open WebUI (à la main, ~1 minute par modèle) :
+  Espace de travail > Prompts > « + » > titre = le titre du modèle ; commande = un mot court précédé de « / » (par exemple /devis-vitrine) ;
+  contenu = le texte à copier. Ensuite, dans une conversation, tapez la commande pour insérer le texte.
+  Remarque : le format d'un fichier d'import n'a pas pu être vérifié pour la version 0.12.0 ; aucun fichier d'import n'est donc fourni.
+
+--------------------------------------------------------------------
+1. Devis d'un site vitrine
+Agent recommandé : pk-04-devis
+Texte à copier (remplacez ce qui est entre crochets) :
+```
+Contexte : je prépare un devis pour [nom du client], [activité], à [ville].
+Tâche : chiffrer un site vitrine de [nombre] pages avec la grille de PixelKréol et proposer l'échéancier.
+Ce que je te donne : le besoin du client : [pages et fonctions voulues], [délai souhaité]. Si une information manque, liste-la d'abord.
+Forme du résultat : devis poste par poste avec total HT, TVA à confirmer selon la région, acompte et échéancier.
+Limites : aucune remise, aucun prix hors grille ; Feu : ORANGE (je valide avant l'envoi au client).
+```
+
+--------------------------------------------------------------------
+2. Relance d'une facture impayée
+Agent recommandé : pk-26-relances
+Texte à copier (remplacez ce qui est entre crochets) :
+```
+Contexte : la facture [numéro] de [nom du client] est échue depuis [nombre] jours.
+Tâche : rédiger la relance courtoise n°[1, 2 ou 3].
+Ce que je te donne : le montant exact [montant HT], l'échéance d'origine [date], les relances déjà faites [liste].
+Forme du résultat : message vouvoyé avec objet, 8 lignes maximum, nouvelle date limite [date].
+Limites : aucune pénalité chiffrée, aucune menace ; une mise en demeure passe par le Juriste ; Feu : ORANGE.
+```
+
+--------------------------------------------------------------------
+3. Cahier des charges à partir de mes notes
+Agent recommandé : pk-27-cahier-des-charges
+Texte à copier (remplacez ce qui est entre crochets) :
+```
+Contexte : rendez-vous avec [nom du client], [activité], le [date].
+Tâche : rédiger le cahier des charges du projet à partir de mes notes.
+Ce que je te donne : mes notes brutes : [coller les notes]. Pose-moi d'abord tes questions si le besoin est flou.
+Forme du résultat : sections numérotées : contexte, périmètre, hors-périmètre, fonctions priorisées, livrables, critères d'acceptation, points ouverts.
+Limites : aucun prix, aucun nombre de jours ; ce qui est incertain est marqué « à confirmer ».
+```
+
+--------------------------------------------------------------------
+4. Relance commerciale après une proposition
+Agent recommandé : pk-02-commercial
+Texte à copier (remplacez ce qui est entre crochets) :
+```
+Contexte : j'ai envoyé la proposition [référence] à [nom du client] le [date], sans réponse.
+Tâche : écrire un message de relance qui relance la discussion sans brusquer.
+Ce que je te donne : l'historique : [ce qui a été dit], l'objection probable [objection].
+Forme du résultat : mail de 5 lignes, vouvoiement, une seule question, un rendez-vous proposé.
+Limites : aucune remise, aucun délai promis ; Feu : ORANGE (j'envoie moi-même).
+```
+
+--------------------------------------------------------------------
+5. Liste de prospects
+Agent recommandé : pk-03-prospecteur
+Texte à copier (remplacez ce qui est entre crochets) :
+```
+Contexte : je cherche de nouveaux clients pour [offre PixelKréol].
+Tâche : dresser une liste de [nombre] types d'entreprises à contacter dans [zone].
+Ce que je te donne : mon client idéal : [secteur, taille, besoin].
+Forme du résultat : tableau : entreprise ou type | commune | besoin probable | angle d'approche | source à vérifier.
+Limites : ne pas inventer de nom ni de coordonnées ; indiquer où chercher ; aucun envoi.
+```
+
+--------------------------------------------------------------------
+6. Planning d'un projet client
+Agent recommandé : pk-05-chef-de-projet
+Texte à copier (remplacez ce qui est entre crochets) :
+```
+Contexte : projet [nom du projet] pour [nom du client], démarrage le [date], livraison souhaitée le [date].
+Tâche : construire le planning par étapes avec les dépendances.
+Ce que je te donne : les étapes connues : [liste], ce que le client doit fournir : [liste].
+Forme du résultat : tableau : étape | responsable | durée indicative | dépendance | date.
+Limites : pas d'engagement de délai vis-à-vis du client sans validation ; Feu : ORANGE pour tout envoi.
+```
+
+--------------------------------------------------------------------
+7. Texte de page web optimisé
+Agent recommandé : pk-07-redacteur-seo
+Texte à copier (remplacez ce qui est entre crochets) :
+```
+Contexte : page [nom de la page] du site de [nom du client], activité [activité], zone [ville ou région].
+Tâche : rédiger le texte de la page et proposer le titre et la meta description.
+Ce que je te donne : les informations vraies sur l'entreprise : [liste]. Ce qui manque, demande-le-moi.
+Forme du résultat : texte structuré avec titres, titre de 60 caractères maximum, description de 155 maximum.
+Limites : aucune promesse de résultat, aucun fait inventé ; Feu : ORANGE avant publication.
+```
+
+--------------------------------------------------------------------
+8. Publication pour les réseaux sociaux
+Agent recommandé : pk-10-community-manager
+Texte à copier (remplacez ce qui est entre crochets) :
+```
+Contexte : compte [réseau] de [nom du client], ton [ton souhaité].
+Tâche : écrire [nombre] propositions de publication sur [sujet].
+Ce que je te donne : l'actualité à annoncer : [texte], les photos disponibles : [liste].
+Forme du résultat : texte court, hashtags, jour et heure conseillés.
+Limites : droit à l'image et RGPD respectés ; Feu : ORANGE avant publication.
+```
+
+--------------------------------------------------------------------
+9. Dossier pour une mise en demeure
+Agent recommandé : pk-13-juriste
+Texte à copier (remplacez ce qui est entre crochets) :
+```
+Contexte : le client [nom du client] n'a pas payé la facture [numéro] malgré [nombre] relances.
+Tâche : préparer le dossier (chronologie, pièces, montant) avant toute mise en demeure.
+Ce que je te donne : la liste des relances [dates], les pièces disponibles [liste], le montant dû [montant HT].
+Forme du résultat : chronologie en tableau puis liste des pièces à joindre et points à vérifier.
+Limites : tu ne rédiges pas la mise en demeure seul : Feu : ROUGE, je décide avec toi ; aucun article de loi inventé.
+```
+
+--------------------------------------------------------------------
+10. Dossier de subvention
+Agent recommandé : pk-14-subventions
+Texte à copier (remplacez ce qui est entre crochets) :
+```
+Contexte : projet [nom du projet] de [nom du client] à [commune].
+Tâche : identifier les aides possibles et lister les pièces à réunir.
+Ce que je te donne : description du projet : [texte], budget approximatif [montant], date de démarrage [date].
+Forme du résultat : tableau : dispositif | financeur | conditions | pièces | date limite à vérifier.
+Limites : aucun montant d'aide ni date inventés : tout est « à vérifier » auprès du financeur.
+```
+
+--------------------------------------------------------------------
+11. Réponse à un client mécontent
+Agent recommandé : pk-16-support
+Texte à copier (remplacez ce qui est entre crochets) :
+```
+Contexte : [nom du client] a écrit le [date] : [coller son message].
+Tâche : répondre avec calme et proposer une solution.
+Ce que je te donne : ce qui s'est passé : [faits vérifiés], ce que je peux proposer : [geste éventuel].
+Forme du résultat : mail vouvoyé de 10 lignes maximum, un engagement clair.
+Limites : aucun remboursement ni geste promis sans mon accord ; Feu : ORANGE.
+```
+
+--------------------------------------------------------------------
+12. Accueil d'un nouveau client
+Agent recommandé : pk-28-onboarding-client
+Texte à copier (remplacez ce qui est entre crochets) :
+```
+Contexte : [nom du client] vient de signer le [date], projet [nom du projet].
+Tâche : préparer le mail de bienvenue et la liste de ce que le client doit fournir.
+Ce que je te donne : les étapes prévues : [liste], les contacts : [liste].
+Forme du résultat : mail de bienvenue puis liste à cocher des éléments à fournir.
+Limites : pas de promesse de date non validée ; Feu : ORANGE avant l'envoi.
+```
+
+--------------------------------------------------------------------
+13. Rapport mensuel d'un client
+Agent recommandé : pk-29-rapport-mensuel
+Texte à copier (remplacez ce qui est entre crochets) :
+```
+Contexte : client [nom du client], période [mois et année].
+Tâche : rédiger le rapport mensuel d'activité du site.
+Ce que je te donne : les chiffres du mois : [visites, demandes, etc. à coller], les actions faites : [liste].
+Forme du résultat : une page : résumé, chiffres, actions, prochaines étapes.
+Limites : uniquement les chiffres que je fournis ; pas de comparaison inventée ; Feu : ORANGE avant l'envoi.
+```
+
+--------------------------------------------------------------------
+14. Relecture avant envoi
+Agent recommandé : pk-33-relecture-croisee
+Texte à copier (remplacez ce qui est entre crochets) :
+```
+Contexte : le document ci-dessous a été produit par l'agent [nom de l'agent] pour [nom du client].
+Tâche : faire un second regard et lister les écarts.
+Ce que je te donne : le document : [coller le texte], la région du client : [région].
+Forme du résultat : verdict (conforme / à corriger / bloquant) puis tableau écart | gravité | où | correction.
+Limites : tu ne valides pas à ma place ; tu refais les calculs.
+```
+
+--------------------------------------------------------------------
+15. Lancement complet d'un projet
+Agent recommandé : pk-equipe
+Texte à copier (remplacez ce qui est entre crochets) :
+```
+Contexte : nouveau client [nom du client], activité [activité], à [ville].
+Tâche : préparer d'un coup le devis, le planning et le mail d'annonce du projet [nom du projet].
+Ce que je te donne : le besoin : [description], le délai souhaité : [date].
+Forme du résultat : un livrable par métier, puis une synthèse avec les points à valider.
+Limites : aucun envoi sans mon accord ; Feu : ORANGE ; les prix viennent de la grille via l'agent Devis.
+```

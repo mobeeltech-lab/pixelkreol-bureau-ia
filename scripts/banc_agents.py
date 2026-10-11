@@ -37,6 +37,8 @@ def lire_env(*dossiers: Path) -> dict:
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--url", default=os.environ.get("PK_ORCH_URL", "http://127.0.0.1:4001"), help="adresse de l'orchestrateur")
+    p.add_argument("--bureau", choices=("pixelkreol", "abi"), default="pixelkreol",
+                   help="jeu de cas : pixelkreol (défaut) ou abi (10 cas du Spécialiste Prompt d'ABI Holding ; donner l'adresse d'abi_orchestrateur avec --url)")
     p.add_argument("--agent", help="un ou plusieurs ids d'agents, séparés par des virgules (ex. devis,commercial)")
     p.add_argument("--rapide", action="store_true", help="3 questions par agent (≈ 99 appels)")
     p.add_argument("--pause", type=float, default=1.0, help="secondes entre deux questions (fournisseurs gratuits : ne pas descendre sous 1)")
@@ -51,7 +53,7 @@ def main(argv=None) -> int:
     p.add_argument("--liste", action="store_true", help="affiche les cas sans appeler l'orchestrateur")
     a = p.parse_args(argv)
 
-    liste = cas_mod.tous()
+    liste = cas_mod.tous(a.bureau)
     if a.agent:
         voulus = {x.strip() for x in a.agent.split(",") if x.strip()}
         inconnus = voulus - {c.agent for c in liste}

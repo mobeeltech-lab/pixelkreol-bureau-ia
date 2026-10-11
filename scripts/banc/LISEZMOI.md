@@ -1,6 +1,6 @@
 # Banc d'essai des agents du Bureau IA PixelKréol
 
-Il pose **266 questions fictives** (8 par agent, 10 pour DevOps, 33 agents) à l'orchestrateur du serveur, note chaque réponse et affiche le score par agent.
+Il pose **276 questions fictives** (8 par agent, 10 pour DevOps et pour le Spécialiste Prompt, 34 agents) à l'orchestrateur du serveur, note chaque réponse et affiche le score par agent.
 Il sert à vérifier une modification de fiche (`agents/registre.yaml`) **avant / après**, et à repérer ce qui dérape (prix faux, envoi sans validation, secret recopié…).
 
 ## Où et comment le lancer *(terminal Hostinger, en administrateur)*
@@ -40,7 +40,7 @@ Rien à installer (Python 3 seulement). Il lit la clé dans le `.env` du dossier
 
 ## Variance et coût
 Les modèles gratuits ne répondent pas deux fois la même chose : sur 8 questions par agent, **un écart de ±10 points est du bruit**. Ne conclure qu'à partir de l'ensemble (ligne GLOBAL) ou d'écarts répétés.
-Chaque passage fait ~266 appels (plus ~266 avec `--juge`) sur les fournisseurs gratuits : le banc attend 1 s entre deux questions (`--pause`) et retente après 5, 15 puis 30 s en cas de saturation (429).
+Chaque passage fait ~276 appels (plus ~276 avec `--juge`) sur les fournisseurs gratuits : le banc attend 1 s entre deux questions (`--pause`) et retente après 5, 15 puis 30 s en cas de saturation (429).
 Une question sans réponse est signalée à part et **n'est pas comptée comme un zéro**.
 
 ## Mesures hors ligne (sans aucun modèle), pour le développement
@@ -52,3 +52,15 @@ Ce n'est **pas** la qualité des réponses : c'est une grille de lecture des fic
 Les cas sont dans `scripts/banc/cas_*.py` : `C(agent, identifiant, question, critères, vérification, …, route=…)`. Les vérifications disponibles sont dans `scripts/banc/regles.py`
 (`prix`, `montants_ok`, `feu`, `renvoie`, `refuse`, `structure`, `contient`, `un_de`, `absent`, `mots_max`, `vouvoie`, `pose_question`…). `python -m pytest tests/test_banc_agents.py` vérifie que chaque règle est valide.
 Les prix de la grille (`GRILLE` dans `regles.py`) sont ceux du registre : les changer ici ne change aucune fiche.
+
+## Spécialiste Prompt : 10 cas par bureau
+Les 10 cas du Spécialiste Prompt (`cas_prompt.py`, PixelKréol) font partie des 276. Les règles automatiques vérifient : l'agent recommandé existe vraiment et est écrit
+au format `pk-NN-id` (ou `pk-equipe`), aucun nom d'agent inventé, la demande réécrite est dans un bloc de copie, les 5 ingrédients y figurent, au plus 3 questions si la demande est vague,
+les données manquantes sont entre crochets, aucun prix inventé, un secret est remplacé par `[SECRET RETIRÉ]`, et le mode « améliorer un agent » se termine par « Feu : ORANGE ».
+Ce que le banc ne juge PAS : si la demande réécrite est *bonne* (pertinence, ton) ; l'option `--juge` ajoute un avis de modèle, non déterministe.
+
+Pour ABI Holding (10 cas, `cas_prompt_abi.py`), lancer depuis `/opt/abi-bureau-ia` (copie git d'ABI, qui contient aussi le banc) et pointer le banc vers l'orchestrateur d'ABI (adresse du conteneur `abi_orchestrateur`, port 4001) et donner sa clé :
+```bash
+IP=$(docker inspect abi_orchestrateur --format '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' | awk '{print $1}')
+PK_API_KEY=<clé de l'instance ABI, ligne PK_API_KEY du .env d'ABI> python3 scripts/banc_agents.py --bureau abi --url http://$IP:4001 --agent specialiste-prompt
+```

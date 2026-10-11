@@ -1,0 +1,131 @@
+MODÈLES DE DEMANDES — Bureau IA d'ABI Holding (instance de TEST, données fictives) — 10 modèles
+====================================================================
+Chaque modèle donne : un titre, l'agent à choisir (nom EXACT du modèle dans Open WebUI) et un texte à copier.
+Remplacez ce qui est entre crochets [ ... ]. Aucun montant ni taux n'est écrit ici.
+Pour une demande qui ne ressemble à aucun modèle, écrivez « améliore ma demande : … » au Spécialiste Prompt
+(pk-10-specialiste-prompt) : il choisit l'agent et réécrit la demande.
+
+Comment les enregistrer dans Open WebUI (à la main, ~1 minute par modèle) :
+  Espace de travail > Prompts > « + » > titre = le titre du modèle ; commande = un mot court précédé de « / » (par exemple /appel-de-fonds) ;
+  contenu = le texte à copier.
+  Remarque : le format d'un fichier d'import n'a pas pu être vérifié pour la version d'Open WebUI de cette instance ; aucun fichier d'import n'est donc fourni.
+
+--------------------------------------------------------------------
+1. Lettres d'appel de fonds
+Agent recommandé : pk-04-appels-de-fonds
+Texte à copier (remplacez ce qui est entre crochets) :
+```
+Contexte : programme [nom du programme], [nombre] lots, jalon atteint : [jalon].
+Tâche : préparer les lettres d'appel de fonds pour ce jalon.
+Ce que je te donne : l'attestation d'avancement [coller], le tableau des acquéreurs et des montants déjà payés [coller].
+Forme du résultat : une lettre type puis un tableau acquéreur | lot | montant à appeler.
+Limites : aucun taux ni plafond inventé : ceux de l'échéancier fourni ; Feu : ROUGE, la direction valide avant tout envoi.
+```
+
+--------------------------------------------------------------------
+2. Quittance de loyer
+Agent recommandé : pk-06-locatif
+Texte à copier (remplacez ce qui est entre crochets) :
+```
+Contexte : bail du lot [numéro de lot], locataire [nom du locataire], période [mois et année].
+Tâche : rédiger la quittance de loyer.
+Ce que je te donne : le bail et le montant du loyer et des charges [coller].
+Forme du résultat : quittance prête à signer, une page.
+Limites : aucun montant que je n'ai pas donné ; Feu : ORANGE avant envoi.
+```
+
+--------------------------------------------------------------------
+3. Relecture d'un contrat de réservation
+Agent recommandé : pk-07-juriste
+Texte à copier (remplacez ce qui est entre crochets) :
+```
+Contexte : contrat de réservation du lot [numéro de lot], acquéreur [nom de l'acquéreur].
+Tâche : relire le contrat et signaler les clauses à vérifier.
+Ce que je te donne : le texte du contrat : [coller]. Si une pièce manque, dis-le-moi d'abord.
+Forme du résultat : tableau clause | risque | question à poser à l'avocat ou au notaire.
+Limites : pas de conseil juridique définitif ; Feu : ROUGE pour toute décision.
+```
+
+--------------------------------------------------------------------
+4. Tableau de bord hebdomadaire du chantier
+Agent recommandé : pk-08-suivi-programme
+Texte à copier (remplacez ce qui est entre crochets) :
+```
+Contexte : programme [nom du programme], semaine [numéro ou date].
+Tâche : préparer le tableau de bord de la semaine.
+Ce que je te donne : le planning [coller], les situations de travaux [coller], la liste des réserves [coller].
+Forme du résultat : avancement par lot, jalons à venir, retards, réserves ouvertes, points de décision.
+Limites : aucun pourcentage ni date inventés ; ce qui manque est listé.
+```
+
+--------------------------------------------------------------------
+5. Retrouver un document
+Agent recommandé : pk-09-archiviste
+Texte à copier (remplacez ce qui est entre crochets) :
+```
+Contexte : programme [nom du programme], lot [numéro de lot].
+Tâche : retrouver le document [type de pièce] à partir de la liste de fichiers ci-dessous.
+Ce que je te donne : la liste de fichiers : [coller].
+Forme du résultat : nom exact du fichier, emplacement, version la plus récente, ou « introuvable dans la liste fournie ».
+Limites : ne rien supprimer ni déplacer ; ne pas inventer de nom de fichier.
+```
+
+--------------------------------------------------------------------
+6. Écritures comptables d'une facture
+Agent recommandé : pk-03-comptable
+Texte à copier (remplacez ce qui est entre crochets) :
+```
+Contexte : facture [numéro] du fournisseur [nom du fournisseur], programme [nom du programme].
+Tâche : proposer les écritures comptables.
+Ce que je te donne : la facture : [coller les lignes], le plan comptable utilisé [coller].
+Forme du résultat : tableau compte | libellé | débit | crédit.
+Limites : aucune écriture passée : proposition à valider ; Feu : ORANGE.
+```
+
+--------------------------------------------------------------------
+7. Courrier type aux acquéreurs
+Agent recommandé : pk-02-secretaire
+Texte à copier (remplacez ce qui est entre crochets) :
+```
+Contexte : programme [nom du programme], sujet : [sujet du courrier].
+Tâche : rédiger un courrier d'information aux acquéreurs.
+Ce que je te donne : les faits à annoncer : [liste], la date de [événement].
+Forme du résultat : courrier vouvoyé d'une page avec objet.
+Limites : aucune date ni engagement non validés ; Feu : ORANGE avant envoi.
+```
+
+--------------------------------------------------------------------
+8. Annonce d'un lot disponible
+Agent recommandé : pk-05-commercial
+Texte à copier (remplacez ce qui est entre crochets) :
+```
+Contexte : programme [nom du programme], lot [numéro de lot], type [T2, T3…].
+Tâche : rédiger l'annonce et une réponse type aux prospects.
+Ce que je te donne : les caractéristiques exactes du lot : [coller].
+Forme du résultat : annonce de 8 lignes et réponse de 5 lignes.
+Limites : aucun prix ni disponibilité inventés ; Feu : ORANGE avant publication.
+```
+
+--------------------------------------------------------------------
+9. Synthèse du jour pour la direction
+Agent recommandé : pk-01-orchestrateur
+Texte à copier (remplacez ce qui est entre crochets) :
+```
+Contexte : journée du [date].
+Tâche : faire le point du jour et les priorités.
+Ce que je te donne : les informations des agents : [coller leurs réponses].
+Forme du résultat : 3 lignes à retenir, tâches par agent, échéances J-7 et J-1, décisions en attente.
+Limites : reprendre les chiffres à l'identique ; ne rien valider à ma place.
+```
+
+--------------------------------------------------------------------
+10. Clôture de trimestre (plusieurs métiers)
+Agent recommandé : pk-equipe
+Texte à copier (remplacez ce qui est entre crochets) :
+```
+Contexte : clôture du trimestre pour le programme [nom du programme].
+Tâche : préparer d'un coup la synthèse, le courrier aux acquéreurs et le tableau de bord.
+Ce que je te donne : les données du trimestre : [coller].
+Forme du résultat : un livrable par métier, puis une synthèse avec les décisions à prendre.
+Limites : aucun envoi sans accord ; les actions ROUGE attendent mon OUI.
+```

@@ -22,7 +22,7 @@ from conftest import CLE_API, RACINE, FauxLiteLLM, charger_app  # noqa: E402
 ABI = RACINE / "instances" / "abi"
 AGENTS_ABI = ABI / "agents"
 IDS = ["orchestrateur", "secretaire", "comptable", "appels-de-fonds", "commercial", "locatif", "juriste",
-       "suivi-programme", "archiviste"]
+       "suivi-programme", "archiviste", "specialiste-prompt"]
 ENV_ABI = {"PK_MARQUE": "ABI Holding", "PK_LIEU": "à Ajaccio", "PK_FUSEAU": "Europe/Paris",
            "PK_PATRON": "la direction d'ABI Holding", "PK_VITRINE_PIED": "environnement de test · données fictives",
            "PK_PROPRIETAIRE": "abi"}
@@ -57,15 +57,15 @@ def client_abi(app_abi, faux):
 
 
 # =============================================================== 1. registre
-def test_neuf_agents_dans_le_bon_ordre():
+def test_dix_agents_dans_le_bon_ordre():
     agents = charge("registre.yaml")["agents"]
     assert [a["id"] for a in agents] == IDS
-    assert [a["num"] for a in agents] == list(range(1, 10))
+    assert [a["num"] for a in agents] == list(range(1, 11))
 
 
 def test_ids_et_numeros_uniques_et_champs_complets():
     agents = charge("registre.yaml")["agents"]
-    assert len({a["id"] for a in agents}) == 9 and len({a["num"] for a in agents}) == 9
+    assert len({a["id"] for a in agents}) == 10 and len({a["num"] for a in agents}) == 10
     for a in agents:
         for champ in ("id", "num", "nom", "emoji", "famille", "cerveau", "temperature", "description", "mots_cles", "consignes"):
             assert a.get(champ) not in (None, "", []), f"{a['id']} : {champ} manquant"
@@ -93,17 +93,17 @@ def test_le_registre_abi_suit_le_meme_format_que_pixelkreol():
     ref = yaml.safe_load((RACINE / "agents" / "registre.yaml").read_text(encoding="utf-8"))["agents"]
     cles_ref = set(ref[0])
     for a in charge("registre.yaml")["agents"]:
-        assert set(a) - {"routage_prioritaire", "outils"} == cles_ref, f"{a['id']} : champs différents du registre PixelKréol"
+        assert set(a) - {"routage_prioritaire", "outils", "inclure_annuaire"} == cles_ref, f"{a['id']} : champs différents du registre PixelKréol"
 
 
 def test_perso_abi_vide_et_valide():
     assert charge("perso.yaml") == {"agents": []}
 
 
-def test_les_neuf_agents_repondent_via_l_orchestrateur(client_abi, h_api):
+def test_les_dix_agents_repondent_via_l_orchestrateur(client_abi, h_api):
     modeles = [m["id"] for m in client_abi.get("/v1/models", headers=h_api).json()["data"]]
-    assert modeles[:2] == ["pk-auto", "pk-equipe"] and len(modeles) == 11
-    for ident, num in zip(IDS, range(1, 10)):
+    assert modeles[:2] == ["pk-auto", "pk-equipe"] and len(modeles) == 12
+    for ident, num in zip(IDS, range(1, 11)):
         r = client_abi.post("/v1/chat/completions", headers=h_api, json={
             "model": f"pk-{num:02d}-{ident}", "messages": [{"role": "user", "content": "bonjour"}]})
         assert r.status_code == 200 and r.headers["x-pk-agent"] == ident

@@ -1,6 +1,6 @@
 # Instance de TEST « ABI Holding » — Bureau IA
 
-> **Environnement de test, données fictives.** Cette instance sert à valider les 9 agents, le routage et les
+> **Environnement de test, données fictives.** Cette instance sert à valider les 10 agents, le routage et les
 > règles de feux (vert / orange / rouge) sur le serveur de PixelKréol, avec des modèles en ligne et le jeu de
 > données du dossier `donnees-fictives/`. **Ne jamais y mettre de données réelles d'ABI Holding.**
 > Le produit final sera installé chez ABI Holding sur un Mac Pro avec des modèles locaux : ici on ne teste
@@ -10,7 +10,7 @@
 
 | Conteneur | Rôle | Mémoire max |
 |---|---|---|
-| `abi_orchestrateur` | les 9 agents + `pk-auto` + `pk-equipe` (le même programme que l'instance PixelKréol) | 256 Mo |
+| `abi_orchestrateur` | les 10 agents + `pk-auto` + `pk-equipe` (le même programme que l'instance PixelKréol) | 256 Mo |
 | `abi_postgres` | sa propre base (journal des échanges) | 256 Mo |
 | `abi_openwebui` | son propre chat et ses propres comptes, sur `127.0.0.1:3101` | 1 Go |
 
@@ -88,11 +88,11 @@ Les trois conteneurs doivent être `running` (et `healthy` pour la base et l'orc
 `docker inspect pk_openwebui --format '{{.Config.Image}}'` donne celle de l'instance PixelKréol ; l'écrire dans `.env`
 sous `ABI_OPENWEBUI_IMAGE=`, puis relancer `dc up -d`.
 
-Vérifier que les 9 agents sont chargés :
+Vérifier que les 10 agents sont chargés :
 ```bash
 docker exec abi_orchestrateur python -c "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:4001/health').read().decode())"
 ```
-La réponse doit contenir `"agents":9` et `"litellm":true`.
+La réponse doit contenir `"agents":10` et `"litellm":true`.
 
 ### 7. Publier en HTTPS *(terminal Hostinger)*
 ```bash
@@ -169,6 +169,21 @@ Procédure complète, coupure d'urgence et désinstallation : **[NAS-LISEZMOI.md
 Un service séparé relève une boîte mail dédiée (messagerie vocale de l'opérateur → e-mail), transcrit les messages **sur le serveur**, les fait classer par la
 Secrétaire et prévient la bonne personne par e-mail, avec une tâche de rappel. Il ne rappelle et n'écrit jamais à un client.
 Procédure, questions à poser au client, texte du répondeur : **[STANDARD-LISEZMOI.md](STANDARD-LISEZMOI.md)**.
+
+## Le Spécialiste Prompt (agent n° 10) et les modèles de demandes
+Le Spécialiste Prompt (`pk-10-specialiste-prompt`) ne traite aucun dossier : il transforme une demande brouillon en demande claire adressée au bon agent
+(nom exact `pk-NN-id`, ou `pk-equipe` si plusieurs métiers), avec les 5 ingrédients (contexte, tâche, pièces à fournir, forme du résultat, limites).
+Il travaille seulement sur le texte qu'on lui donne : aucun outil, ni NAS ni MCP. Écrire par exemple : « améliore ma demande : relance les gens qui n'ont pas payé ».
+La liste des agents qu'il connaît est **générée par l'orchestrateur à partir du registre** (champ `inclure_annuaire: true`, réservé à cet agent) : rien à recopier.
+Les 10 **modèles de demandes** à compléter sont dans **[modeles-de-demandes.txt](modeles-de-demandes.txt)** ; à enregistrer à la main dans Open WebUI
+(Espace de travail > Prompts), car le format d'un fichier d'import n'a pas pu être vérifié.
+
+**Mise à jour d'une instance déjà installée** *(terminal Hostinger)* : le code de l'orchestrateur change (génération de la liste des agents), il faut donc reconstruire :
+```bash
+cd /opt/abi-bureau-ia && git pull && cd instances/abi && dc up -d --build abi_orchestrateur
+docker exec abi_orchestrateur python -c "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:4001/health').read().decode())"
+```
+La réponse doit contenir `"agents":10`.
 
 ## Règle de routage particulière
 - **Bail + relecture → Juriste.** Dès qu'une demande contient « bail » (ou « baux ») ET un verbe de relecture (relis, relire, relecture,
