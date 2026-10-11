@@ -509,6 +509,15 @@ def test_chemins_cites_dans_une_reponse():
     assert d.chemins_cites(t) == ["Oliviers/chantier/planning-v3.docx", "acte.pdf", "bail-A.csv", "note.PDF"]
 
 
+def test_chemins_cites_sans_les_marques_markdown():
+    """Gras (**) et backticks autour d'un nom ne font pas partie du nom (faux « absent du NAS » constaté)."""
+    t = ("**acte-vefa-A02.pdf**, `bail-A.csv`, **`Oliviers/chantier/planning-v3.docx`**, `**note.PDF**`, "
+         "**Oliviers/juridique/contrat.pdf** et __gras__ `a.txt`. Liste : - **tableau.xlsx** :")
+    assert d.chemins_cites(t) == ["acte-vefa-A02.pdf", "bail-A.csv", "Oliviers/chantier/planning-v3.docx", "note.PDF",
+                                  "Oliviers/juridique/contrat.pdf", "a.txt", "tableau.xlsx"]
+    assert d.chemins_cites("**gras sans fichier** et `code`") == []
+
+
 def test_dependances_legeres():
     """Le module n'importe que la bibliothèque standard (pypdf seulement à la demande)."""
     source = (Path(__file__).resolve().parent.parent / "orchestrateur" / "documents.py").read_text(encoding="utf-8")

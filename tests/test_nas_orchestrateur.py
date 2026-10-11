@@ -197,6 +197,16 @@ def test_nom_de_document_invente_est_signale(client_nas):
     assert texte.split("Non vérifié dans le NAS")[1].count("acte-vefa-A02.pdf") == 0       # le vrai fichier n'est pas accusé
 
 
+def test_nom_en_gras_ou_backticks_n_est_pas_accuse_a_tort(client_nas):
+    client_nas.faux.par_defaut = OK("Voir **acte-vefa-A02.pdf** et `acte-vefa-A02.pdf`, ainsi que **`acte-vefa-A02.pdf`**.")
+    texte = demande(client_nas).json()["choices"][0]["message"]["content"]
+    assert "Non vérifié" not in texte
+    client_nas.faux.par_defaut = OK("Voir **contrat-imaginaire-2026.pdf** et `acte-vefa-A02.pdf`.")
+    texte = demande(client_nas).json()["choices"][0]["message"]["content"]
+    assert "Non vérifié dans le NAS" in texte and texte.split("Non vérifié dans le NAS")[1].count("contrat-imaginaire-2026.pdf") == 1
+    assert "**contrat" not in texte.split("Non vérifié dans le NAS")[1] and texte.split("Non vérifié dans le NAS")[1].count("acte-vefa-A02.pdf") == 0
+
+
 # =============================================================== repli si le modèle ne sait pas appeler d'outils
 def test_repli_automatique_quand_le_cerveau_refuse_les_outils(client_nas):
     f = client_nas.faux
