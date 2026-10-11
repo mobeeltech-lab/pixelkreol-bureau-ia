@@ -526,13 +526,22 @@ def option_autorisee(nom: str) -> bool:
     return nom not in OPTIONS_INTERDITES and not str(nom).startswith(PREFIXES_INTERDITS)
 
 
+CHAMPS_MESSAGE = ("role", "content", "name", "tool_calls", "tool_call_id")
+
+
+def nettoyer_message(m: dict) -> dict:
+    """Ne garde que les champs standard d'un message : l'historique d'Open WebUI peut contenir des champs propres
+    à un fournisseur (reasoning_details, reasoning_content…) que Groq, Mistral, Cerebras ou DeepSeek refusent."""
+    return {k: v for k, v in m.items() if k in CHAMPS_MESSAGE}
+
+
 def preparer_corps(corps: dict, agent: dict) -> tuple[dict, list[str]]:
     messages = [m for m in corps.get("messages", []) if isinstance(m, dict)]
     systeme_client = "\n\n".join(texte_du_message(m) for m in messages if m.get("role") == "system").strip()
     systeme = REGISTRE.prompt_systeme(agent)
     if systeme_client:
         systeme += "\n\n## Consignes supplémentaires de l'utilisateur\n" + systeme_client
-    nouveaux = [{"role": "system", "content": systeme}] + [m for m in messages if m.get("role") != "system"]
+    nouveaux = [{"role": "system", "content": systeme}] + [nettoyer_message(m) for m in messages if m.get("role") != "system"]
     sortie = {k: v for k, v in corps.items() if k not in ("messages", "model") and option_autorisee(k)}
     sortie["messages"] = nouveaux
     sortie.setdefault("temperature", agent.get("temperature", 0.4))
