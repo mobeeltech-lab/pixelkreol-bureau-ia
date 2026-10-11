@@ -33,7 +33,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import httpx
 import yaml
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 
 LOG = logging.getLogger("pk")
 logging.basicConfig(level=os.getenv("PK_LOG_LEVEL", "INFO"),
@@ -857,14 +857,20 @@ def demarrer_nas(app: FastAPI) -> None:
     app.state.taches.append(asyncio.create_task(boucle_indexation(app)))
 
 
-def demarrer_mcp(app: FastAPI) -> None:
-    """Prépare le client MCP. Un échec est journalisé et laisse MCP éteint : jamais de panne générale."""
-    global MCPM, MCPC
-    try:
+def charger_module_mcp() -> None:
+    global MCPM
+    if MCPM is None:
         spec = importlib.util.spec_from_file_location("pk_mcp_client", Path(__file__).with_name("mcp_client.py"))
         MCPM = importlib.util.module_from_spec(spec)
         sys.modules["pk_mcp_client"] = MCPM
         spec.loader.exec_module(MCPM)
+
+
+def demarrer_mcp(app: FastAPI) -> None:
+    """Prépare le client MCP. Un échec est journalisé et laisse MCP éteint : jamais de panne générale."""
+    global MCPM, MCPC
+    try:
+        charger_module_mcp()
         MCPC = MCPM.depuis_env(set(REGISTRE.agents), AGENTS_DIR)
     except Exception as e:  # noqa: BLE001
         LOG.error("MCP NON démarré (%s : %s) — les agents travaillent sans outils externes", type(e).__name__, masquer(str(e))[:200])
@@ -872,6 +878,19 @@ def demarrer_mcp(app: FastAPI) -> None:
         return
     LOG.info("MCP actif : %d serveur(s), %d outil(s) autorisé(s)%s", len(MCPC.cfg.serveurs), len(MCPC.cfg.outils),
              " — AUCUN outil configuré (agents/mcp.yaml absent ou vide)" if MCPC.cfg.vide else "")
+    app.state.taches.append(asyncio.create_task(boucle_mcp()))
+
+
+async def boucle_mcp() -> None:
+    """Entretien de la file de validation : expiration à 24 h, nouvel essai des notifications échouées."""
+    while True:
+        try:
+            await MCPC.entretien()
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001
+            LOG.exception("Entretien MCP en échec (réessai dans 5 min)")
+        await asyncio.sleep(300)
 
 
 async def indexer_nas() -> dict:
@@ -1621,3 +1640,147 @@ small{{display:block;color:var(--c);text-transform:uppercase;font-size:11px;lett
 p{{margin:0;font-size:14px;line-height:1.4}}</style></head><body>
 <header><h1>Bureau IA {html.escape(MARQUE)}</h1>{len(REGISTRE.agents)} agents · {html.escape(VITRINE_PIED)}</header>
 <main>{cartes}</main></body></html>"""
+
+
+# =====================================================================
+#  MCP — validation par Will (routes ajoutées SEULEMENT si MCP est actif : sinon elles n'existent pas)
+# =====================================================================
+@app.get("/admin/mcp/attente")
+async def attente_mcp(request: Request):
+    if not autorise(request, ADMIN_KEY):
+        return erreur(401, "Clé admin invalide", "auth")
+    if MCPC is None:
+        return erreur(404, "MCP n'est pas activé", "introuvable")
+    return {"actions": await asyncio.to_thread(MCPC.base.actions, None, 100)}
+
+
+async def _decision_api(request: Request, ident: str, verbe: str):
+    if not autorise(request, ADMIN_KEY):
+        return erreur(401, "Clé admin invalide", "auth")
+    if MCPC is None:
+        return erreur(404, "MCP n'est pas activé", "introuvable")
+    if not re.fullmatch(r"[0-9a-f]{10}", ident):
+        return erreur(404, "Action introuvable", "introuvable")
+    res = await getattr(MCPC, verbe)(ident, "admin (API)")
+    return JSONResponse(status_code=200 if res["ok"] else (404 if res["code"] == "introuvable" else 409), content=res)
+
+
+@app.post("/admin/mcp/valider/{ident}")
+async def valider_mcp(ident: str, request: Request):
+    return await _decision_api(request, ident, "valider")
+
+
+@app.post("/admin/mcp/refuser/{ident}")
+async def refuser_mcp(ident: str, request: Request):
+    return await _decision_api(request, ident, "refuser")
+
+
+@app.post("/admin/mcp/classer/{ident}")
+async def classer_mcp(ident: str, request: Request):
+    return await _decision_api(request, ident, "classer")
+
+
+MCP_COOKIE = "pk_mcp"
+
+
+def _prefixe_mcp() -> str:
+    return MCPM.prefixe_de(cfg("PK_MCP_URL_PUBLIQUE", "").strip())
+
+
+def _html_mcp(corps: str, statut: int = 200) -> HTMLResponse:
+    return HTMLResponse(corps, status_code=statut, headers=MCPM.EN_TETES_PAGE)
+
+
+def _retour(chemin: str, code: str = "", cookie: str | None = None, efface: bool = False, request: Request | None = None) -> Response:
+    """303 vers une adresse RELATIVE (la page marche derrière n'importe quel préfixe de chemin du serveur web)."""
+    r = Response(status_code=303, headers={**MCPM.EN_TETES_PAGE, "Location": chemin + (f"?m={code}" if code else "")})
+    secure = request is not None and (request.url.scheme == "https" or request.headers.get("x-forwarded-proto", "") == "https")
+    if cookie:
+        r.set_cookie(MCP_COOKIE, cookie, max_age=MCPM.DUREE_SESSION, path=_prefixe_mcp(), httponly=True, samesite="strict", secure=secure)
+    if efface:
+        r.delete_cookie(MCP_COOKIE, path=_prefixe_mcp())
+    return r
+
+
+def _session_mcp(request: Request) -> str | None:
+    v = request.cookies.get(MCP_COOKIE)
+    return v if MCPM.session_valide(ADMIN_KEY, v) else None
+
+
+async def _formulaire(request: Request) -> dict | None:
+    from urllib.parse import parse_qs
+    corps = await request.body()
+    if len(corps) > 4096:
+        return None
+    origine = request.headers.get("origin")
+    if origine and origine != "null":
+        hote = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
+        if (origine.split("://", 1)[-1].rstrip("/")) != hote:
+            return None
+    elif origine == "null":
+        return None
+    try:
+        return {k: v[0] for k, v in parse_qs(corps.decode("utf-8"), keep_blank_values=True).items()}
+    except UnicodeDecodeError:
+        return None
+
+
+def _poser_routes_mcp() -> None:
+    try:
+        charger_module_mcp()
+    except Exception as e:  # noqa: BLE001
+        LOG.error("Routes MCP non posées (%s)", type(e).__name__)
+        return
+    P = _prefixe_mcp()
+    limiteur = MCPM.Limiteur()
+
+    async def racine(request: Request):
+        if MCPC is None:
+            return erreur(404, "MCP n'est pas activé", "introuvable")
+        session = _session_mcp(request)
+        code = request.query_params.get("m", "")
+        code = code if code in MCPM.MESSAGES else ""
+        if not session:
+            return _html_mcp(MCPM.page_connexion(code))
+        lignes = await asyncio.to_thread(MCPC.base.actions, None, 200)
+        return _html_mcp(MCPM.page_validation(lignes, ADMIN_KEY, session, code))
+
+    async def sans_barre(request: Request):
+        return Response(status_code=307, headers={"Location": P.rsplit("/", 1)[-1] + "/"})
+
+    async def connexion(request: Request):
+        if MCPC is None:
+            return erreur(404, "MCP n'est pas activé", "introuvable")
+        champs = await _formulaire(request)
+        if champs is None:
+            return _html_mcp(MCPM.page_connexion("invalide"), 400)
+        if await limiteur.verifier(champs.get("cle", ""), ADMIN_KEY):
+            return _retour("./", "connecte", cookie=MCPM.nouvelle_session(ADMIN_KEY), request=request)
+        return _html_mcp(MCPM.page_connexion("refus_cle"), 401)
+
+    async def deconnexion(request: Request):
+        return _retour("./", efface=True, request=request)
+
+    def decision(verbe: str):
+        async def f(ident: str, request: Request):
+            if MCPC is None:
+                return erreur(404, "MCP n'est pas activé", "introuvable")
+            session = _session_mcp(request)
+            champs = await _formulaire(request)
+            if not session or champs is None or not re.fullmatch(r"[0-9a-f]{10}", ident) or not MCPM.csrf_valide(ADMIN_KEY, session, ident, verbe, champs.get("jeton", "")):
+                return _retour("../", "invalide", request=request)
+            res = await getattr(MCPC, {"valider": "valider", "refuser": "refuser", "classer": "classer"}[verbe])(ident, "Will (page web)")
+            return _retour("../", res["code"], request=request)
+        return f
+
+    ajouter = app.add_api_route
+    ajouter(P, sans_barre, methods=["GET"], include_in_schema=False)
+    ajouter(P + "/", racine, methods=["GET"], include_in_schema=False)
+    ajouter(P + "/connexion", connexion, methods=["POST"], include_in_schema=False)
+    ajouter(P + "/deconnexion", deconnexion, methods=["POST"], include_in_schema=False)
+    for v in ("valider", "refuser", "classer"):
+        ajouter(P + f"/{v}/{{ident}}", decision(v), methods=["POST"], include_in_schema=False)
+
+
+if MCP_ACTIF:
+    _poser_routes_mcp()

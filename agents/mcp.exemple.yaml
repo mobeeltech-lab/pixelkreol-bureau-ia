@@ -72,3 +72,20 @@ serveurs:
         classe: vert
         agents: [archiviste]
         description: Lit le texte d'un fichier trouvé par la recherche.
+
+# =====================================================================
+#  ÉCRITURES — À NE DÉCOMMENTER QU'APRÈS VALIDATION de la page de validation (étape 2) sur le serveur.
+#  orange = brouillon / création : mise en attente, Will valide dans la page (24 h) ; rouge = envoi : jamais exécuté.
+#  Ajouter ces outils sous les serveurs ci-dessus (même nom de serveur, bloc « outils »), avec les VRAIS noms d'outils.
+# =====================================================================
+#      create_draft:                       # sous « courrier » : brouillon de mail (jamais envoyé)
+#        classe: orange
+#        agents: [secretariat]
+#        description: Prépare un brouillon de mail (il n'est pas envoyé).
+#      send_message:                       # sous « courrier » : envoi — ROUGE, jamais exécuté par le Bureau IA
+#        classe: rouge
+#        agents: [secretariat]
+#      create_event:                       # sous « agenda » : création d'un événement
+#        classe: orange
+#        agents: [secretariat]
+#        description: Crée un événement dans l'agenda (après validation de Will).

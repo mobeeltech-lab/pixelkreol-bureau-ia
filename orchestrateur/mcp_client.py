@@ -22,6 +22,10 @@ aucun processus n'est lancé par l'orchestrateur.
 from __future__ import annotations
 
 import asyncio
+import base64
+import hashlib
+import hmac
+import html
 import ipaddress
 import json
 import logging
@@ -522,6 +526,11 @@ class Base:
                     agent TEXT, demandeur TEXT, serveur TEXT, outil TEXT, classe TEXT, arguments TEXT, resume TEXT, decide_le TEXT, resultat TEXT);
                 CREATE INDEX IF NOT EXISTS actions_statut ON actions(statut);
             """)
+            for colonne in ("notifie TEXT DEFAULT ''", "notif_essais INTEGER DEFAULT 0", "decide_par TEXT DEFAULT ''"):
+                try:
+                    con.execute(f"ALTER TABLE actions ADD COLUMN {colonne}")
+                except sqlite3.OperationalError:
+                    pass                                  # colonne déjà là
 
     @contextmanager
     def _con(self) -> Iterator[sqlite3.Connection]:
@@ -565,6 +574,32 @@ class Base:
                             (maintenant().isoformat(timespec="seconds"),) * 2)
             return c.rowcount
 
+    def action(self, ident: str) -> dict | None:
+        self.expirer()
+        with self._con() as con:
+            r = con.execute("SELECT * FROM actions WHERE id=?", (str(ident)[:20],)).fetchone()
+            return dict(r) if r else None
+
+    def reserver(self, ident: str, de: str, vers: str, par: str) -> bool:
+        """Change le statut de `de` vers `vers` en UNE instruction : un seul appelant peut réussir (double clic, deux onglets : une seule exécution)."""
+        with self._con() as con:
+            c = con.execute("UPDATE actions SET statut=?, decide_le=?, decide_par=? WHERE id=? AND statut=? AND (statut!='attente' OR expire_le >= ?)",
+                            (vers, maintenant().isoformat(timespec="seconds"), par[:60], str(ident)[:20], de, maintenant().isoformat(timespec="seconds")))
+            return c.rowcount == 1
+
+    def conclure(self, ident: str, statut: str, resultat: str) -> None:
+        with self._con() as con:
+            con.execute("UPDATE actions SET statut=?, resultat=? WHERE id=?", (statut, resultat[:500], str(ident)[:20]))
+
+    def marquer_notif(self, ident: str, ok: bool) -> None:
+        with self._con() as con:
+            con.execute("UPDATE actions SET notifie=?, notif_essais=notif_essais+1 WHERE id=?", ("oui" if ok else "echec", str(ident)[:20]))
+
+    def a_renotifier(self, maxi: int = 5) -> list[dict]:
+        with self._con() as con:
+            return [dict(r) for r in con.execute("SELECT * FROM actions WHERE statut='attente' AND notifie='echec' AND notif_essais<? AND expire_le>=?",
+                                                 (maxi, maintenant().isoformat(timespec="seconds")))]
+
     def actions(self, statut: str | None = None, limite: int = 200) -> list[dict]:
         self.expirer()
         with self._con() as con:
@@ -595,16 +630,58 @@ INSTRUCTIONS_AGENT = (
 
 
 class MCP:
-    def __init__(self, cfg: Config, base: Base, client: httpx.AsyncClient | None = None, notifier=None):
+    def __init__(self, cfg: Config, base: Base, client: httpx.AsyncClient | None = None, notif_url: str = "", notif_jeton_env: str = "",
+                 url_publique: str = "", prefixe: str = "/pk-validation"):
         self.cfg, self.base = cfg, base
         self.client = client or httpx.AsyncClient(follow_redirects=False)
         self.sessions: dict[str, SessionMCP] = {n: SessionMCP(s, self.client) for n, s in cfg.serveurs.items()}
         self.cadence: deque = deque()
-        self.notifier = notifier                              # appelé quand une action attend la validation de Will (étape 2)
+        self.notif_url, self.notif_jeton_env = notif_url, notif_jeton_env      # webhook n8n qui envoie le mail à Will
+        self.url_publique, self.prefixe = url_publique, prefixe
+
+    # --- notification : « une action attend Will » ----------------------------------------------------
+    def lien(self) -> str:
+        return (self.url_publique.rstrip("/") + "/") if self.url_publique else f"http://127.0.0.1:4001{self.prefixe}/"
+
+    def charge_notification(self, a: dict) -> dict:
+        """Ce qui part vers n8n : l'essentiel pour écrire un mail, JAMAIS les arguments de l'action (ils restent sur le serveur, visibles sur la page de validation)."""
+        return {"evenement": "action_en_attente", "id": a["id"], "agent": a["agent"], "serveur": a["serveur"], "outil": a["outil"], "classe": a["classe"],
+                "cree_le": a["cree_le"], "expire_le": a["expire_le"], "lien": self.lien(),
+                "objet": f"Bureau IA : action en attente de votre validation ({a['serveur']}/{a['outil']})",
+                "corps": (f"Une action attend votre validation (n° {a['id']}).\nAgent : {a['agent']}\nOutil : {a['serveur']}/{a['outil']}\n"
+                          f"Valable jusqu'au : {a['expire_le']} (UTC)\n\nValider ou refuser : {self.lien()}\n\n"
+                          "Sans réponse, l'action expire d'elle-même et rien n'est fait.")}
+
+    async def notifier_action(self, a: dict) -> bool:
+        """Prévient Will par le webhook n8n. Ne lève jamais d'exception ; l'échec est noté et retenté par l'entretien (5 essais au plus)."""
+        if not self.notif_url:
+            return False
+        try:
+            entetes = {"Content-Type": "application/json"}
+            if self.notif_jeton_env:
+                jeton = os.getenv(self.notif_jeton_env, "")
+                if jeton:
+                    entetes["Authorization"] = f"Bearer {jeton}"
+            r = await self.client.post(self.notif_url, json=self.charge_notification(a), headers=entetes, timeout=6)
+            ok = r.status_code < 300
+        except (httpx.HTTPError, OSError, asyncio.TimeoutError) as e:
+            LOG.warning("Notification n8n impossible (%s)", type(e).__name__)
+            ok = False
+        await asyncio.to_thread(self.base.marquer_notif, a["id"], ok)
+        if not ok:
+            LOG.warning("Notification de l'action %s non remise : nouvel essai au prochain entretien", a["id"])
+        return ok
+
+    async def entretien(self) -> int:
+        """À lancer toutes les quelques minutes : fait expirer les actions de plus de 24 h et retente les notifications échouées."""
+        expirees = await asyncio.to_thread(self.base.expirer)
+        for a in await asyncio.to_thread(self.base.a_renotifier):
+            await self.notifier_action(a)
+        return expirees
 
     def etat(self) -> dict:
         return {"serveurs": sorted(self.cfg.serveurs), "outils": sorted(self.cfg.outils), "erreurs": self.cfg.erreurs,
-                "en_attente": len(self.base.actions("attente"))}
+                "en_attente": len(self.base.actions("attente")), "notification": bool(self.notif_url), "page_de_validation": self.lien()}
 
     # --- ce que le modèle voit ------------------------------------------------
     async def outils_pour(self, agent_id: str) -> list[dict]:
@@ -668,11 +745,7 @@ class MCP:
             ligne = await asyncio.to_thread(self.base.ajouter_action, statut, agent_id, demandeur, o.serveur, o.nom, o.classe, args, resume)
             await asyncio.to_thread(self.base.journaliser, agent_id, demandeur, o.serveur, o.nom, o.classe, statut, debut, 0, ligne["id"])
             if o.classe == "orange":
-                if self.notifier is not None:
-                    try:
-                        await self.notifier(ligne)
-                    except Exception as e:  # noqa: BLE001 — la notification ne doit jamais faire échouer la demande
-                        LOG.warning("Notification d'une action en attente impossible (%s)", type(e).__name__)
+                await self.notifier_action(ligne)             # ne lève jamais : la notification ne doit pas faire échouer la demande
                 return (f"ACTION NON EXÉCUTÉE : mise en attente de la validation de Will (n° {ligne['id']}, valable {EXPIRATION_HEURES} h). "
                         "Dis à l'utilisateur qu'elle attend la validation de Will ; ne dis jamais qu'elle est faite.")
             return (f"ACTION NON EXÉCUTÉE (ROUGE) : un envoi ou un engagement n'est jamais fait par le Bureau IA (n° {ligne['id']}). "
@@ -697,6 +770,65 @@ class MCP:
             return encadrer(o.serveur, o.nom, "[l'outil a signalé une erreur] " + propre[:300])
         return encadrer(o.serveur, o.nom, propre or "[aucun résultat]", tronque)
 
+    async def valider(self, ident: str, par: str = "admin") -> dict:
+        """Exécute une action ORANGE en attente, après décision de Will. Revérifie TOUT au moment de l'exécution (configuration, agent, paiement, arguments)."""
+        debut = time.monotonic()
+        a = await asyncio.to_thread(self.base.action, ident)
+        if a is None:
+            return {"ok": False, "code": "introuvable", "message": "Action introuvable."}
+        if a["statut"] != "attente":
+            return {"ok": False, "code": "deja" if a["statut"] != "expiree" else "expiree",
+                    "message": "Action expirée (plus de 24 h)." if a["statut"] == "expiree" else f"Action déjà traitée ({a['statut']})."}
+        nom = f"mcp__{a['serveur']}__{a['outil']}"[:64]
+        o = self.cfg.outils.get(nom)
+        if o is None or o.classe != "orange" or a["agent"] not in o.agents or est_paiement(o.nom):
+            await asyncio.to_thread(self.base.reserver, ident, "attente", "refusee", par)
+            await asyncio.to_thread(self.base.conclure, ident, "refusee", "refusée automatiquement : la configuration a changé ou l'outil n'est plus autorisé")
+            await asyncio.to_thread(self.base.journaliser, a["agent"], par, a["serveur"], a["outil"], "orange", "refuse", debut, 0, "configuration changée")
+            return {"ok": False, "code": "refusee", "message": "Refusée : l'outil n'est plus autorisé tel quel par mcp.yaml."}
+        try:
+            args = controler_arguments(o, json.loads(a["arguments"]))
+        except (Refus, ValueError) as e:
+            await asyncio.to_thread(self.base.reserver, ident, "attente", "refusee", par)
+            await asyncio.to_thread(self.base.conclure, ident, "refusee", f"refusée automatiquement : {e}")
+            return {"ok": False, "code": "refusee", "message": f"Refusée : arguments non conformes à la configuration actuelle ({e})."}
+        if not await asyncio.to_thread(self.base.reserver, ident, "attente", "validee", par):
+            return {"ok": False, "code": "deja", "message": "Action déjà traitée ou expirée."}
+        try:
+            res = await self.sessions[o.serveur].appeler_outil(o.nom, args)
+        except asyncio.TimeoutError:
+            await asyncio.to_thread(self.base.conclure, ident, "echec", "délai dépassé")
+            await asyncio.to_thread(self.base.journaliser, a["agent"], par, o.serveur, o.nom, "orange", "delai", debut, 0, "validée, délai dépassé")
+            return {"ok": False, "code": "echec", "message": "Validée mais le serveur n'a pas répondu à temps : rien n'est confirmé, vérifiez avant de recommencer."}
+        except (ErreurMCP, httpx.HTTPError, OSError) as e:
+            await asyncio.to_thread(self.base.conclure, ident, "echec", f"erreur : {str(e)[:150]}")
+            await asyncio.to_thread(self.base.journaliser, a["agent"], par, o.serveur, o.nom, "orange", "erreur", debut, 0, str(e)[:200])
+            return {"ok": False, "code": "echec", "message": "Validée, mais la réponse du serveur est en erreur ou perdue : l'action est peut-être faite, peut-être pas — vérifiez avant de recommencer."}
+        texte, est_erreur = texte_du_resultat(res)
+        propre, _ = nettoyer_texte(texte, 500)
+        await asyncio.to_thread(self.base.conclure, ident, "echec" if est_erreur else "executee", propre)
+        await asyncio.to_thread(self.base.journaliser, a["agent"], par, o.serveur, o.nom, "orange", "erreur_outil" if est_erreur else "ok", debut, len(propre), "validée par " + par)
+        return {"ok": not est_erreur, "code": "echec" if est_erreur else "executee",
+                "message": "Action exécutée." if not est_erreur else "Validée mais l'outil a signalé une erreur."}
+
+    async def refuser(self, ident: str, par: str = "admin") -> dict:
+        a = await asyncio.to_thread(self.base.action, ident)
+        if a is None:
+            return {"ok": False, "code": "introuvable", "message": "Action introuvable."}
+        if await asyncio.to_thread(self.base.reserver, ident, "attente", "refusee", par):
+            await asyncio.to_thread(self.base.journaliser, a["agent"], par, a["serveur"], a["outil"], a["classe"], "refusee_par_will", time.monotonic(), 0, ident)
+            return {"ok": True, "code": "refusee", "message": "Action refusée : rien n'a été fait."}
+        return {"ok": False, "code": "deja", "message": f"Action déjà traitée ({a['statut']})."}
+
+    async def classer(self, ident: str, par: str = "admin") -> dict:
+        """Action ROUGE (envoi) : Will l'a faite lui-même ou l'abandonne ; on la sort de la liste. Rien n'est exécuté."""
+        a = await asyncio.to_thread(self.base.action, ident)
+        if a is None:
+            return {"ok": False, "code": "introuvable", "message": "Action introuvable."}
+        if await asyncio.to_thread(self.base.reserver, ident, "rouge", "classee", par):
+            return {"ok": True, "code": "classee", "message": "Classée (rien n'a été exécuté par le Bureau IA)."}
+        return {"ok": False, "code": "deja", "message": f"Action déjà traitée ({a['statut']})."}
+
     async def fermer(self) -> None:
         await self.client.aclose()
 
@@ -708,7 +840,170 @@ def depuis_env(ids_agents: set[str] | None, dossier_agents: Path) -> MCP:
     for e in cfg.erreurs:
         LOG.warning("mcp.yaml : %s", e)
     donnees = Path(os.getenv("PK_MCP_DATA", "/app/data/mcp"))
-    return MCP(cfg, Base(donnees / "mcp.sqlite"))
+    publique = os.getenv("PK_MCP_URL_PUBLIQUE", "").strip()
+    prefixe = prefixe_de(publique)
+    if publique and not publique.startswith(("https://", "http://localhost", "http://127.0.0.1")):
+        LOG.warning("PK_MCP_URL_PUBLIQUE ignorée (HTTPS attendu) : le lien de la notification sera l'adresse locale")
+        publique = ""
+    notif = os.getenv("PK_MCP_NOTIF_URL", "").strip()
+    if notif and _url_acceptable(notif) is not None:
+        LOG.warning("PK_MCP_NOTIF_URL ignorée (%s) : aucune notification ne sera envoyée", _url_acceptable(notif))
+        notif = ""
+    return MCP(cfg, Base(donnees / "mcp.sqlite"), notif_url=notif, notif_jeton_env=os.getenv("PK_MCP_NOTIF_JETON_ENV", "PK_MCP_NOTIF_JETON"),
+               url_publique=publique, prefixe=prefixe)
+
+
+def prefixe_de(url_publique: str) -> str:
+    """Chemin sous lequel la page de validation vit (le même en public et en interne) : celui de PK_MCP_URL_PUBLIQUE, sinon /pk-validation."""
+    chemin = urlsplit(url_publique).path.rstrip("/") if url_publique else ""
+    return chemin if re.fullmatch(r"/[a-z0-9][a-z0-9-]{0,39}", chemin or "") else "/pk-validation"
+
+
+# =====================================================================
+#  Page de validation (protégée par la clé admin) : session signée, jeton anti-CSRF, essais ralentis
+# =====================================================================
+DUREE_SESSION = 8 * 3600
+EN_TETES_PAGE = {"Cache-Control": "no-store", "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer", "X-Robots-Tag": "noindex, nofollow",
+                 "X-Content-Type-Options": "nosniff",
+                 "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"}
+MESSAGES = {"executee": ("ok", "Action exécutée."), "refusee": ("ok", "Action refusée : rien n'a été fait."), "classee": ("ok", "Action classée."),
+            "deja": ("pb", "Action déjà traitée ou expirée."), "expiree": ("pb", "Action expirée (plus de 24 h) : rien n'a été fait."),
+            "echec": ("pb", "Validée, mais l'action n'a pas abouti : vérifiez avant de recommencer."), "introuvable": ("pb", "Action introuvable."),
+            "invalide": ("pb", "Demande invalide (session ou jeton périmé) : rechargez la page."), "connecte": ("ok", "Connecté."),
+            "refus_cle": ("pb", "Clé refusée.")}
+
+
+def _signer(cle: str, texte: str) -> str:
+    return hmac.new(cle.encode("utf-8"), texte.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def nouvelle_session(cle: str, maintenant_s: float | None = None) -> str:
+    exp = int((time.time() if maintenant_s is None else maintenant_s) + DUREE_SESSION)
+    return f"{exp}.{_signer(cle, f'mcp-session|{exp}')}"
+
+
+def session_valide(cle: str, valeur: str | None, maintenant_s: float | None = None) -> bool:
+    if not cle or not valeur or "." not in valeur:
+        return False
+    exp, _, sig = valeur.partition(".")
+    if not exp.isdigit() or len(valeur) > 200:
+        return False
+    return hmac.compare_digest(sig, _signer(cle, f"mcp-session|{exp}")) and int(exp) >= (time.time() if maintenant_s is None else maintenant_s)
+
+
+def jeton_csrf(cle: str, session: str, ident: str, verbe: str) -> str:
+    return _signer(cle, f"csrf|{session}|{ident}|{verbe}")
+
+
+def csrf_valide(cle: str, session: str, ident: str, verbe: str, fourni: str) -> bool:
+    return bool(fourni) and hmac.compare_digest(fourni, jeton_csrf(cle, session, ident, verbe))
+
+
+def _e(x: Any) -> str:
+    return html.escape(str(x), quote=True)
+
+
+def _reste(expire_le: str) -> str:
+    try:
+        s = int((datetime.fromisoformat(expire_le) - maintenant()).total_seconds())
+    except ValueError:
+        return ""
+    if s <= 0:
+        return "expirée"
+    return f"{s // 3600} h {s % 3600 // 60:02d} min"
+
+
+STYLE = ("body{font:16px/1.45 system-ui,sans-serif;max-width:46rem;margin:0 auto;padding:1rem 16px;background:#f6f7f9;color:#1d2330}"
+         "h1{font-size:1.3rem}h2{font-size:1.05rem;margin-top:1.6rem}.carte{background:#fff;border:1px solid #d9dde5;border-radius:10px;padding:.9rem;margin:.7rem 0}"
+         ".m{color:#5a6376;font-size:.88rem}pre{white-space:pre-wrap;word-break:break-word;background:#f0f2f6;border-radius:6px;padding:.6rem;font-size:.85rem;max-height:18rem;overflow:auto}"
+         "button{font:inherit;padding:.55rem 1.1rem;border-radius:8px;border:1px solid #888;background:#fff;cursor:pointer;margin-right:.5rem}"
+         "button.v{background:#1f7a3f;color:#fff;border-color:#1f7a3f}button.r{background:#fff;color:#a12626;border-color:#a12626}"
+         ".ok{background:#e4f4ea;padding:.5rem .8rem;border-radius:8px}.pb{background:#fbe8e8;padding:.5rem .8rem;border-radius:8px}"
+         ".tag{display:inline-block;font-size:.75rem;padding:.05rem .5rem;border-radius:99px;border:1px solid #999}input[type=password]{font:inherit;padding:.5rem;width:100%;box-sizing:border-box}"
+         "@media (prefers-color-scheme:dark){body{background:#14171d;color:#e6e9ef}.carte{background:#1c2029;border-color:#333b4a}pre{background:#11141a}button{background:#1c2029;color:#e6e9ef}.m{color:#9aa4b8}}")
+
+
+def _page(titre: str, corps: str) -> str:
+    return (f'<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+            f'<meta name="robots" content="noindex,nofollow"><title>{_e(titre)}</title><style>{STYLE}</style></head><body>{corps}</body></html>')
+
+
+def page_connexion(message: str = "") -> str:
+    m = MESSAGES.get(message)
+    bandeau = f'<p class="{m[0]}">{_e(m[1])}</p>' if m else ""
+    return _page("Validation — connexion", f'<h1>Validations du Bureau IA</h1>{bandeau}<p>Saisissez la clé d\'administration.</p>'
+                 '<form method="post" action="connexion"><p><input type="password" name="cle" autocomplete="current-password" required autofocus></p>'
+                 '<p><button class="v" type="submit">Se connecter</button></p></form>')
+
+
+def _carte(a: dict, cle: str, session: str) -> str:
+    args = a.get("arguments") or "{}"
+    try:
+        args = json.dumps(json.loads(args), ensure_ascii=False, indent=2)
+    except ValueError:
+        pass
+    if len(args) > 3000:
+        args = args[:3000] + "\n[…tronqué à l'affichage]"
+    entete = (f'<p><b>{_e(a["serveur"])}/{_e(a["outil"])}</b> <span class="tag">{_e(a["classe"])}</span> '
+              f'<span class="m">· n° {_e(a["id"])} · agent {_e(a["agent"])} · demandé par {_e(a["demandeur"])}</span></p>'
+              f'<p class="m">Créée le {_e(a["cree_le"])} (UTC)')
+    if a["statut"] == "attente":
+        entete += f' · <b>expire dans {_e(_reste(a["expire_le"]))}</b>'
+    entete += "</p>"
+    corps = f'<p class="m">Ce que fera la validation : appeler « {_e(a["outil"])} » avec exactement ces arguments.</p><pre>{_e(args)}</pre>'
+    def form(verbe: str, libelle: str, classe: str) -> str:
+        return (f'<form method="post" action="{verbe}/{_e(a["id"])}" style="display:inline"><input type="hidden" name="jeton" '
+                f'value="{_e(jeton_csrf(cle, session, a["id"], verbe))}"><button class="{classe}" type="submit">{libelle}</button></form>')
+    if a["statut"] == "attente":
+        boutons = form("valider", "Valider", "v") + form("refuser", "Refuser", "r")
+    elif a["statut"] == "rouge":
+        boutons = '<p class="m">ROUGE : le Bureau IA n\'exécute jamais un envoi. Copiez le texte ci-dessus, envoyez-le vous-même, puis classez.</p>' + form("classer", "Classer", "")
+    else:
+        boutons = f'<p class="m">Statut : <b>{_e(a["statut"])}</b>' + (f' · {_e(a["resultat"])}' if a.get("resultat") else "") + "</p>"
+    return f'<div class="carte">{entete}{corps}{boutons}</div>'
+
+
+def page_validation(actions: list[dict], cle: str, session: str, message: str = "") -> str:
+    m = MESSAGES.get(message)
+    bandeau = f'<p class="{m[0]}">{_e(m[1])}</p>' if m else ""
+    attente = [a for a in actions if a["statut"] == "attente"]
+    rouges = [a for a in actions if a["statut"] == "rouge"]
+    passees = [a for a in actions if a["statut"] not in ("attente", "rouge")][:20]
+    corps = ['<h1>Validations du Bureau IA</h1>', bandeau,
+             f'<form method="post" action="deconnexion" style="float:right"><button type="submit">Quitter</button></form>',
+             f'<h2>En attente de votre décision ({len(attente)})</h2>']
+    corps += [_carte(a, cle, session) for a in attente] or ['<p class="m">Rien n\'attend. Une action non traitée expire d\'elle-même au bout de 24 h : rien n\'est alors fait.</p>']
+    if rouges:
+        corps.append(f"<h2>Envois à faire vous-même — ROUGE ({len(rouges)})</h2>")
+        corps += [_carte(a, cle, session) for a in rouges]
+    if passees:
+        corps.append("<h2>Dernières décisions</h2>")
+        corps += [_carte(a, cle, session) for a in passees]
+    return _page("Validations du Bureau IA", "".join(corps))
+
+
+class Limiteur:
+    """Ralentit les essais de connexion : au-delà de 10 échecs en 15 minutes, chaque essai coûte 2 s et les essais passent un par un."""
+
+    def __init__(self, seuil: int = 10, fenetre: float = 900.0, delai: float = 2.0):
+        self.echecs: deque = deque()
+        self.seuil, self.fenetre, self.delai = seuil, fenetre, delai
+        self.verrou = asyncio.Lock()
+
+    def _purger(self) -> None:
+        t = time.monotonic()
+        while self.echecs and t - self.echecs[0] > self.fenetre:
+            self.echecs.popleft()
+
+    async def verifier(self, cle_fournie: str, cle: str) -> bool:
+        async with self.verrou:
+            self._purger()
+            if len(self.echecs) >= self.seuil:
+                await asyncio.sleep(self.delai)
+            ok = bool(cle) and hmac.compare_digest(cle_fournie.encode("utf-8"), cle.encode("utf-8"))
+            if not ok:
+                self.echecs.append(time.monotonic())
+            return ok
 
 
 # =====================================================================

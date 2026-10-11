@@ -9,6 +9,10 @@ services:
     environment:
       PK_MCP_ACTIF: "1"
       PK_MCP_DATA: /app/data/mcp
+      # Page de validation (ouverte sous ce chemin, en local et derrière le serveur web) et notification par mail via n8n
+      PK_MCP_URL_PUBLIQUE: ${PK_MCP_URL_PUBLIQUE:-https://agents.mebeeltech.online/pk-validation}
+      PK_MCP_NOTIF_URL: ${PK_MCP_NOTIF_URL:-}                  # ex. http://pk_n8n:5678/webhook/pk-mcp (voir scripts/mcp/n8n-notification-mcp.json)
+      PK_MCP_NOTIF_JETON: ${PK_MCP_NOTIF_JETON:-}              # jeton du webhook n8n (valeur dans .env uniquement)
       # Jetons : seulement les NOMS ici ; les valeurs sont dans .env (jamais dans le dépôt)
       PK_MCP_PAGES_JETON: ${PK_MCP_PAGES_JETON:-}
       PK_MCP_AGENDA_JETON: ${PK_MCP_AGENDA_JETON:-}

@@ -47,7 +47,7 @@ imposé par l'orchestrateur est une **seconde barrière**, pas la première. La 
   seulement ce que l'on veut faire lire).
 Les noms d'outils et d'arguments de `mcp.exemple.yaml` sont des **exemples** : lisez les vrais avec la commande ci-dessous et adaptez.
 
-## Fichiers (étape 1)
+## Fichiers
 | Fichier | Rôle |
 |---|---|
 | `orchestrateur/mcp_client.py` | le client, la configuration, le journal, la file des actions en attente |
@@ -55,6 +55,7 @@ Les noms d'outils et d'arguments de `mcp.exemple.yaml` sont des **exemples** : l
 | `orchestrateur/Dockerfile` | copie `mcp_client.py` dans l'image |
 | `agents/mcp.exemple.yaml` | exemple : pages web, Agenda, Gmail (un libellé), Drive (un dossier) — tout en lecture |
 | `docker-compose.mcp.yml` | ajout optionnel (variables et volume) ; n'existe pas pour ABI |
+| `scripts/mcp/n8n-notification-mcp.json` | modèle de workflow n8n : webhook → mail à Will (à vérifier dans n8n) |
 
 Le code Python est dans l'image : **reconstruire** l'orchestrateur (pas de simple copie à chaud).
 
@@ -67,7 +68,8 @@ Le code Python est dans l'image : **reconstruire** l'orchestrateur (pas de simpl
 3. Copier `agents/mcp.exemple.yaml` en `agents/mcp.yaml`, **adapter** noms d'outils, domaines, libellé, dossier. Vérifier :
    `docker compose exec pk_orchestrateur python mcp_client.py verifier`
    Lister les vrais outils d'un serveur : `docker compose exec pk_orchestrateur python mcp_client.py lister pages`
-4. Mettre les jetons dans `.env` (noms : `PK_MCP_PAGES_JETON`, `PK_MCP_AGENDA_JETON`, `PK_MCP_COURRIER_JETON`, `PK_MCP_DRIVE_JETON`) et ajouter
+4. Mettre les jetons dans `.env` (noms : `PK_MCP_PAGES_JETON`, `PK_MCP_AGENDA_JETON`, `PK_MCP_COURRIER_JETON`, `PK_MCP_DRIVE_JETON`, et pour la notification
+   `PK_MCP_NOTIF_URL`, `PK_MCP_NOTIF_JETON`) et ajouter
    `COMPOSE_FILE=docker-compose.yml:docker-compose.mcp.yml` (en gardant ce qui y figure déjà, ex. `:docker-compose.caddy.yml`).
 5. Donner `outils: [mcp]` aux seuls agents voulus (dans leur fiche : `agents/registre.yaml` ou `agents/perso.yaml`).
 6. `docker compose up -d pk_orchestrateur` — **un redémarrage est nécessaire** pour relire `mcp.yaml`.
@@ -76,13 +78,48 @@ Le code Python est dans l'image : **reconstruire** l'orchestrateur (pas de simpl
 
 **Retour arrière immédiat** : retirer `docker-compose.mcp.yml` de `COMPOSE_FILE` (ou mettre `PK_MCP_ACTIF=0`) puis `docker compose up -d pk_orchestrateur`.
 
-## Écritures et validation de Will
-Une action **orange** est enregistrée (agent, outil, arguments, 24 h de validité) et **non exécutée** ; l'agent répond « en attente de validation ».
-`GET /admin/mcp/etat` en indique le nombre. **Étape 2 (à venir dans ce lot)** : routes pour valider ou refuser, page web minimale
-(protégée par la clé admin) et notification (n8n ou mail) quand une action attend. **Tant qu'elle n'est pas livrée, ne configurez aucun outil
-orange ni rouge** — l'exemple fourni n'en contient aucun.
+## Écritures et validation de Will (étape 2)
+Une action **orange** (brouillon, création) n'est **jamais exécutée par l'agent** : elle est enregistrée avec ses arguments, valable **24 h**, et l'agent
+répond « en attente de validation de Will ». Will la voit et décide :
+- **Page web** `…/pk-validation/` (protégée par la clé d'administration) : liste des actions en attente avec **ce qui sera exécuté, argument par argument**,
+  boutons **Valider** / **Refuser**, historique des 20 dernières décisions ; les actions **rouges** (envois) s'y affichent pour être copiées et envoyées
+  **par vous**, puis « Classées » — rien n'est jamais exécuté pour elles.
+- **Routes** (clé admin en `Authorization: Bearer`) : `GET /admin/mcp/attente`, `POST /admin/mcp/valider/{id}`, `/refuser/{id}`, `/classer/{id}`.
+- À la validation, tout est **revérifié** (l'outil est-il toujours autorisé, toujours « orange », l'agent aussi, arguments conformes) : sinon refus
+  automatique. Une action ne s'exécute **qu'une seule fois** (double clic, deux onglets). Après 24 h : « expirée », impossible à valider, rien n'est fait.
+- Si le serveur ne répond pas ou répond en erreur après validation, la page le dit (« peut-être faite, peut-être pas : vérifiez avant de recommencer »).
+
+**Sécurité de la page.** Connexion par la clé admin (comparaison à temps constant ; au-delà de 10 échecs en 15 min chaque essai coûte 2 s) → cookie
+signé de 8 h, `HttpOnly`, `SameSite=Strict`, `Secure` derrière HTTPS, **limité au chemin de la page**. Chaque bouton porte un jeton anti-CSRF propre à
+l'action et au geste ; l'origine de la requête est contrôlée. Tout est échappé, aucun script, en-têtes `Content-Security-Policy`, `no-store`, `noindex`.
+Les liens et formulaires sont **relatifs** : la page fonctionne sous n'importe quel préfixe.
+
+**Adresse.** Le chemin est celui de `PK_MCP_URL_PUBLIQUE` (défaut `https://agents.mebeeltech.online/pk-validation`), identique en interne et en public ;
+en local : `http://127.0.0.1:4001/pk-validation/`. Le serveur web doit **conserver le préfixe** (ne pas le retirer) :
+- Caddy (`config/Caddyfile`, dans le bloc `{$PK_DOMAINE_AGENTS}`) :
+  ```
+  handle /pk-validation* { reverse_proxy pk_orchestrateur:4001 }
+  handle { reverse_proxy pk_openwebui:8080 }
+  ```
+- nginx : `location /pk-validation { proxy_pass http://127.0.0.1:4001; proxy_set_header Host $host; proxy_set_header X-Forwarded-Proto $scheme; }`
+  (pas de `/` à la fin de `proxy_pass`, pour garder le préfixe).
+Le reste de l'orchestrateur n'est pas exposé par ce chemin (seul `/pk-validation*` est redirigé).
+
+**Notification (mail via n8n).** Quand une action orange est mise en attente, l'orchestrateur appelle un **webhook n8n** (`PK_MCP_NOTIF_URL`) avec :
+identifiant, agent, outil, dates, lien vers la page, et un `objet` / `corps` prêts à envoyer. **Les arguments (texte du mail, destinataire…) ne quittent
+pas le serveur.** Échec de remise : 5 essais au plus (toutes les 5 min), sans jamais gêner la réponse à l'utilisateur.
+1. Dans n8n, importer `scripts/mcp/n8n-notification-mcp.json` (modèle **non testé contre votre version de n8n** : vérifier les deux nœuds), créer les
+   identifiants « Header Auth » (le jeton = `PK_MCP_NOTIF_JETON`) et SMTP, mettre votre adresse, **activer** le workflow.
+2. Dans `.env` : `PK_MCP_NOTIF_URL=http://pk_n8n:5678/webhook/pk-mcp` et `PK_MCP_NOTIF_JETON=…` (valeur secrète), puis `docker compose up -d pk_orchestrateur`.
+3. Essai sans risque : voir « Essai de la validation » ci-dessous.
+
+**Essai de la validation (avec un outil orange de test)**
+1. Configurer un outil orange sur un serveur MCP de test (jamais sur vos vrais comptes pour le premier essai), donner `outils: [mcp]` à un agent.
+2. Demander à l'agent d'utiliser l'outil : il répond « en attente » ; vous recevez le mail ; `curl -s -H "Authorization: Bearer $PK_ADMIN_KEY" localhost:4001/admin/mcp/attente`.
+3. Ouvrir la page, **Refuser** une première action (rien ne doit se passer), puis **Valider** une seconde.
+4. Laisser une troisième action 24 h : elle doit apparaître « expiree ».
 
 ## Tests
-`python -m pytest tests/test_mcp.py` : faux serveur MCP en mémoire (aucun accès réseau) — désactivé par défaut, ABI coupée, liste blanche, classes,
+`python -m pytest tests/test_mcp.py tests/test_mcp_validation.py` : faux serveur MCP et faux n8n en mémoire (aucun accès réseau) — désactivé par défaut, ABI coupée, liste blanche, classes,
 paiement refusé (14 noms), arguments contrôlés (16 adresses refusées), bornes, injection (résultat piégé, description piégée, appel écrit en texte),
-journal sans contenu, jetons non divulgués. Étape 3 (à venir) : serveur MCP exposant les agents en lecture seule.
+journal sans contenu, jetons non divulgués ; validation : une seule exécution, expiration à 24 h, revérification, page (connexion, cookie limité au chemin, CSRF, origine, échappement, liens relatifs, préfixe configurable), notification sans arguments. Étape 3 (à venir) : serveur MCP exposant les agents en lecture seule.

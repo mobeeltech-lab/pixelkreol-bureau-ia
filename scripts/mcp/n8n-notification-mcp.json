@@ -1,0 +1,43 @@
+{
+  "name": "Bureau IA — action MCP en attente de validation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pk-mcp",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "name": "Action en attente (webhook)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "pk-mcp-attente",
+      "credentials": {
+        "httpHeaderAuth": { "id": "A-CONFIGURER", "name": "Jeton webhook Bureau IA" }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "A-CONFIGURER@exemple.invalid",
+        "toEmail": "A-CONFIGURER@exemple.invalid",
+        "subject": "={{ $json.body.objet }}",
+        "emailFormat": "text",
+        "text": "={{ $json.body.corps }}",
+        "options": {}
+      },
+      "name": "Mail à Will",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [520, 300],
+      "credentials": {
+        "smtp": { "id": "A-CONFIGURER", "name": "SMTP de Will" }
+      }
+    }
+  ],
+  "connections": {
+    "Action en attente (webhook)": { "main": [[{ "node": "Mail à Will", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": {}
+}
