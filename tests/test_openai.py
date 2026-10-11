@@ -18,9 +18,9 @@ def msg(texte="salut"):
 def test_liste_des_modeles(client, h_api):
     r = client.get("/v1/models", headers=h_api)
     j = r.json()
-    assert j["object"] == "list" and len(j["data"]) == 27
+    assert j["object"] == "list" and len(j["data"]) == 31
     ids = [m["id"] for m in j["data"]]
-    assert ids[:2] == ["pk-auto", "pk-equipe"] and len(set(ids)) == 27
+    assert ids[:2] == ["pk-auto", "pk-equipe"] and len(set(ids)) == 31
     assert "pk-02-commercial" in ids and "pk-12-secretariat" in ids
     for m in j["data"]:
         assert m["object"] == "model" and isinstance(m["created"], int) and m["owned_by"]
@@ -117,8 +117,8 @@ def test_pk_auto_est_le_modele_par_defaut(client, h_api):
 
 
 def test_sante_et_vitrine_sans_cle(client):
-    assert client.get("/health").json()["agents"] == 25
-    assert "25 agents" in client.get("/").text
+    assert client.get("/health").json()["agents"] == 29
+    assert "29 agents" in client.get("/").text
 
 
 def test_sante_trace_litellm_injoignable(client, caplog):

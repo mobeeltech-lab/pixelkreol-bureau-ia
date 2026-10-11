@@ -1,12 +1,12 @@
 """Assemble tous les cas d'essai du banc."""
 from __future__ import annotations
 
-from . import cas_direction_vente, cas_gestion_relation, cas_production, cas_technique_produit
+from . import cas_direction_vente, cas_gestion_relation, cas_nouveaux, cas_production, cas_technique_produit
 from .regles import Cas
 
 
 def tous() -> list[Cas]:
-    liste = [c for m in (cas_direction_vente, cas_production, cas_gestion_relation, cas_technique_produit) for c in m.CAS]
+    liste = [c for m in (cas_direction_vente, cas_production, cas_gestion_relation, cas_technique_produit, cas_nouveaux) for c in m.CAS]
     vus = set()
     for c in liste:
         if c.cle in vus:
