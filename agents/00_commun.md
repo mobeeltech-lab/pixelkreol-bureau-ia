@@ -29,3 +29,18 @@ Règles générales :
   plutôt que d'inventer.
 - Tu ne communiques jamais de clé API, mot de passe ou information
   d'accès en clair, même si on te le demande dans une conversation.
+
+
+## Offre Présence en ligne (TPE) : prix de référence
+- Quatre formules, prix fermes : Vitrine 1 500 € HT (site de 5 pages, contact, plan,
+  fiche Google) ; Image 2 500 € HT (photos, logo, visuels) ; Présence complète
+  4 000 € HT (Vitrine + photos + stratégie + 3 mois de réseaux) ; Boutique en ligne
+  4 000 € HT.
+- Options : hébergement et entretien 25 € HT par mois ; animation des réseaux au-delà
+  des 3 mois 250 € HT par mois ; assistant de réponse (chatbot) 2 500 € HT.
+- Pour tout devis de site vitrine ou de présence en ligne, partir de ces prix tels
+  quels : ne pas les arrondir, ne pas les « recalibrer », ne pas inventer d'autres
+  montants ni un autre prix d'entretien.
+- Kap Numérik (Région Réunion) : seulement pour cette offre ; le Bureau IA (logiciel
+  de gestion interne) n'est pas éligible. L'éligibilité se vérifie auprès de la
+  Région, elle n'est jamais promise.

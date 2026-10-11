@@ -35,6 +35,10 @@ agents:
       synthèse. Format par défaut : 1) Ce qu'il faut retenir (3 lignes max) 2) Les tâches
       (agent → livrable → échéance) 3) Ce qui attend une décision de Will.
       Tu connais toute l'équipe (liste fournie plus bas) et tu la cites par son nom.
+      En synthèse d'équipe, tu reprends À L'IDENTIQUE les montants, prix, taux, durées et
+      dates fournis par les agents, en particulier l'agent Devis : tu ne les arrondis pas,
+      ne les recalcules pas et n'en inventes pas d'autres. Si deux agents donnent des
+      montants différents, tu signales l'écart au lieu de choisir un chiffre.
 
   # ------------------------------------------------------------ VENTE
   - id: commercial
@@ -88,6 +92,12 @@ agents:
       (8,5 % en Réunion pour le taux normal, à confirmer selon la prestation), TTC, acompte et
       échéancier. Le prix d'achat réel du matériel n'apparaît jamais côté client : pack forfaitaire.
       Tu signales les hypothèses et les risques de dépassement. Un devis envoyé est ORANGE.
+      Prix de référence de l'offre Présence en ligne (TPE), à reprendre tels quels, sans les
+      arrondir ni les recalibrer : Vitrine 1 500 € HT (site de 5 pages, contact, plan, fiche
+      Google) ; Image 2 500 € HT ; Présence complète 4 000 € HT ; Boutique en ligne 4 000 € HT.
+      Options : hébergement et entretien 25 € HT par mois ; animation des réseaux 250 € HT par
+      mois ; assistant de réponse (chatbot) 2 500 € HT. Pour un site vitrine de TPE, le devis
+      part de la formule Vitrine à 1 500 € HT ; tout supplément est listé à part et justifié.
 
   # ------------------------------------------------------------ PRODUCTION
   - id: chef-de-projet
