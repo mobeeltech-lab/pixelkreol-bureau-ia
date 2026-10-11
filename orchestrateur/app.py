@@ -535,13 +535,54 @@ def nettoyer_message(m: dict) -> dict:
     return {k: v for k, v in m.items() if k in CHAMPS_MESSAGE}
 
 
+MAX_MESSAGE = int(cfg_nombre("PK_MAX_MESSAGE", 24000, 2000, 400000))   # caracteres par message envoye aux cerveaux
+MAX_TOTAL = int(cfg_nombre("PK_MAX_TOTAL", 90000, 8000, 2000000))       # caracteres pour toute la conversation
+
+
+def tronquer_milieu(t, maxi: int):
+    """Coupe le MILIEU d'un texte trop long (pages web lues par un outil) : le debut (consignes) et la fin (question) restent."""
+    if not isinstance(t, str) or len(t) <= maxi:
+        return t
+    tete = int(maxi * 0.6)
+    return (t[:tete] + f"\n\n[… {len(t) - maxi} caractères retirés ici pour tenir dans la mémoire des cerveaux …]\n\n"
+            + t[-(maxi - tete):])
+
+
+def _taille(m: dict) -> int:
+    c = m.get("content")
+    if isinstance(c, str):
+        return len(c)
+    if isinstance(c, list):
+        return sum(len(x.get("text", "")) for x in c if isinstance(x, dict) and isinstance(x.get("text"), str))
+    return 0
+
+
+def borner(messages: list[dict]) -> list[dict]:
+    """Chaque message est borne a MAX_MESSAGE caracteres, puis les echanges les plus anciens sont retires tant que la
+    conversation depasse MAX_TOTAL (les 2 derniers messages sont toujours gardes)."""
+    ms = []
+    for m in messages:
+        c = m.get("content")
+        if isinstance(c, str):
+            m = {**m, "content": tronquer_milieu(c, MAX_MESSAGE)}
+        elif isinstance(c, list):
+            m = {**m, "content": [({**x, "text": tronquer_milieu(x["text"], MAX_MESSAGE)}
+                                   if isinstance(x, dict) and isinstance(x.get("text"), str) else x) for x in c]}
+        ms.append(m)
+    while sum(_taille(m) for m in ms) > MAX_TOTAL and len(ms) > 2:
+        del ms[0]
+        while len(ms) > 2 and ms[0].get("role") == "tool":   # pas de resultat d'outil orphelin
+            del ms[0]
+    return ms
+
+
 def preparer_corps(corps: dict, agent: dict) -> tuple[dict, list[str]]:
     messages = [m for m in corps.get("messages", []) if isinstance(m, dict)]
-    systeme_client = "\n\n".join(texte_du_message(m) for m in messages if m.get("role") == "system").strip()
+    systeme_client = tronquer_milieu("\n\n".join(texte_du_message(m) for m in messages if m.get("role") == "system").strip(), MAX_MESSAGE)
     systeme = REGISTRE.prompt_systeme(agent)
     if systeme_client:
         systeme += "\n\n## Consignes supplémentaires de l'utilisateur\n" + systeme_client
-    nouveaux = [{"role": "system", "content": systeme}] + [nettoyer_message(m) for m in messages if m.get("role") != "system"]
+    nouveaux = [{"role": "system", "content": systeme}] + borner([nettoyer_message(m) for m in messages if m.get("role") != "system"])
     sortie = {k: v for k, v in corps.items() if k not in ("messages", "model") and option_autorisee(k)}
     sortie["messages"] = nouveaux
     sortie.setdefault("temperature", agent.get("temperature", 0.4))

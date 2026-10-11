@@ -41,13 +41,6 @@ model_list:
     stream_timeout: 30
   model_info:
     description: pk-rapide via openrouter
-- model_name: pk-rapide--7
-  litellm_params:
-    model: cerebras/gpt-oss-120b
-    api_key: os.environ/CEREBRAS_API_KEY
-    stream_timeout: 75
-  model_info:
-    description: pk-rapide via cerebras
 - model_name: pk-rapide--8
   litellm_params:
     model: openrouter/openrouter/free
@@ -90,13 +83,6 @@ model_list:
     stream_timeout: 75
   model_info:
     description: pk-costaud via groq
-- model_name: pk-costaud--7
-  litellm_params:
-    model: cerebras/gpt-oss-120b
-    api_key: os.environ/CEREBRAS_API_KEY
-    stream_timeout: 75
-  model_info:
-    description: pk-costaud via cerebras
 - model_name: pk-costaud--8
   litellm_params:
     model: deepseek/deepseek-chat
@@ -146,13 +132,6 @@ model_list:
     stream_timeout: 30
   model_info:
     description: pk-code via openrouter
-- model_name: pk-code--7
-  litellm_params:
-    model: cerebras/gpt-oss-120b
-    api_key: os.environ/CEREBRAS_API_KEY
-    stream_timeout: 75
-  model_info:
-    description: pk-code via cerebras
 - model_name: pk-code--8
   litellm_params:
     model: openrouter/openrouter/free
@@ -242,7 +221,6 @@ router_settings:
   fallbacks:
   - pk-rapide:
     - pk-rapide--2
-    - pk-rapide--7
     - pk-rapide--3
     - pk-rapide--4
     - pk-rapide--5
@@ -252,7 +230,6 @@ router_settings:
     - pk-costaud--lite
     - pk-costaud--2
     - pk-costaud--6
-    - pk-costaud--7
     - pk-costaud--3
     - pk-costaud--8
     - pk-costaud--4
@@ -260,7 +237,6 @@ router_settings:
   - pk-code:
     - pk-code--2
     - pk-code--4
-    - pk-code--7
     - pk-code--5
     - pk-code--6
     - pk-code--8
