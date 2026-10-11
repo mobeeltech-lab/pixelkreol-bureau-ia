@@ -26,7 +26,7 @@ import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, AsyncIterator
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
 import yaml
@@ -41,7 +41,6 @@ VERSION = "2.0.0"
 CERVEAUX_VALIDES = {"pk-rapide", "pk-costaud", "pk-code", "pk-vision", "pk-long"}
 FAMILLES = {"direction", "vente", "production", "gestion", "relation", "technique", "produit", "client"}
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,40}$")
-TZ = ZoneInfo("Indian/Reunion")
 
 
 def cfg(nom: str, defaut: str = "") -> str:
@@ -70,6 +69,20 @@ ANNONCE = cfg("PK_ANNONCE_AGENT", "true").lower() == "true"
 MAX_EQUIPE = cfg_nombre("PK_EQUIPE_MAX", 4, 1, 8, entier=True)
 DELAI_AGENT = cfg_nombre("PK_EQUIPE_DELAI", 150, 1, 900)   # secondes accordées à chaque agent en mode équipe
 DATABASE_URL = cfg("DATABASE_URL", "")
+
+# Textes propres à une installation (valeurs par défaut = celles de l'instance PixelKréol, inchangées).
+# Une autre instance (ex. ABI Holding, tests) les remplace par des variables d'environnement.
+MARQUE = cfg("PK_MARQUE", "PixelKréol")                       # « Bureau IA <marque> »
+LIEU = cfg("PK_LIEU", "à La Réunion")                         # « Date et heure <lieu> : … »
+FUSEAU = cfg("PK_FUSEAU", "Indian/Reunion")                   # fuseau horaire donné aux agents
+PATRON = cfg("PK_PATRON", "Will")                             # « Demande de <patron> : … » (synthèse d'équipe)
+VITRINE_PIED = cfg("PK_VITRINE_PIED", "LLM gratuits · La Réunion")
+PROPRIETAIRE = cfg("PK_PROPRIETAIRE", "pixelkreol")           # champ owned_by du catalogue /v1/models
+try:
+    TZ = ZoneInfo(FUSEAU)
+except (ZoneInfoNotFoundError, ValueError):
+    LOG.warning("PK_FUSEAU « %s » inconnu : fuseau Indian/Reunion utilisé", FUSEAU)
+    TZ = ZoneInfo("Indian/Reunion")
 
 
 # =====================================================================
@@ -336,7 +349,7 @@ class Registre:
         date = f"{JOURS[maintenant.weekday()]} {maintenant.strftime('%d/%m/%Y %H:%M')}"
         parties = [self.socle,
                    f"## Ton poste : {a['emoji']} {a['nom']}\n{a['description']}\n\n{a['consignes'].strip()}",
-                   f"Date et heure à La Réunion : {date}."]
+                   f"Date et heure {LIEU} : {date}."]
         if a["id"] == "orchestrateur":
             equipe = "\n".join(f"- {x['emoji']} {x['nom']} ({x['id']}) : {x['description']}"
                                for x in self.agents.values() if x["id"] != "orchestrateur")
@@ -721,7 +734,7 @@ async def cycle_de_vie(app: FastAPI):
     await JOURNAL.arreter()
 
 
-app = FastAPI(title="Bureau IA PixelKréol — Orchestrateur", version=VERSION, lifespan=cycle_de_vie,
+app = FastAPI(title=f"Bureau IA {MARQUE} — Orchestrateur", version=VERSION, lifespan=cycle_de_vie,
               docs_url=None, redoc_url=None, openapi_url=None)
 
 
@@ -766,13 +779,13 @@ async def modeles(request: Request):
     REGISTRE.recharger()
     cree = int(time.time())
     donnees = [
-        {"id": "pk-auto", "object": "model", "created": cree, "owned_by": "pixelkreol",
+        {"id": "pk-auto", "object": "model", "created": cree, "owned_by": PROPRIETAIRE,
          "name": "🧠 PK Auto — choisit le bon agent"},
-        {"id": "pk-equipe", "object": "model", "created": cree, "owned_by": "pixelkreol",
+        {"id": "pk-equipe", "object": "model", "created": cree, "owned_by": PROPRIETAIRE,
          "name": "👥 PK Équipe — plusieurs agents + synthèse"},
     ]
     for a in REGISTRE.agents.values():
-        donnees.append({"id": a["modele"], "object": "model", "created": cree, "owned_by": "pixelkreol",
+        donnees.append({"id": a["modele"], "object": "model", "created": cree, "owned_by": PROPRIETAIRE,
                         "name": f"{a['emoji']} {a['nom']}", "description": a["description"],
                         "famille": a["famille"], "cerveau": a["cerveau"]})
     return {"object": "list", "data": donnees}
@@ -1000,7 +1013,7 @@ async def mode_equipe(client: httpx.AsyncClient, corps: dict, flux: bool):
                       + "). Réessaie dans quelques minutes.", "cerveaux_indisponibles")
 
     contributions = "\n\n".join(f"### {a['emoji']} {a['nom']}\n{txt}" for (a, _), (txt, _) in zip(taches, resultats))
-    prompt_synthese = (f"Demande de Will : {demande}\n\nVoici les contributions de l'équipe :\n\n{contributions}\n\n")
+    prompt_synthese = (f"Demande de {PATRON} : {demande}\n\nVoici les contributions de l'équipe :\n\n{contributions}\n\n")
     if muets:
         prompt_synthese += ("ATTENTION : " + ", ".join(a["nom"] for a in muets) + " n'a pas pu répondre (indisponible). "
                             "N'invente pas leur partie : dis clairement ce qui manque et ce qu'il faudra redemander.\n\n")
@@ -1156,7 +1169,7 @@ async def vitrine():
         f'<small>{html.escape(a["famille"])}</small><p>{html.escape(a["description"])}</p></div>'
         for a in REGISTRE.agents.values())
     return f"""<!doctype html><html lang="fr"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>Bureau IA PixelKréol</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Bureau IA {html.escape(MARQUE)}</title>
 <style>:root{{--l:#0B5D6B;--v:#17B6C4;--c:#E8542F;--s:#FFF6E8;--n:#1D2A2E}}
 body{{margin:0;font-family:system-ui,sans-serif;background:var(--s);color:var(--n)}}
 header{{background:var(--l);color:#fff;padding:28px 16px}}h1{{margin:0 0 6px}}
@@ -1164,5 +1177,5 @@ main{{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap
 .c{{background:#fff;border-radius:12px;padding:14px;border-top:4px solid var(--v)}}.e{{font-size:28px}}
 small{{display:block;color:var(--c);text-transform:uppercase;font-size:11px;letter-spacing:.06em;margin:2px 0 6px}}
 p{{margin:0;font-size:14px;line-height:1.4}}</style></head><body>
-<header><h1>Bureau IA PixelKréol</h1>{len(REGISTRE.agents)} agents · LLM gratuits · La Réunion</header>
+<header><h1>Bureau IA {html.escape(MARQUE)}</h1>{len(REGISTRE.agents)} agents · {html.escape(VITRINE_PIED)}</header>
 <main>{cartes}</main></body></html>"""
