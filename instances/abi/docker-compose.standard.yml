@@ -1,0 +1,100 @@
+# =====================================================================
+#  Instance de TEST ABI Holding — AJOUT « standard téléphonique IA » (messages vocaux) — ÉTEINT PAR DÉFAUT
+#
+#  Ce fichier n'est lu que si COMPOSE_FILE=docker-compose.yml:docker-compose.standard.yml figure dans .env
+#  (avec le NAS : docker-compose.yml:docker-compose.nas.yml:docker-compose.standard.yml). Voir STANDARD-LISEZMOI.md.
+#  Sans lui, ce service n'existe pas. Avec lui mais ABI_STANDARD_ACTIF=0 (défaut), le conteneur démarre, le dit, et s'arrête.
+#
+#  - SERVICE SÉPARÉ de l'orchestrateur : la transcription a besoin de plus de mémoire (modèle de voix) et d'autres bibliothèques ;
+#    en cas de problème elle ne peut pas entraîner le chat ni les agents avec elle.
+#  - AUCUN port publié, aucun accès au NAS ni à Docker. Système de fichiers en lecture seule, aucune capacité Linux, pas de swap.
+#  - La voix est transcrite sur le serveur ; HF_HUB_OFFLINE=1 : le service ne va jamais chercher de modèle sur Internet.
+# =====================================================================
+services:
+  abi_standard:
+    build: ./standard
+    image: abi/standard:1
+    container_name: abi_standard
+    restart: on-failure:5          # ACTIF=0 → sortie propre, pas de redémarrage ; panne réelle → redémarre (5 essais)
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    depends_on:
+      abi_orchestrateur: {condition: service_healthy}
+    environment:
+      ABI_STANDARD_ACTIF: ${ABI_STANDARD_ACTIF:-0}
+      ABI_STANDARD_IMAP_HOTE: ${ABI_STANDARD_IMAP_HOTE:-}
+      ABI_STANDARD_IMAP_PORT: ${ABI_STANDARD_IMAP_PORT:-993}
+      ABI_STANDARD_IMAP_SSL: ${ABI_STANDARD_IMAP_SSL:-1}
+      ABI_STANDARD_IMAP_COMPTE: ${ABI_STANDARD_IMAP_COMPTE:-}
+      ABI_STANDARD_IMAP_MDP: ${ABI_STANDARD_IMAP_MDP:-}
+      ABI_STANDARD_IMAP_DOSSIER: ${ABI_STANDARD_IMAP_DOSSIER:-INBOX}
+      ABI_STANDARD_IMAP_DOSSIER_TRAITE: ${ABI_STANDARD_IMAP_DOSSIER_TRAITE:-Traité}
+      ABI_STANDARD_IMAP_APRES: ${ABI_STANDARD_IMAP_APRES:-lu}
+      ABI_STANDARD_EXPEDITEURS_OK: ${ABI_STANDARD_EXPEDITEURS_OK:-}
+      ABI_STANDARD_SMTP_HOTE: ${ABI_STANDARD_SMTP_HOTE:-}
+      ABI_STANDARD_SMTP_PORT: ${ABI_STANDARD_SMTP_PORT:-587}
+      ABI_STANDARD_SMTP_SECURITE: ${ABI_STANDARD_SMTP_SECURITE:-starttls}
+      ABI_STANDARD_SMTP_COMPTE: ${ABI_STANDARD_SMTP_COMPTE:-}
+      ABI_STANDARD_SMTP_MDP: ${ABI_STANDARD_SMTP_MDP:-}
+      ABI_STANDARD_SMTP_EXPEDITEUR: ${ABI_STANDARD_SMTP_EXPEDITEUR:-}
+      ABI_STANDARD_DEST_VENTE: ${ABI_STANDARD_DEST_VENTE:-}
+      ABI_STANDARD_DEST_LOCATION: ${ABI_STANDARD_DEST_LOCATION:-}
+      ABI_STANDARD_DEST_APPEL_DE_FONDS: ${ABI_STANDARD_DEST_APPEL_DE_FONDS:-}
+      ABI_STANDARD_DEST_CHANTIER: ${ABI_STANDARD_DEST_CHANTIER:-}
+      ABI_STANDARD_DEST_FOURNISSEUR: ${ABI_STANDARD_DEST_FOURNISSEUR:-}
+      ABI_STANDARD_DEST_ADMINISTRATION: ${ABI_STANDARD_DEST_ADMINISTRATION:-}
+      ABI_STANDARD_DEST_AUTRE: ${ABI_STANDARD_DEST_AUTRE:-}
+      ABI_STANDARD_DEST_DEFAUT: ${ABI_STANDARD_DEST_DEFAUT:-}
+      ABI_STANDARD_DEST_URGENCE: ${ABI_STANDARD_DEST_URGENCE:-}
+      ABI_STANDARD_DOMAINES_OK: ${ABI_STANDARD_DOMAINES_OK:-}
+      ABI_STANDARD_HORAIRES: ${ABI_STANDARD_HORAIRES:-08:00-18:00}
+      ABI_STANDARD_JOURS: ${ABI_STANDARD_JOURS:-1-5}
+      ABI_STANDARD_WHISPER_MODELE: ${ABI_STANDARD_WHISPER_MODELE:-small}
+      ABI_STANDARD_THREADS: ${ABI_STANDARD_THREADS:-2}
+      ABI_STANDARD_BEAM: ${ABI_STANDARD_BEAM:-1}
+      ABI_STANDARD_DUREE_MAX: ${ABI_STANDARD_DUREE_MAX:-180}
+      ABI_STANDARD_TAILLE_MAX_MO: ${ABI_STANDARD_TAILLE_MAX_MO:-15}
+      ABI_STANDARD_MOTS_MIN: ${ABI_STANDARD_MOTS_MIN:-3}
+      ABI_STANDARD_LIBERER_MODELE: ${ABI_STANDARD_LIBERER_MODELE:-1}
+      ABI_STANDARD_INTERVALLE: ${ABI_STANDARD_INTERVALLE:-120}
+      ABI_STANDARD_LOT_MAX: ${ABI_STANDARD_LOT_MAX:-5}
+      ABI_STANDARD_MAX_MAILS_HEURE: ${ABI_STANDARD_MAX_MAILS_HEURE:-30}
+      ABI_STANDARD_MAX_ALERTES_HEURE: ${ABI_STANDARD_MAX_ALERTES_HEURE:-10}
+      ABI_STANDARD_CONSERVATION_JOURS: ${ABI_STANDARD_CONSERVATION_JOURS:-30}
+      ABI_STANDARD_CONSERVATION_JOURNAL: ${ABI_STANDARD_CONSERVATION_JOURNAL:-365}
+      # liaison interne avec la Secrétaire (Bureau IA) : la clé est celle que l'interface de chat utilise déjà
+      ABI_STANDARD_ORCH_URL: http://abi_orchestrateur:4001
+      ABI_STANDARD_ORCH_DELAI: ${ABI_STANDARD_ORCH_DELAI:-120}
+      ABI_STANDARD_AGENT: ${ABI_STANDARD_AGENT:-secretaire}
+      ABI_STANDARD_ORCH_CLE: ${ABI_API_KEY:?ABI_API_KEY manquant dans .env}
+      ABI_STANDARD_WHISPER_DOSSIER: /models
+      ABI_STANDARD_TMP: /tmp
+      ABI_STANDARD_DONNEES: /app/data
+      HF_HUB_OFFLINE: "1"
+      TZ: Europe/Paris
+    volumes:
+      - abi_standard_donnees:/app/data      # journal et tâches (SQLite)
+      - abi_standard_modeles:/models        # modèle de voix (téléchargé une fois, voir STANDARD-LISEZMOI.md)
+    tmpfs:
+      - /tmp:size=96m,mode=1700,uid=1000,gid=1000     # l'audio ne touche jamais le disque : il vit en mémoire, puis est supprimé
+    networks: [abi_net]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 128
+    mem_limit: ${ABI_STANDARD_MEM:-1280m}
+    memswap_limit: ${ABI_STANDARD_MEM:-1280m}     # pas de swap : le service ne peut pas ralentir le serveur en le saturant
+    cpus: ${ABI_STANDARD_CPUS:-1.5}
+    healthcheck:
+      test: ["CMD", "python", "-m", "abi_standard", "sante"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  abi_standard_donnees:
+    name: abi_standard_donnees
+  abi_standard_modeles:
+    name: abi_standard_modeles

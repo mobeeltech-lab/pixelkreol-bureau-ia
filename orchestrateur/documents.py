@@ -962,8 +962,12 @@ def contexte_repli(docs: "Documents", demande: str, demandeur: str, agent: str) 
 
 
 def chemins_cites(reponse: str) -> list[str]:
-    """Noms de fichiers (extensions lues) cités dans une réponse du modèle."""
-    return [m.strip(".,;:()[]«»\"'") for m in re.findall(r"[^\s|<>\"'`]+\.(?:pdf|docx|xlsx|txt|csv)\b", reponse, re.I)]
+    """Noms de fichiers (extensions lues) cités dans une réponse du modèle.
+
+    Les marques de mise en forme markdown (** du gras, backticks) ne font pas partie du nom : elles sont retirées avant la comparaison,
+    sinon `**acte.pdf**` était signalé à tort « absent du NAS »."""
+    reponse = reponse.replace("**", "").replace("`", "")
+    return [m.strip(".,;:()[]«»\"'*") for m in re.findall(r"[^\s|<>\"'`*]+\.(?:pdf|docx|xlsx|txt|csv)\b", reponse, re.I)]
 
 
 def prochaine_execution(maintenant: datetime, heure: str) -> datetime:

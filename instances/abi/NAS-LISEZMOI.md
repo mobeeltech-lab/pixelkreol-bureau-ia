@@ -119,21 +119,27 @@ Si `touch` réussit, **arrêter là**, démonter (`umount /mnt/nas-abi`) et corr
 ## Étape 4 — Activer la lecture du NAS dans l'instance ABI *(terminal Hostinger)*
 
 ### 4.1 Mettre le code à jour (une seule fois)
+La commande `dc` ci-dessous remplace `docker compose` partout dans ce document : elle se place dans `/opt/abi-bureau-ia/instances/abi` (là où sont le `.env` et les
+fichiers compose) et vise toujours le projet Docker Compose `abi`, quel que soit le dossier où l'on se trouve. À retaper à chaque nouvelle ouverture du terminal :
 ```bash
-cd /opt/pk-abi && git pull
-cd /opt/pk-abi/instances/abi
-docker compose up -d --build           # reconstruit l'orchestrateur (nouvel outil) ; sans effet tant que le NAS n'est pas activé
+dc() { (cd /opt/abi-bureau-ia/instances/abi && docker compose -p abi --project-directory . "$@"); }
+```
+```bash
+cd /opt/abi-bureau-ia && git pull
+cd /opt/abi-bureau-ia/instances/abi
+dc up -d --build           # reconstruit l'orchestrateur (nouvel outil) ; sans effet tant que le NAS n'est pas activé
 ```
 
 ### 4.2 Régler et activer
 ```bash
-cd /opt/pk-abi/instances/abi
+cd /opt/abi-bureau-ia/instances/abi
 reglage() { if grep -q "^$1=" .env; then sed -i "s|^$1=.*|$1=$2|" .env; else echo "$1=$2" >> .env; fi; }
 reglage ABI_NAS_CHEMIN /mnt/nas-abi
 reglage ABI_NAS_ACTIF 1
-reglage COMPOSE_FILE docker-compose.yml:docker-compose.nas.yml
-docker compose up -d --no-deps abi_orchestrateur       # relance SEULEMENT l'orchestrateur ; le chat et la base ne bougent pas
-docker compose logs --tail 20 abi_orchestrateur         # chercher « Outil documents actif (lecture seule) »
+grep -q '^COMPOSE_FILE=' .env || reglage COMPOSE_FILE docker-compose.yml        # ne touche pas à une ligne existante (standard téléphonique, par exemple)
+grep -q 'docker-compose.nas.yml' .env || sed -i '/^COMPOSE_FILE=/s|$|:docker-compose.nas.yml|' .env
+dc up -d --no-deps abi_orchestrateur       # relance SEULEMENT l'orchestrateur ; le chat et la base ne bougent pas
+dc logs --tail 20 abi_orchestrateur         # chercher « Outil documents actif (lecture seule) »
 ```
 (La première ligne définit `reglage`, une petite aide qui modifie ou ajoute une ligne dans `.env`.)
 
@@ -144,7 +150,7 @@ liste par défaut RH / paie / pièces d'identité), `ABI_NAS_TAILLE_MAX_MO`, `AB
 ### 4.3 Construire l'index et suivre son état
 La première indexation démarre toute seule quelques secondes après le lancement. Pour la suivre ou la relancer à la demande :
 ```bash
-cd /opt/pk-abi/instances/abi
+cd /opt/abi-bureau-ia/instances/abi
 CLE=$(grep '^ABI_ADMIN_KEY=' .env | cut -d= -f2-)
 docker exec -e K="$CLE" abi_orchestrateur python -c "import os,urllib.request as u;r=u.Request('http://127.0.0.1:4001/admin/nas');r.add_header('Authorization','Bearer '+os.environ['K']);print(u.urlopen(r).read().decode())"
 docker exec -e K="$CLE" abi_orchestrateur python -c "import os,urllib.request as u;r=u.Request('http://127.0.0.1:4001/admin/nas/reindexer',data=b'',method='POST');r.add_header('Authorization','Bearer '+os.environ['K']);print(u.urlopen(r).read().decode())"
@@ -164,7 +170,7 @@ docker exec abi_orchestrateur python -c "import sqlite3;c=sqlite3.connect('/app/
 
 ## COUPURE D'URGENCE — une seule commande *(terminal Hostinger)*
 ```bash
-bash /opt/pk-abi/instances/abi/nas-coupure-urgence.sh
+bash /opt/abi-bureau-ia/instances/abi/nas-coupure-urgence.sh
 ```
 Elle met `ABI_NAS_ACTIF=0`, retire le montage du NAS dans le conteneur (relance **seulement** `abi_orchestrateur`), **démonte** le
 partage et met sa ligne en commentaire dans `/etc/fstab` (il ne revient pas au redémarrage). Elle ne supprime rien : ni l'index, ni le
@@ -177,23 +183,23 @@ Tailscale (console Tailscale → le NAS → *Remove*).
 
 ## Désactiver sans tout démonter *(terminal Hostinger)*
 ```bash
-cd /opt/pk-abi/instances/abi
-sed -i 's|^ABI_NAS_ACTIF=.*|ABI_NAS_ACTIF=0|' .env && sed -i '/^COMPOSE_FILE=/d' .env
-docker compose up -d --no-deps --force-recreate abi_orchestrateur
+cd /opt/abi-bureau-ia/instances/abi
+sed -i 's|^ABI_NAS_ACTIF=.*|ABI_NAS_ACTIF=0|' .env && sed -i '/^COMPOSE_FILE=/s#:docker-compose\.nas\.yml##g' .env && sed -i '/^COMPOSE_FILE=docker-compose\.yml$/d' .env
+dc up -d --no-deps --force-recreate abi_orchestrateur
 ```
 
 ## Désinstallation complète *(terminal Hostinger, puis sur le NAS)*
 ```bash
 # 1. couper l'accès (désactive l'outil, démonte le partage)
-bash /opt/pk-abi/instances/abi/nas-coupure-urgence.sh
+bash /opt/abi-bureau-ia/instances/abi/nas-coupure-urgence.sh
 # 2. supprimer la ligne du partage dans /etc/fstab, les identifiants et le dossier de montage
 sed -i '/\/mnt\/nas-abi/d' /etc/fstab && systemctl daemon-reload
 shred -u /root/.nas-abi-identifiants
 rmdir /mnt/nas-abi
 # 3. supprimer l'index et le journal des consultations (volume dédié ABI ; ne touche à aucune autre donnée)
-cd /opt/pk-abi/instances/abi && docker volume rm abi_nas_index
+cd /opt/abi-bureau-ia/instances/abi && docker volume rm abi_nas_index
 # 4. retirer les réglages NAS de .env
-sed -i '/^ABI_NAS_/d;/^COMPOSE_FILE=/d' .env
+sed -i '/^ABI_NAS_/d;/^COMPOSE_FILE=/s#:docker-compose\.nas\.yml##g;/^COMPOSE_FILE=docker-compose\.yml$/d' .env
 # 5. désinstaller Tailscale du serveur
 tailscale logout && systemctl disable --now tailscaled && apt-get purge -y tailscale
 ```
