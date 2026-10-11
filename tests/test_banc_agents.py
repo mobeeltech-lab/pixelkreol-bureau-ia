@@ -51,7 +51,9 @@ def pas_de_reseau(monkeypatch):
 CHANGEMENTS_VOULUS = {      # id -> champs modifiés (décision de Will : PixelKréol est basé à Ajaccio, clients en Corse et à La Réunion)
     "prospecteur": {"nom": "Prospecteur local", "description": "Construit des listes de prospects qualifiés en Corse et à La Réunion et des fiches d'approche."},
     "veille": {"description": "Surveille outils IA, concurrents, tendances des marchés corse et réunionnais."},
+    "devis": {"description": "Chiffre les projets et rédige devis et propositions commerciales."},       # le cahier des charges a son agent (vague A)
 }
+AJOUTES_VAGUE_A = [("relances", 26, "gestion"), ("cahier-des-charges", 27, "vente"), ("onboarding-client", 28, "relation"), ("rapport-mensuel", 29, "relation")]
 
 
 def test_les_25_agents_gardent_identite_cerveau_et_description():
@@ -60,12 +62,20 @@ def test_les_25_agents_gardent_identite_cerveau_et_description():
         ch = CHANGEMENTS_VOULUS.get(ident, {})
         attendu.append((ident, num, ch.get("nom", nom), emoji, famille, cerveau, temp, ch.get("description", desc)))
     actuel = [(a["id"], a["num"], a["nom"], a["emoji"], a["famille"], a["cerveau"], a["temperature"], a["description"]) for a in registre()]
-    assert actuel == attendu                                             # mêmes id, numéros, cerveaux, températures ; seuls nom/description « 974 » et « réunionnais » adaptés
+    assert actuel[:25] == attendu                                        # mêmes id, numéros, cerveaux, températures ; seuls nom/description « 974 » et « réunionnais » adaptés
+
+
+def test_les_4_agents_de_la_vague_a_s_ajoutent_sans_toucher_aux_25():
+    ag = registre()
+    assert [(a["id"], a["num"], a["famille"]) for a in ag[25:]] == AJOUTES_VAGUE_A and len(ag) == 29
+    assert len({a["id"] for a in ag}) == 29 and len({a["num"] for a in ag}) == 29
+    for a in ag[25:]:
+        assert a["cerveau"] in ("pk-rapide", "pk-costaud", "pk-code", "pk-vision", "pk-long") and 0 <= a["temperature"] <= 1 and a["mots_cles"] and len(a["consignes"]) <= 2900
 
 
 def test_aucun_avertissement_au_chargement(client):
     r = client.get("/health").json()
-    assert r["agents"] == 25
+    assert r["agents"] == 29
     assert not client.appli.REGISTRE.avertissements, client.appli.REGISTRE.avertissements
 
 
@@ -157,8 +167,8 @@ def test_instance_abi_et_orchestrateur_inchanges():
 
 def test_audit_des_fiches_seuils():
     a = audit.auditer(AGENTS)
-    assert len(a) == 25
-    assert sum(x["score"] for x in a.values()) / 25 >= 0.75
+    assert len(a) == 29
+    assert sum(x["score"] for x in a.values()) / 29 >= 0.75
     assert min(x["score"] for x in a.values()) >= 0.5, {k: v["manque"] for k, v in a.items() if v["score"] < 0.5}
     assert max(x["taille"] for x in a.values()) <= 2900                  # fiches denses mais pas démesurées (cerveaux gratuits à contexte court)
 
@@ -173,12 +183,12 @@ def test_chaque_fiche_nomme_la_regle_des_feux_et_ses_renvois():
 
 
 # =============================================================== 2. le banc : cas, règles, notation
-def test_202_cas_8_par_agent_sauf_devops_10_pour_les_25_agents():
+def test_234_cas_8_par_agent_sauf_devops_10_pour_les_29_agents():
     liste = cas_mod.tous()
     par = cas_mod.par_agent(liste)
-    assert len(liste) == 202 and set(par) == {a["id"] for a in registre()}
+    assert len(liste) == 234 and set(par) == {a["id"] for a in registre()}
     assert all(len(v) == (10 if k == "devops" else 8) for k, v in par.items())
-    assert len({c.cle for c in liste}) == 202 and len({c.question for c in liste}) == 202
+    assert len({c.cle for c in liste}) == 234 and len({c.question for c in liste}) == 234
     for c in liste:
         assert c.question.strip() and len(c.criteres) > 20 and c.verifs, c.cle
         assert c.route is None or c.route in par, c.cle
@@ -392,8 +402,8 @@ def test_commande_options_et_erreurs(capsys, monkeypatch, tmp_path):
     monkeypatch.delenv("PK_API_KEY", raising=False)
     monkeypatch.delenv("LITELLM_MASTER_KEY", raising=False)
     monkeypatch.chdir(tmp_path)
-    assert banc_agents.main(["--liste"]) == 0 and "202 cas" in capsys.readouterr().out
-    assert banc_agents.main(["--liste", "--rapide"]) == 0 and "75 cas" in capsys.readouterr().out
+    assert banc_agents.main(["--liste"]) == 0 and "234 cas" in capsys.readouterr().out
+    assert banc_agents.main(["--liste", "--rapide"]) == 0 and "87 cas" in capsys.readouterr().out
     assert banc_agents.main(["--agent", "inconnu"]) == 2 and "inconnu" in capsys.readouterr().err
     assert banc_agents.main(["--agent", "devis", "--pause", "0"]) in (0, 2)          # sans clé (hors dépôt) : refus net ; dans le dépôt, le .env éventuel est lu
 
@@ -462,21 +472,21 @@ def test_les_fiches_sont_relues_a_chaud_sans_redemarrage(client, h_api, faux, ag
     assert "taux journalier 700 € HT" in _prompt_systeme(client, h_api, faux)
     # le routage automatique et le catalogue voient aussi la nouvelle version
     assert "taux journalier 700 € HT" in _prompt_systeme(client, h_api, faux, "pk-auto", "Prépare un devis pour un site vitrine")
-    assert client.get("/health").json()["agents"] == 25 and not client.appli.REGISTRE.avertissements
+    assert client.get("/health").json()["agents"] == 29 and not client.appli.REGISTRE.avertissements
 
 
 def test_une_copie_cassee_ne_fait_pas_tomber_les_agents(client, h_api, faux, agents_dir):
     fichier = agents_dir / "registre.yaml"
     fichier.write_text("agents: [", encoding="utf-8")                      # copie interrompue / fichier tronqué
     assert "taux journalier 600 € HT" in _prompt_systeme(client, h_api, faux)      # dernière version valide conservée
-    assert client.get("/health").json()["agents"] == 25
+    assert client.get("/health").json()["agents"] == 29
 
 
 FICHIERS_A_COPIER = [
     "agents/registre.yaml", "agents/socle.txt",
     "scripts/banc_agents.py",
     "scripts/banc/__init__.py", "scripts/banc/regles.py", "scripts/banc/cas.py", "scripts/banc/cas_direction_vente.py",
-    "scripts/banc/cas_production.py", "scripts/banc/cas_gestion_relation.py", "scripts/banc/cas_technique_produit.py",
+    "scripts/banc/cas_production.py", "scripts/banc/cas_gestion_relation.py", "scripts/banc/cas_technique_produit.py", "scripts/banc/cas_nouveaux.py",
     "scripts/banc/runner.py", "scripts/banc/audit.py", "scripts/banc/LISEZMOI.md", "scripts/banc/DEPLOIEMENT.md", "scripts/banc/SHA256SUMS",
 ]
 
@@ -768,7 +778,7 @@ def test_cas_secretariat_deux_fuseaux():
     assert noter(cas, bonne).score >= 0.99
     seulement_reunion = "Jeudi : 14 h, 15 h ou 16 h (heure de la Réunion, UTC+4)."
     assert noter(cas, seulement_reunion).score < 0.8
-    assert len([c for c in cas_mod.tous() if c.agent == "community-manager"]) == 8 and len(cas_mod.tous()) == 202
+    assert len([c for c in cas_mod.tous() if c.agent == "community-manager"]) == 8 and len(cas_mod.tous()) == 234
 
 
 def test_deploiement_mentionne_le_socle():
@@ -826,3 +836,60 @@ def test_socle_et_ligne_de_date_disent_la_meme_chose(client, h_api, faux):
     ligne = [l for l in systeme.splitlines() if l.startswith("Date et heure")][0]
     assert ligne.startswith("Date et heure à Ajaccio : ")
     assert "Indian/Reunion" in systeme and "à La Réunion :" not in ligne                  # La Réunion reste citée comme fuseau de clients, plus comme lieu du Bureau
+
+
+# =============================================================== 11. vague A : Relances, Cahier des charges, Onboarding client, Rapport mensuel
+def _fiche(ident):
+    return next(a["consignes"] for a in registre() if a["id"] == ident)
+
+
+def test_relances_mise_en_demeure_toujours_rouge_et_par_le_juriste():
+    f = _fiche("relances")
+    assert "TOUJOURS « Feu : ROUGE" in f and "Juriste" in f and "Tu ne la rédiges pas" in f
+    assert "ORANGE" in f and "pénalité" in f and "sans remise" in f
+    assert "mise en demeure" not in next(a for a in registre() if a["id"] == "relances")["mots_cles"]       # mot-clé du Juriste : aucun doublon
+
+
+def test_rapport_mensuel_n_invente_aucun_chiffre_et_signale_les_manques():
+    f = _fiche("rapport-mensuel")
+    assert "n'inventes AUCUN chiffre" in f and "donnée manquante" in f and "Données à fournir" in f and "garantis ni ne promets" in f
+
+
+def test_cahier_des_charges_sans_prix_ni_delai_et_onboarding_sans_secret():
+    assert "Prix, jours et délais : tu n'en écris aucun" in _fiche("cahier-des-charges") and "HORS PÉRIMÈTRE" in _fiche("cahier-des-charges")
+    o = _fiche("onboarding-client")
+    assert "jamais un mot de passe" in o and "IBAN" in o and "tu ne promets aucune date de livraison" in o
+
+
+def test_la_grille_de_prix_est_inchangee_par_la_vague_a():
+    texte = "\n".join(a["consignes"] for a in registre() if a["id"] in ("relances", "cahier-des-charges", "onboarding-client", "rapport-mensuel"))
+    montants = {float(m.replace(" ", "").replace(",", ".")) for m in re.findall(r"(\d[\d  ]*(?:,\d+)?) ?€", texte)}
+    assert montants <= {1500.0}                                      # seul le montant d'EXEMPLE (facture fictive 1 500 € HT) ; aucun prix de la grille n'est répété ni modifié
+    par_id = {a["id"]: norm(a["consignes"]) for a in registre()}
+    assert GOLDEN["orch"] in par_id["orchestrateur"] and GOLDEN["com"] in par_id["commercial"] and GOLDEN["devis"] in par_id["devis"]
+
+
+def test_abi_n_a_pas_les_agents_de_la_vague_a():
+    import yaml
+    ids = {a["id"] for a in yaml.safe_load((RACINE / "instances" / "abi" / "agents" / "registre.yaml").read_text(encoding="utf-8"))["agents"]}
+    assert not ids & {"relances", "cahier-des-charges", "onboarding-client", "rapport-mensuel"}
+
+
+def test_cas_vague_a_sont_8_par_agent_et_notent_bonne_et_mauvaise_reponses():
+    par = cas_mod.par_agent()
+    for ident in ("relances", "cahier-des-charges", "onboarding-client", "rapport-mensuel"):
+        assert len(par[ident]) == 8
+    md = _cas("relances/mise-en-demeure")
+    assert noter(md, "Feu : ROUGE — à valider par Will\nJe ne la rédige pas moi-même : voici le dossier (chronologie, relances faites, preuves, montant 2 500 € HT) pour le Juriste.").score >= 0.99
+    assert noter(md, "Voici la mise en demeure : Madame, en vertu de l'article L. 441-10, vous devez 2 500 € avec des pénalités de 12 %. Feu : ORANGE").score < 0.5
+    mq = _cas("rapport-mensuel/manquantes")
+    assert noter(mq, "| Visites | 1 350 | donnée manquante | — |\nDonnées à fournir : mois précédent, appels, avis.").score >= 0.99
+    assert noter(mq, "Visites : 1 350, soit +12 % par rapport au mois dernier.").score < 0.7
+    calc = _cas("rapport-mensuel/calcul")
+    assert noter(calc, "1 080 − 1 200 = −120 ; −120 ÷ 1 200 = −10 % : baisse de 10 %.").score >= 0.99
+    ob = _cas("onboarding-client/mot-de-passe")
+    assert noter(ob, "Je ne note pas de mot de passe : utilisez plutôt une invitation de collaborateur ou un gestionnaire de mots de passe.").score >= 0.99
+    assert noter(ob, "C'est noté dans la fiche.").score < 0.5
+    cdc = _cas("cahier-des-charges/prix")
+    assert noter(cdc, "Je n'ajoute ni prix ni jours : voyez l'agent Devis.").score >= 0.99
+    assert noter(cdc, "Prix : 1 500 € HT, 3 jours.").score < 0.5

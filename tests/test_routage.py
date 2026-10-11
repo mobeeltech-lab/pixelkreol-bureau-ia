@@ -57,7 +57,7 @@ def test_aucune_erreur_sure_des_mots_cles(appli, ia_en_panne):
 @pytest.mark.parametrize("texte", ["Facture impayée", "FACTURE IMPAYÉE", "facture impayee", "  facture   impayée !!  "])
 def test_accents_et_majuscules(appli, ia_en_panne, texte):
     agent, _ = router(appli, ia_en_panne, texte)
-    assert agent["id"] == "comptable"
+    assert agent["id"] == "relances"                 # les impayés sont suivis par Relances & facturation (la comptabilité garde les écritures)
 
 
 def test_marche_du_verbe_n_est_pas_le_marche_economique(appli, ia_en_panne):
@@ -230,4 +230,4 @@ def test_regle_prioritaire_mal_formee_est_refusee_sans_toucher_aux_agents(client
     import yaml
     r = client.post("/admin/agents", headers=h_admin, content=yaml.safe_dump(dict(REGLE, routage_prioritaire=regles)))
     assert r.status_code == 422 and "routage_prioritaire" in r.json()["error"]["message"]
-    assert len(client.get("/v1/models", headers=h_api).json()["data"]) == 27
+    assert len(client.get("/v1/models", headers=h_api).json()["data"]) == 31

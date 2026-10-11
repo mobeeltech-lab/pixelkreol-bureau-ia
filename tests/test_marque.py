@@ -44,7 +44,7 @@ def test_valeurs_par_defaut_identiques_a_avant(appli):
 def test_pixelkreol_pages_et_textes_inchanges(client, h_api, faux):
     page = client.get("/").text
     assert "<title>Bureau IA PixelKréol</title>" in page
-    assert "<header><h1>Bureau IA PixelKréol</h1>25 agents · LLM gratuits · La Réunion</header>" in page
+    assert "<header><h1>Bureau IA PixelKréol</h1>29 agents · LLM gratuits · La Réunion</header>" in page
     assert client.app.title == "Bureau IA PixelKréol — Orchestrateur"
     modeles = client.get("/v1/models", headers=h_api).json()["data"]
     assert {m["owned_by"] for m in modeles} == {"pixelkreol"}
