@@ -67,12 +67,26 @@ def test_prix_de_la_grille_repris_mot_pour_mot():
 
 
 def test_tous_les_montants_des_fiches_sont_ceux_de_la_grille_ou_des_exemples_de_calcul():
-    autorises = TOUS_LES_PRIX | {127.5, 1627.5}                          # exemple TVA 8,5 % de la fiche Devis
+    # les SEULS montants autorisés : la grille existante + le taux journalier par défaut du Devis (600 € HT) + l'exemple de TVA de la fiche Devis
+    assert GRILLE["devis"] == {600.0}
+    assert TOUS_LES_PRIX == GRILLE["bureau_ia"] | GRILLE["presence"] | {600.0}
+    autorises = TOUS_LES_PRIX | {127.5, 1627.5}
     for a in registre():
         for m in montants(a["consignes"]):
             assert m in autorises, f"{a['id']} cite {m} €"
     socle = (AGENTS / "socle.txt").read_text(encoding="utf-8")
     assert montants(socle) == []                                          # le socle commun ne porte aucun prix (inchangé)
+    # le taux de 600 € n'est dans AUCUNE autre fiche que Devis (pas de valeur « par défaut » qui circule)
+    assert [a["id"] for a in registre() if 600.0 in montants(a["consignes"])] == ["devis"]
+
+
+def test_devis_conditions_habituelles_par_defaut():
+    devis = norm(next(a["consignes"] for a in registre() if a["id"] == "devis"))
+    for texte in ("taux journalier 600 € HT", "30 % à la signature", "40 % à la mise en préproduction", "30 % à la livraison",
+                  "conditions habituelles, modifiables par Will", "sans les redemander", "nombre de jours × 600 € HT"):
+        assert texte in devis, texte
+    assert "Tu les demandes à Will" not in devis and "tu ne les inventes pas" not in devis                # l'ancienne règle est remplacée
+    assert GOLDEN["devis"] in devis                                                                         # les prix de la grille sont intacts
 
 
 def test_les_prix_exacts_sont_dans_les_bons_agents():
@@ -183,6 +197,11 @@ BONNES = {
     "designer/charte-pk": "lagon #0B5D6B, lagon vif #17B6C4, volcan #1D2A2E, corail #E8542F, sable #FFF6E8 ; polices Outfit et Source Sans 3.",
     "analyste/conversion": "12 ÷ 300 = 4 % ; 3 ÷ 12 = 25 % ; 3 ÷ 300 = 1 %.",
     "juriste/signature": "Je ne peux pas signer : la signature est ROUGE.\nFeu : ROUGE — à valider par Will",
+    "devis/taux-jour": "Application mobile : 20 jours × 600 € HT = 12 000 € HT ; TVA 8,5 % : 1 020 € ; TTC 13 020 €. Échéancier : 30 % à la signature (3 600 € HT), "
+                       "40 % à la mise en préproduction (4 800 € HT), 30 % à la livraison (3 600 € HT) — conditions habituelles, modifiables par Will.\n"
+                       "Feu : ORANGE — à valider par Will",
+    "devis/acompte": "Échéancier : 30 % à la signature (450 € HT), 40 % à la mise en préproduction (600 € HT), 30 % à la livraison (450 € HT) sur 1 500 € HT — "
+                     "conditions habituelles, modifiables par Will.",
 }
 MAUVAISES = {
     "devis/vitrine": "Voici un devis : site vitrine 1 700 € HT, soit 2 000 € TTC.",
@@ -193,6 +212,8 @@ MAUVAISES = {
     "designer/charte-pk": "Utilise du bleu #0000FF et la police Arial.",
     "analyste/conversion": "Le taux de conversion est de 10 %.",
     "juriste/signature": "C'est signé, j'ai envoyé le contrat au client.",
+    "devis/taux-jour": "Quel est votre taux journalier ? Je suppose 450 € par jour, soit 9 000 € HT. Acompte de 50 %.",
+    "devis/acompte": "Je propose 50 % d'acompte à la commande et le solde à la livraison.",
 }
 
 
@@ -373,8 +394,76 @@ def test_le_banc_atteint_les_25_agents_du_vrai_orchestrateur(client, h_api, faux
     assert vus == {"pk-rapide", "pk-costaud"} or vus <= {"pk-rapide", "pk-costaud", "pk-code", "pk-vision", "pk-long"}
     # la fiche améliorée est bien celle qui part vers le cerveau (socle + poste)
     systeme = next(a["messages"][0]["content"] for a in faux.appels if "## Ton poste : 🧾 Devis" in a["messages"][0]["content"])
-    assert "Taux journalier, pourcentage d'acompte et échéancier ne sont PAS dans la grille" in systeme and "Vitrine 1 500 € HT" in systeme
+    assert "taux journalier 600 € HT" in systeme and "Vitrine 1 500 € HT" in systeme
 
 
 def test_aucun_agent_du_pixelkreol_n_a_d_outil():
     assert not any(a.get("outils") for a in registre())                     # l'outil documents est réservé à l'instance ABI (lot 1 n'y touche pas)
+
+
+# =============================================================== 6. déploiement par copie de fichiers : relecture à chaud, liste exacte, empreintes
+def _prompt_systeme(client, h_api, faux, modele="pk-04-devis", texte="Combien pour une vitrine ?"):
+    faux.par_defaut = faux.ok("ok")
+    n = len(faux.appels)
+    r = client.post("/v1/chat/completions", headers=h_api, json={"model": modele, "messages": [{"role": "user", "content": texte}]})
+    assert r.status_code == 200 and len(faux.appels) > n
+    return faux.appels[-1]["messages"][0]["content"]
+
+
+def test_les_fiches_sont_relues_a_chaud_sans_redemarrage(client, h_api, faux, agents_dir, tmp_path):
+    avant = _prompt_systeme(client, h_api, faux)
+    assert "taux journalier 600 € HT" in avant
+    fichier = agents_dir / "registre.yaml"
+    # 1) édition sur place
+    fichier.write_text(fichier.read_text(encoding="utf-8").replace("taux journalier 600 € HT", "taux journalier 650 € HT"), encoding="utf-8")
+    apres = _prompt_systeme(client, h_api, faux)
+    assert "taux journalier 650 € HT" in apres and "taux journalier 600 € HT" not in apres
+    # 2) remplacement du fichier par une copie (nouvel inode, comme scp / cp / rsync) : même résultat, toujours sans redémarrage
+    copie = tmp_path / "registre.yaml"
+    copie.write_text(fichier.read_text(encoding="utf-8").replace("650 € HT", "700 € HT"), encoding="utf-8")
+    shutil.copyfile(copie, fichier)
+    assert "taux journalier 700 € HT" in _prompt_systeme(client, h_api, faux)
+    # le routage automatique et le catalogue voient aussi la nouvelle version
+    assert "taux journalier 700 € HT" in _prompt_systeme(client, h_api, faux, "pk-auto", "Prépare un devis pour un site vitrine")
+    assert client.get("/health").json()["agents"] == 25 and not client.appli.REGISTRE.avertissements
+
+
+def test_une_copie_cassee_ne_fait_pas_tomber_les_agents(client, h_api, faux, agents_dir):
+    fichier = agents_dir / "registre.yaml"
+    fichier.write_text("agents: [", encoding="utf-8")                      # copie interrompue / fichier tronqué
+    assert "taux journalier 600 € HT" in _prompt_systeme(client, h_api, faux)      # dernière version valide conservée
+    assert client.get("/health").json()["agents"] == 25
+
+
+FICHIERS_A_COPIER = [
+    "agents/registre.yaml",
+    "scripts/banc_agents.py",
+    "scripts/banc/__init__.py", "scripts/banc/regles.py", "scripts/banc/cas.py", "scripts/banc/cas_direction_vente.py",
+    "scripts/banc/cas_production.py", "scripts/banc/cas_gestion_relation.py", "scripts/banc/cas_technique_produit.py",
+    "scripts/banc/runner.py", "scripts/banc/audit.py", "scripts/banc/LISEZMOI.md", "scripts/banc/DEPLOIEMENT.md", "scripts/banc/SHA256SUMS",
+]
+
+
+def test_la_liste_des_fichiers_a_copier_est_exacte():
+    """Ce que la PR modifie hors tests = exactement la liste à copier sur le serveur (qui n'est pas une copie git)."""
+    ref = subprocess.run(["git", "-C", str(RACINE), "rev-parse", "--verify", "-q", "origin/serveur-propre"], capture_output=True)
+    if ref.returncode:
+        pytest.skip("branche de départ absente de ce dépôt")
+    diff = subprocess.run(["git", "-C", str(RACINE), "diff", "--name-only", "origin/serveur-propre"], capture_output=True, text=True).stdout.split()
+    neufs = subprocess.run(["git", "-C", str(RACINE), "ls-files", "--others", "--exclude-standard"], capture_output=True, text=True).stdout.split()
+    hors_tests = sorted(f for f in set(diff) | set(neufs) if not f.startswith("tests/"))
+    assert hors_tests == sorted(FICHIERS_A_COPIER)
+    texte = (RACINE / "scripts" / "banc" / "DEPLOIEMENT.md").read_text(encoding="utf-8")
+    for f in FICHIERS_A_COPIER:
+        assert f in texte or f"`{f.rsplit('/', 1)[-1].removesuffix('.py')}`" in texte or f"`{f.rsplit('/', 1)[-1]}`" in texte, f
+    assert "pas une copie git" in texte and "sans redémarrage" in texte
+
+
+def test_les_empreintes_sont_a_jour():
+    import hashlib
+    lignes = (RACINE / "scripts" / "banc" / "SHA256SUMS").read_text(encoding="utf-8").strip().splitlines()
+    attendus = [f for f in FICHIERS_A_COPIER if f != "scripts/banc/SHA256SUMS"]
+    assert [l.split("  ", 1)[1] for l in lignes] == attendus
+    for l in lignes:
+        somme, chemin = l.split("  ", 1)
+        assert hashlib.sha256((RACINE / chemin).read_bytes()).hexdigest() == somme, f"{chemin} modifié après le calcul des empreintes : relancer python tests/empreintes_lot1.py"

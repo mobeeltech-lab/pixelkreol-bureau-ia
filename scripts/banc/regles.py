@@ -14,8 +14,9 @@ from dataclasses import dataclass, field
 GRILLE = {
     "bureau_ia": {1990.0, 5500.0, 13900.0, 18000.0, 49.0, 300.0, 500.0},
     "presence": {1500.0, 2500.0, 4000.0, 25.0, 250.0},
+    "devis": {600.0},                      # taux journalier par défaut de l'agent Devis (€ HT par jour)
 }
-TOUS_LES_PRIX = GRILLE["bureau_ia"] | GRILLE["presence"]
+TOUS_LES_PRIX = GRILLE["bureau_ia"] | GRILLE["presence"] | GRILLE["devis"]
 
 
 def sans_accents(t: str) -> str:

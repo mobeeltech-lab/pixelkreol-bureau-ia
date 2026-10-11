@@ -15,7 +15,7 @@ Rien à installer (Python 3 seulement). Il lit la clé dans le `.env` du dossier
 | Un essai rapide (3 questions par agent, ≈ 10 min) | `python3 scripts/banc_agents.py --rapide` |
 | Un seul agent ou deux | `python3 scripts/banc_agents.py --agent devis,commercial` |
 | Voir les vérifications ratées cas par cas | `python3 scripts/banc_agents.py --detail` |
-| **Mesurer avant / après un changement de fiche** | 1) `python3 scripts/banc_agents.py --sauver /root/banc-avant.json` 2) modifier les fiches (`git pull`, ou édition ; l'orchestrateur relit `agents/` à chaud) 3) `python3 scripts/banc_agents.py --comparer /root/banc-avant.json --sauver /root/banc-apres.json` |
+| **Mesurer avant / après un changement de fiche** | 1) `python3 scripts/banc_agents.py --sauver /root/banc-avant.json` 2) copier les nouvelles fiches (voir `DEPLOIEMENT.md` : le dossier du serveur n'est pas une copie git ; l'orchestrateur relit `agents/` à chaud, sans redémarrage) 3) `python3 scripts/banc_agents.py --comparer /root/banc-avant.json --sauver /root/banc-apres.json` |
 | Ajouter l'avis d'un modèle (« juge ») | `python3 scripts/banc_agents.py --juge` |
 | Vérifier aussi que `pk-auto` choisit le bon agent | `python3 scripts/banc_agents.py --routage` |
 | Lister les questions sans rien appeler | `python3 scripts/banc_agents.py --liste` |
