@@ -45,6 +45,8 @@ Réglages facultatifs (dans .env, puis bash install.sh)
   PK_ANNONCE_AGENT=false      ne plus écrire « ➜ Agent choisi » au début des réponses de pk-auto
 
 Tests (pour le développeur ; aucun appel aux vrais fournisseurs, aucune clé nécessaire)
-  pip install -r orchestrateur/requirements.txt pytest && python -m pytest
+  pip install -r orchestrateur/requirements.txt pytest reportlab python-docx openpyxl && python -m pytest
+  (reportlab, python-docx, openpyxl ne servent qu'à fabriquer de faux documents pour les tests du NAS)
+  python tests/mesure_nas.py                  temps et mémoire d'indexation de 5 000 faux fichiers
   python tests/mesure_routage.py --detail     taux de bonnes réponses de pk-auto
 Audit du 10/10/2026 : voir AUDIT-BUREAU-IA.md

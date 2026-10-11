@@ -73,6 +73,18 @@ services:
       PK_VITRINE_PIED: environnement de test · données fictives
       PK_PROPRIETAIRE: abi
       DATABASE_URL: postgresql://${ABI_POSTGRES_USER:-abi}:${ABI_POSTGRES_PASSWORD}@abi_postgres:5432/abi_bureau
+      # Lecture du NAS (outil « documents », LECTURE SEULE). Éteint par défaut. Pour l'activer, voir NAS-LISEZMOI.md :
+      # le montage du NAS n'existe que si docker-compose.nas.yml est ajouté (COMPOSE_FILE).
+      PK_NAS_ACTIF: ${ABI_NAS_ACTIF:-0}
+      PK_NAS_CHEMIN: /nas
+      PK_NAS_INDEX: /app/data/index.sqlite
+      PK_NAS_EXCLUS: ${ABI_NAS_EXCLUS:-}
+      PK_NAS_TAILLE_MAX_MO: ${ABI_NAS_TAILLE_MAX_MO:-15}
+      PK_NAS_FICHIERS_MAX: ${ABI_NAS_FICHIERS_MAX:-3000}
+      PK_NAS_CARACTERES_MAX: ${ABI_NAS_CARACTERES_MAX:-6000}
+      PK_NAS_DELAI: ${ABI_NAS_DELAI:-20}
+      PK_NAS_NUIT: ${ABI_NAS_NUIT:-02:30}
+      PK_NAS_MODE: ${ABI_NAS_MODE:-auto}
     volumes:
       - ./agents:/app/agents:ro
     networks: [abi_net, pixelkreol_net]
@@ -105,6 +117,8 @@ services:
       SCARF_NO_ANALYTICS: "true"
       DO_NOT_TRACK: "true"
       TASK_MODEL_EXTERNAL: pk-rapide
+      # transmet le nom de l'utilisateur à l'orchestrateur (journal des consultations du NAS : qui a demandé)
+      ENABLE_FORWARD_USER_INFO_HEADERS: "true"
     volumes:
       - abi_openwebui_data:/app/backend/data
     ports:

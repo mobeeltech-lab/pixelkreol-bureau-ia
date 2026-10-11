@@ -47,6 +47,7 @@ agents:
     temperature: 0.3
     description: Gère le courrier, les mails, les courriers types, l'agenda et rappelle les échéances à J-7 et J-1.
     mots_cles: [mail, mails, email, emails, courrier, courriers, courrier type, agenda, rendez-vous, rappel, rappelle, compte rendu, lettre, echeance, trier, trie, convocation, reunion, repondre au mail, boite mail, accuse de reception]
+    outils: [documents]   # lecture seule du NAS quand il est activé (sans effet sinon)
     consignes: |
       Tu tiens le secrétariat d'ABI Holding : tri du courrier et des mails entrants (urgent / à traiter /
       à classer, avec l'agent concerné), brouillons de réponses, courriers types (information aux acquéreurs,
@@ -67,6 +68,7 @@ agents:
     temperature: 0.1
     description: Prépare les écritures selon le plan comptable de la promotion immobilière, le rapprochement bancaire et l'export pour l'expert-comptable.
     mots_cles: [comptabilite, comptable, ecriture, ecritures, ecritures comptables, rapprochement, rapprochement bancaire, plan comptable, tresorerie, facture, factures, retenue de garantie, retenues de garantie, tva, sccv, lettrage, imputation, grand livre, releve bancaire]
+    outils: [documents]   # lecture seule du NAS quand il est activé (sans effet sinon)
     consignes: |
       Tu prépares la comptabilité d'une société de promotion immobilière (programmes en cours, stocks et
       en-cours de production, acomptes reçus des acquéreurs, retenues de garantie des entreprises).
@@ -93,6 +95,7 @@ agents:
     temperature: 0.1
     description: Calcule l'échéancier VEFA (plafonds R261-14 du CCH et échéancier contractuel), prépare la lettre d'appel de fonds de chaque acquéreur, suit les encaissements et prépare les relances.
     mots_cles: [appel de fond, appels de fond, apel de fond, apels de fond, apelle de fond, appel des fondations, appel de fondations, echeancier, vefa, r261-14, plafond, plafonds, acquereur, acquereurs, encaissement, encaissements, tranche de paiement, relance acquereur]
+    outils: [documents]   # lecture seule du NAS quand il est activé (sans effet sinon)
     consignes: |
       Tu prépares les appels de fonds des ventes en VEFA d'ABI Holding.
       1) Échéancier. Deux contrôles à toujours faire ensemble : (a) les plafonds cumulés de l'article R261-14
@@ -146,6 +149,7 @@ agents:
     temperature: 0.2
     description: Gère les baux, les quittances, la révision des loyers selon l'IRL, les charges et les relances de loyers.
     mots_cles: [bail, baux, locataire, locataires, loyer, loyers, loye, loyes, quittance, quittances, quitance, quitances, irl, revision du loyer, retard de loyer, charges locatives, renouvellement du bail, bailleur, depot de garantie, etat des lieux, preavis, location]
+    outils: [documents]   # lecture seule du NAS quand il est activé (sans effet sinon)
     consignes: |
       Tu gères les logements loués par ABI Holding : suivi des baux, quittances, révision annuelle des loyers,
       régularisation des charges, relances.
@@ -176,6 +180,7 @@ agents:
       - - [bail, baux]
         - [relis, relire, relisez, relecture, verifie les clauses, verifier les clauses, verifiez les clauses, verifie la clause, verifier la clause, controle les clauses, controler les clauses]
       - - [verifie le bail, verifier le bail, verifiez le bail, controle le bail, controler le bail, verifie les baux, verifier les baux, verifiez les baux, controlez le bail, controle les baux, controler les baux, controlez les baux]
+    outils: [documents]   # lecture seule du NAS quand il est activé (sans effet sinon)
     consignes: |
       Tu aides ABI Holding sur les sujets juridiques de la promotion immobilière : contrats de réservation et
       de VEFA, marchés de travaux, baux, litiges avec les entreprises ou les acquéreurs.
@@ -198,6 +203,7 @@ agents:
     temperature: 0.2
     description: Suit le planning de chantier, les situations de travaux et les réserves, produit le tableau de bord hebdomadaire et déclenche la préparation des appels de fonds.
     mots_cles: [planning, plannings, chantier, chantiers, situation de travaux, situations de travaux, reserve, reserves, levee des reserves, pre-livraison, avancement, tableau de bord, tableau de bord hebdomadaire, mise hors d'eau, atteinte, jalon, jalons, retard de chantier, entreprise de maconnerie, travaux]
+    outils: [documents]   # lecture seule du NAS quand il est activé (sans effet sinon)
     consignes: |
       Tu suis l'avancement des programmes en construction : planning (jalons, retards, causes), situations
       de travaux des entreprises (montant demandé, cumul, avancement déclaré, écart avec le marché), réserves
@@ -222,6 +228,7 @@ agents:
     temperature: 0.1
     description: "Remplace le NAS : retrouve, classe, nomme les documents, signale les doublons et les pièces manquantes, sans jamais rien supprimer."
     mots_cles: [archive, archives, archiver, archivage, classer, classe, classement, ranger, retrouver, retrouve, retrouvez, doublon, doublons, pieces manquantes, pieces manquent, piece manquante, nommage, renomme, renommer, pv de livraison, dossier, dossiers, documents scannes, gestion documentaire, ged]
+    outils: [documents]   # lecture seule du NAS quand il est activé (sans effet sinon)
     consignes: |
       Tu es la mémoire documentaire d'ABI Holding : tu remplaces le NAS. À partir des listes de fichiers et
       des documents qu'on te donne, tu retrouves un document (nom exact, emplacement, version la plus
