@@ -55,6 +55,21 @@ RANG = {c: i for i, c in enumerate(CLASSES)}
 NOM_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$")
 ENV_RE = re.compile(r"^[A-Z][A-Z0-9_]{2,63}$")
 EXPIRATION_HEURES = 24
+CLE_ADMIN_MIN = 32
+
+
+def verifier_cle_admin(cle_admin: str, cle_litellm: str, cle_api: str) -> str | None:
+    """None si la clé d'administration convient pour VALIDER des actions (clé dédiée), sinon la raison (jamais la clé elle-même).
+    Valider une écriture est le geste le plus sensible du Bureau IA : une clé absente, courte ou partagée avec l'API ne suffit pas."""
+    if not cle_admin:
+        return "PK_ADMIN_KEY absente : la validation MCP est désactivée. Définir dans .env une clé d'administration dédiée (32 caractères au moins)."
+    if len(cle_admin) < CLE_ADMIN_MIN:
+        return f"PK_ADMIN_KEY fait {len(cle_admin)} caractères (minimum {CLE_ADMIN_MIN}) : la validation MCP est désactivée. Générer une clé plus longue."
+    if cle_litellm and hmac.compare_digest(cle_admin.encode(), cle_litellm.encode()):
+        return "PK_ADMIN_KEY est identique à LITELLM_MASTER_KEY : la validation MCP est désactivée. Utiliser une clé d'administration distincte."
+    if cle_api and hmac.compare_digest(cle_admin.encode(), cle_api.encode()):
+        return "PK_ADMIN_KEY est identique à PK_API_KEY : la validation MCP est désactivée. Utiliser une clé d'administration distincte."
+    return None
 
 # --- mots qui trahissent un outil de PAIEMENT (jamais autorisé) ou d'ÉCRITURE / d'ENVOI (classe minimale), comparés mot par mot ---------------
 PAIEMENT_EXACT = frozenset({"pay", "paie", "paye", "payer", "payment", "payments", "payout", "refund", "refunds", "transfer", "virement", "wire", "iban",
@@ -638,6 +653,7 @@ class MCP:
         self.cadence: deque = deque()
         self.notif_url, self.notif_jeton_env = notif_url, notif_jeton_env      # webhook n8n qui envoie le mail à Will
         self.url_publique, self.prefixe = url_publique, prefixe
+        self.validation_pb: str | None = None        # raison pour laquelle Will ne peut pas valider (clé admin inadaptée) : alors aucun outil orange n'est proposé
 
     # --- notification : « une action attend Will » ----------------------------------------------------
     def lien(self) -> str:
@@ -681,12 +697,13 @@ class MCP:
 
     def etat(self) -> dict:
         return {"serveurs": sorted(self.cfg.serveurs), "outils": sorted(self.cfg.outils), "erreurs": self.cfg.erreurs,
-                "en_attente": len(self.base.actions("attente")), "notification": bool(self.notif_url), "page_de_validation": self.lien()}
+                "en_attente": len(self.base.actions("attente")), "notification": bool(self.notif_url), "page_de_validation": self.lien(),
+                "validation": {"disponible": self.validation_pb is None, "raison": self.validation_pb or ""}}
 
     # --- ce que le modèle voit ------------------------------------------------
     async def outils_pour(self, agent_id: str) -> list[dict]:
         """Outils OpenAI autorisés pour cet agent ET réellement présents chez le serveur (un serveur en panne est simplement absent)."""
-        voulus = [o for o in self.cfg.outils.values() if agent_id in o.agents]
+        voulus = [o for o in self.cfg.outils.values() if agent_id in o.agents and not (o.classe == "orange" and self.validation_pb)]
         sortie = []
         for sn in sorted({o.serveur for o in voulus}):
             try:
@@ -740,6 +757,9 @@ class MCP:
             await asyncio.to_thread(self.base.journaliser, agent_id, demandeur, o.serveur, o.nom, o.classe, "refuse", debut, 0, "cadence")
             return "Trop d'appels d'outils à la minute : réessaie plus tard."
         resume = f"{o.serveur}/{o.nom} demandé par {agent_id}"
+        if o.classe == "orange" and self.validation_pb:
+            await asyncio.to_thread(self.base.journaliser, agent_id, demandeur, o.serveur, o.nom, o.classe, "refuse", debut, 0, "validation indisponible")
+            return "Cette action nécessite la validation de Will, actuellement indisponible : elle n'est pas enregistrée. Dis-le à l'utilisateur."
         if o.classe in ("orange", "rouge"):
             statut = "attente" if o.classe == "orange" else "rouge"
             ligne = await asyncio.to_thread(self.base.ajouter_action, statut, agent_id, demandeur, o.serveur, o.nom, o.classe, args, resume)
@@ -773,6 +793,8 @@ class MCP:
     async def valider(self, ident: str, par: str = "admin") -> dict:
         """Exécute une action ORANGE en attente, après décision de Will. Revérifie TOUT au moment de l'exécution (configuration, agent, paiement, arguments)."""
         debut = time.monotonic()
+        if self.validation_pb:
+            return {"ok": False, "code": "indisponible", "message": self.validation_pb}
         a = await asyncio.to_thread(self.base.action, ident)
         if a is None:
             return {"ok": False, "code": "introuvable", "message": "Action introuvable."}
@@ -812,6 +834,8 @@ class MCP:
                 "message": "Action exécutée." if not est_erreur else "Validée mais l'outil a signalé une erreur."}
 
     async def refuser(self, ident: str, par: str = "admin") -> dict:
+        if self.validation_pb:
+            return {"ok": False, "code": "indisponible", "message": self.validation_pb}
         a = await asyncio.to_thread(self.base.action, ident)
         if a is None:
             return {"ok": False, "code": "introuvable", "message": "Action introuvable."}
@@ -822,6 +846,8 @@ class MCP:
 
     async def classer(self, ident: str, par: str = "admin") -> dict:
         """Action ROUGE (envoi) : Will l'a faite lui-même ou l'abandonne ; on la sort de la liste. Rien n'est exécuté."""
+        if self.validation_pb:
+            return {"ok": False, "code": "indisponible", "message": self.validation_pb}
         a = await asyncio.to_thread(self.base.action, ident)
         if a is None:
             return {"ok": False, "code": "introuvable", "message": "Action introuvable."}

@@ -1,0 +1,11 @@
+# =====================================================================
+#  AJOUT « SERVEUR MCP » (le Bureau IA expose des agents EN LECTURE SEULE à un client MCP) — OPTIONNEL, éteint tant qu'il n'est pas ajouté.
+#  Lu seulement si COMPOSE_FILE contient docker-compose.mcp-serveur.yml (voir MCP-LISEZMOI.md). Indépendant de docker-compose.mcp.yml (client MCP).
+#  N'existe PAS pour l'instance ABI. La route /mcp reste sur le port local 127.0.0.1:4001 ; ne pas l'exposer sur Internet avant d'en avoir décidé ensemble.
+# =====================================================================
+services:
+  pk_orchestrateur:
+    environment:
+      PK_MCP_SERVEUR_ACTIF: "1"
+      # Clé DÉDIÉE : 32 caractères au moins, différente de LITELLM_MASTER_KEY, PK_API_KEY et PK_ADMIN_KEY. Sans elle, le compose refuse de démarrer.
+      PK_MCP_SERVEUR_CLE: ${PK_MCP_SERVEUR_CLE:?PK_MCP_SERVEUR_CLE manquante dans .env (clé dédiée de 32 caractères au moins, distincte des autres clés)}

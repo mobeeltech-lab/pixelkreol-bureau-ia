@@ -68,7 +68,7 @@ Le code Python est dans l'image : **reconstruire** l'orchestrateur (pas de simpl
 3. Copier `agents/mcp.exemple.yaml` en `agents/mcp.yaml`, **adapter** noms d'outils, domaines, libellé, dossier. Vérifier :
    `docker compose exec pk_orchestrateur python mcp_client.py verifier`
    Lister les vrais outils d'un serveur : `docker compose exec pk_orchestrateur python mcp_client.py lister pages`
-4. Mettre les jetons dans `.env` (noms : `PK_MCP_PAGES_JETON`, `PK_MCP_AGENDA_JETON`, `PK_MCP_COURRIER_JETON`, `PK_MCP_DRIVE_JETON`, et pour la notification
+4. Mettre dans `.env` une clé **`PK_ADMIN_KEY`** dédiée (voir plus bas), puis les jetons (noms : `PK_MCP_PAGES_JETON`, `PK_MCP_AGENDA_JETON`, `PK_MCP_COURRIER_JETON`, `PK_MCP_DRIVE_JETON`, et pour la notification
    `PK_MCP_NOTIF_URL`, `PK_MCP_NOTIF_JETON`) et ajouter
    `COMPOSE_FILE=docker-compose.yml:docker-compose.mcp.yml` (en gardant ce qui y figure déjà, ex. `:docker-compose.caddy.yml`).
 5. Donner `outils: [mcp]` aux seuls agents voulus (dans leur fiche : `agents/registre.yaml` ou `agents/perso.yaml`).
@@ -88,6 +88,13 @@ répond « en attente de validation de Will ». Will la voit et décide :
 - À la validation, tout est **revérifié** (l'outil est-il toujours autorisé, toujours « orange », l'agent aussi, arguments conformes) : sinon refus
   automatique. Une action ne s'exécute **qu'une seule fois** (double clic, deux onglets). Après 24 h : « expirée », impossible à valider, rien n'est fait.
 - Si le serveur ne répond pas ou répond en erreur après validation, la page le dit (« peut-être faite, peut-être pas : vérifiez avant de recommencer »).
+
+**Clé d'administration dédiée (obligatoire pour valider).** La page `/pk-validation` et les routes `/admin/mcp/valider|refuser|classer` **refusent de répondre**
+(erreur 503 avec la raison) si `PK_ADMIN_KEY` est **absente**, fait **moins de 32 caractères**, ou est **identique à `LITELLM_MASTER_KEY` ou à `PK_API_KEY`**.
+Le message est dans `/health` (`mcp.validation.raison`) et dans les journaux (`docker compose logs pk_orchestrateur | grep "validation MCP"`).
+Tant que c'est le cas, **aucun outil orange n'est proposé aux agents** (personne ne pourrait valider) ; les lectures continuent. Avec `docker-compose.mcp.yml`,
+le compose **ne retombe plus** sur `LITELLM_MASTER_KEY` : il refuse de démarrer si `PK_ADMIN_KEY` manque dans `.env`.
+Générer une clé : `openssl rand -hex 24` (48 caractères), à mettre dans `.env` sous `PK_ADMIN_KEY=`.
 
 **Sécurité de la page.** Connexion par la clé admin (comparaison à temps constant ; au-delà de 10 échecs en 15 min chaque essai coûte 2 s) → cookie
 signé de 8 h, `HttpOnly`, `SameSite=Strict`, `Secure` derrière HTTPS, **limité au chemin de la page**. Chaque bouton porte un jeton anti-CSRF propre à
@@ -119,7 +126,41 @@ pas le serveur.** Échec de remise : 5 essais au plus (toutes les 5 min), sans j
 3. Ouvrir la page, **Refuser** une première action (rien ne doit se passer), puis **Valider** une seconde.
 4. Laisser une troisième action 24 h : elle doit apparaître « expiree ».
 
+## Serveur MCP du Bureau IA — exposer des agents en lecture seule (étape 3)
+Un client MCP (un assistant de bureau, un autre outil) peut interroger des agents du Bureau IA. **Éteint par défaut**, indépendant du client MCP ci-dessus,
+**jamais pour ABI** (garde-fou dans le code : refusé pour toute autre marque que PixelKréol).
+
+| Point | Détail |
+|---|---|
+| Adresse | `POST http://127.0.0.1:4001/mcp` (JSON-RPC, « streamable HTTP » sans session ni flux). Non exposé sur Internet : pour un accès à distance, tunnel SSH (`ssh -L 4001:127.0.0.1:4001 serveur`) tant que nous n'en avons pas décidé autrement |
+| Clé | `PK_MCP_SERVEUR_CLE`, **dédiée** : 32 caractères au moins, différente de `LITELLM_MASTER_KEY`, `PK_API_KEY` et `PK_ADMIN_KEY`, sinon le serveur répond 503 (raison dans `/health` et les journaux). La clé API et la clé admin **n'ouvrent pas** ce serveur, et inversement. En-tête `Authorization: Bearer …` (jamais dans l'adresse) |
+| Outils | **deux seulement** : `lister_agents` (id, nom, famille, rôle ; jamais les fiches de poste) et `poser_question` |
+| Lecture seule | `poser_question` appelle l'agent **sans aucun outil** (ni NAS, ni client MCP, ni écriture) : il rédige, explique, propose. Rien ne peut être envoyé, créé, payé ni mis en attente par ce chemin (testé) |
+| Liste blanche | `agents/mcp_serveur.yaml` (copie de `agents/mcp_serveur.exemple.yaml`) ; absent = **aucun agent exposé** |
+| Bornes | question 4 000 caractères, réponse 8 000, 20 questions/minute, 2 simultanées, 90 s, requête 64 Ko |
+| Navigateurs | en-tête `Origin` contrôlé (refusé s'il n'est pas l'hôte lui-même ou une origine listée) |
+| Journal | agent, durée, succès ; **jamais** la question ni la réponse |
+
+**⚠ Données.** La question posée part vers le fournisseur de modèle en ligne de l'agent, comme tout message au Bureau IA : pas de données de clients, pas d'ABI.
+
+**Mise en service**
+1. Générer une clé : `openssl rand -hex 24`, la mettre dans `.env` : `PK_MCP_SERVEUR_CLE=…`.
+2. Copier `agents/mcp_serveur.exemple.yaml` en `agents/mcp_serveur.yaml` et choisir les agents.
+3. Ajouter `:docker-compose.mcp-serveur.yml` à `COMPOSE_FILE` dans `.env`, puis `docker compose up -d --build pk_orchestrateur`.
+4. Essai :
+   ```
+   curl -s localhost:4001/health                                   # "mcp_serveur":{"actif":true,"agents":N,"disponible":true,…}
+   curl -s -H "Authorization: Bearer $PK_MCP_SERVEUR_CLE" -H "Content-Type: application/json" \
+        -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' localhost:4001/mcp
+   curl -s -H "Authorization: Bearer $PK_MCP_SERVEUR_CLE" -H "Content-Type: application/json" \
+        -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"lister_agents","arguments":{}}}' localhost:4001/mcp
+   ```
+5. Dans le client MCP : serveur HTTP à l'adresse ci-dessus avec l'en-tête `Authorization: Bearer <clé>` (la façon de le déclarer dépend du client).
+
+**Retour arrière** : retirer `docker-compose.mcp-serveur.yml` de `COMPOSE_FILE` (ou `PK_MCP_SERVEUR_ACTIF=0`) puis `docker compose up -d pk_orchestrateur`.
+Fichiers : `orchestrateur/mcp_serveur.py`, `orchestrateur/app.py`, `orchestrateur/Dockerfile`, `agents/mcp_serveur.exemple.yaml`, `docker-compose.mcp-serveur.yml`.
+
 ## Tests
-`python -m pytest tests/test_mcp.py tests/test_mcp_validation.py` : faux serveur MCP et faux n8n en mémoire (aucun accès réseau) — désactivé par défaut, ABI coupée, liste blanche, classes,
+`python -m pytest tests/test_mcp.py tests/test_mcp_validation.py tests/test_mcp_cle_admin.py tests/test_mcp_serveur.py` : faux serveur MCP et faux n8n en mémoire (aucun accès réseau) — désactivé par défaut, ABI coupée, liste blanche, classes,
 paiement refusé (14 noms), arguments contrôlés (16 adresses refusées), bornes, injection (résultat piégé, description piégée, appel écrit en texte),
-journal sans contenu, jetons non divulgués ; validation : une seule exécution, expiration à 24 h, revérification, page (connexion, cookie limité au chemin, CSRF, origine, échappement, liens relatifs, préfixe configurable), notification sans arguments. Étape 3 (à venir) : serveur MCP exposant les agents en lecture seule.
+journal sans contenu, jetons non divulgués ; validation : une seule exécution, expiration à 24 h, revérification, page (connexion, cookie limité au chemin, CSRF, origine, échappement, liens relatifs, préfixe configurable), notification sans arguments. `tests/test_mcp_cle_admin.py` : clé admin dédiée. `tests/test_mcp_serveur.py` : serveur MCP en lecture seule (éteint par défaut, ABI coupée, clé dédiée, liste blanche, aucun outil joignable, protocole, bornes, journal sans contenu).

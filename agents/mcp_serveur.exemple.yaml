@@ -1,0 +1,13 @@
+# =====================================================================
+#  EXEMPLE — à COPIER en agents/mcp_serveur.yaml pour exposer des agents par le serveur MCP du Bureau IA (voir MCP-LISEZMOI.md).
+#  Sans ce fichier : AUCUN agent exposé. Les agents répondent SANS outils (ni fichiers, ni mails, ni agenda) : ils rédigent, expliquent, proposent.
+#  ⚠ La question part vers le fournisseur de modèle en ligne de l'agent : pas de données de clients ni d'ABI.
+# =====================================================================
+agents: [redacteur-seo, veille, traducteur]      # liste blanche : seuls ces agents sont joignables
+limites:
+  question_max: 4000        # caractères
+  reponse_max: 8000
+  appels_par_minute: 20
+  simultanes: 2             # questions traitées en même temps (petit serveur)
+  delai: 90                 # secondes
+origines: []                # origines de navigateur autorisées en plus de l'hôte lui-même (laisser vide pour un client d'ordinateur)

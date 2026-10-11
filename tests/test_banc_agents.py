@@ -165,7 +165,7 @@ def test_instance_abi_et_orchestrateur_inchanges():
                            "install.sh", "outils"], capture_output=True, text=True).stdout.split()
     assert diff == []                                                     # dont instances/abi/agents/socle.txt : le socle d'ABI n'est pas touché
     orch = subprocess.run(["git", "-C", str(RACINE), "diff", "--name-only", "origin/serveur-propre", "--", "orchestrateur"], capture_output=True, text=True).stdout.split()
-    assert set(orch) <= {"orchestrateur/app.py", "orchestrateur/mcp_client.py", "orchestrateur/Dockerfile"}
+    assert set(orch) <= {"orchestrateur/app.py", "orchestrateur/mcp_client.py", "orchestrateur/mcp_serveur.py", "orchestrateur/Dockerfile"}
 
 
 def test_audit_des_fiches_seuils():

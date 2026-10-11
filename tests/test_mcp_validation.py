@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "orchestrateur")
 from conftest import CLE_ADMIN, CLE_API, FauxLiteLLM  # noqa: E402
 import mcp_client as M  # noqa: E402
 from fabrique_mcp import FauxMCP  # noqa: E402
-from test_mcp import AGENT, CONFIG, HA, MODELE, OK, demande, faux_serveurs, monter, reponse_outil  # noqa: E402
+from test_mcp import AGENT, CLE_ADMIN_MCP, CONFIG, HA, MODELE, OK, demande, faux_serveurs, monter, reponse_outil  # noqa: E402
 
 PUBLIQUE = "https://agents.mebeeltech.online/pk-validation"
 P = "/pk-validation"
@@ -77,7 +77,7 @@ def mettre_en_attente(c, args=None, outil="mcp__courrier__create_draft"):
 
 
 def connecter(c):
-    r = c.post(f"{P}/connexion", data={"cle": CLE_ADMIN}, headers=HOTE, follow_redirects=False)
+    r = c.post(f"{P}/connexion", data={"cle": CLE_ADMIN_MCP}, headers=HOTE, follow_redirects=False)
     assert r.status_code == 303
     valeur = re.search(r"pk_mcp=([^;]+)", r.headers["set-cookie"]).group(1)
     c.cookies.set("pk_mcp", valeur, path=P)             # le cookie « Secure » ne repart pas sur http://testserver : on le pose à la main
@@ -194,15 +194,15 @@ def test_connexion_mauvaise_cle_puis_bonne_cle_cookie_limite_au_chemin(tc):
     assert r.status_code == 401 and "set-cookie" not in r.headers
     r = tc.post(f"{P}/connexion", data={"cle": CLE_API}, headers=HOTE, follow_redirects=False)            # la clé API ordinaire ne suffit pas
     assert r.status_code == 401
-    r = tc.post(f"{P}/connexion", data={"cle": CLE_ADMIN}, headers=HOTE, follow_redirects=False)
+    r = tc.post(f"{P}/connexion", data={"cle": CLE_ADMIN_MCP}, headers=HOTE, follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "./?m=connecte"
     cookie = r.headers["set-cookie"]
     assert "Path=/pk-validation" in cookie and "HttpOnly" in cookie and "samesite=strict" in cookie.lower() and "Secure" in cookie and "Max-Age=28800" in cookie
-    assert CLE_ADMIN not in cookie
+    assert CLE_ADMIN_MCP not in cookie
 
 
 def test_cookie_non_secure_en_local_http(tc):
-    r = tc.post(f"{P}/connexion", data={"cle": CLE_ADMIN}, follow_redirects=False)
+    r = tc.post(f"{P}/connexion", data={"cle": CLE_ADMIN_MCP}, follow_redirects=False)
     assert r.status_code == 303 and "Secure" not in r.headers["set-cookie"] and "Path=/pk-validation" in r.headers["set-cookie"]
 
 
@@ -264,7 +264,7 @@ def test_origine_etrangere_refusee(tc):
 
 
 def test_cookies_falsifies_ou_perimes_refuses(tc):
-    cle = CLE_ADMIN
+    cle = CLE_ADMIN_MCP
     bon = M.nouvelle_session(cle)
     assert M.session_valide(cle, bon)
     assert not M.session_valide("autre-cle", bon) and not M.session_valide(cle, None) and not M.session_valide(cle, "") and not M.session_valide(cle, "abc")
@@ -304,7 +304,7 @@ def test_prefixe_personnalise_et_prefixe_invalide(monkeypatch, tmp_path, agents_
     app = monter(monkeypatch, tmp_path, agents_dir, PK_MCP_URL_PUBLIQUE="https://exemple.test/valid-x")
     with TestClient(app.app, raise_server_exceptions=False) as c:
         assert c.get("/valid-x/").status_code == 200 and c.get("/pk-validation/").status_code == 404
-        r = c.post("/valid-x/connexion", data={"cle": CLE_ADMIN}, follow_redirects=False)
+        r = c.post("/valid-x/connexion", data={"cle": CLE_ADMIN_MCP}, follow_redirects=False)
         assert "Path=/valid-x" in r.headers["set-cookie"]
     assert M.prefixe_de("https://exemple.test/Pas Valide/../x") == "/pk-validation"
 
@@ -312,7 +312,7 @@ def test_prefixe_personnalise_et_prefixe_invalide(monkeypatch, tmp_path, agents_
 def test_sans_mcp_actif_la_page_n_existe_pas(monkeypatch, tmp_path, agents_dir, faux):
     app = monter(monkeypatch, tmp_path, agents_dir, actif=False)
     with TestClient(app.app, raise_server_exceptions=False) as c:
-        assert c.get(f"{P}/").status_code == 404 and c.post(f"{P}/connexion", data={"cle": CLE_ADMIN}).status_code == 404
+        assert c.get(f"{P}/").status_code == 404 and c.post(f"{P}/connexion", data={"cle": CLE_ADMIN_MCP}).status_code == 404
         assert c.get("/admin/mcp/attente", headers=HA).status_code == 404
 
 
