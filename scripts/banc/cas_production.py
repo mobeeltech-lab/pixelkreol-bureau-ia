@@ -56,7 +56,7 @@ CAS = [
       renvoie("Designer"), route=None),
 
     # ------------------------------------------------------------------ redacteur-seo
-    C("redacteur-seo", "accueil", "Rédige le texte de la page d'accueil de la boulangerie « Chez Fictif » à Saint-Pierre : pain au levain, viennoiseries, commandes pour mariages.",
+    C("redacteur-seo", "accueil", "Rédige le texte de la page d'accueil de la boulangerie « Chez Fictif » à Saint-Pierre (La Réunion) : pain au levain, viennoiseries, commandes pour mariages.",
       "H1/H2, intention de recherche, mots-clés naturels (boulangerie Saint-Pierre), meta title ≤ 60 car., meta description ≤ 155 car., appel à l'action.",
       un_de("meta title", "title"), un_de("meta description", "description"), contient("saint-pierre"), un_de("appel", "contactez", "commandez", "venez")),
     C("redacteur-seo", "meta", "Donne la meta title et la meta description pour la page « plombier à Saint-Denis ».",
@@ -134,9 +134,12 @@ CAS = [
       un_de("lisib", "contraste", "accessib"), un_de("propose", "alternative", "compromis")),
 
     # ------------------------------------------------------------------ community-manager
-    C("community-manager", "post", "Écris un post Instagram pour la promo de la semaine chez le coiffeur « Chez Fictif » à Saint-Paul : brushing à prix réduit jusqu'à samedi.",
-      "Post prêt à publier, touche locale, hashtags (#974 #LaRéunion), appel à l'action, sans prix inventé ; publication = ORANGE.",
-      contient("#974"), feu("ORANGE"), montants_ok(), un_de("reserve", "appelez", "venez", "contactez")),
+    C("community-manager", "post", "Écris un post Instagram pour la promo de la semaine chez le coiffeur « Chez Fictif » à Ajaccio : brushing à prix réduit jusqu'à samedi.",
+      "Client en Corse : post prêt à publier, touche locale (quelques mots de corse, relecture conseillée), hashtags de la Corse (#Corse #Ajaccio) et PAS ceux de La Réunion (#974), appel à l'action, sans prix inventé ; publication = ORANGE.",
+      contient("#corse|#ajaccio"), absent(r"#974|#lareunion"), feu("ORANGE"), montants_ok(), un_de("reserve", "appelez", "venez", "contactez")),
+    C("community-manager", "post-reunion", "Écris un post Instagram pour la promo de la semaine chez le coiffeur « Chez Fictif » à Saint-Paul, La Réunion : brushing à prix réduit jusqu'à samedi.",
+      "Client à La Réunion : hashtags #974 #LaRéunion et PAS ceux de la Corse ; sans prix inventé ; publication = ORANGE.",
+      contient("#974"), absent(r"#corse|#ajaccio"), feu("ORANGE"), montants_ok()),
     C("community-manager", "calendrier", "Calendrier éditorial du mois de novembre pour un restaurant : 8 publications.",
       "Tableau jour/heure/réseau/format/texte avec 8 lignes ; heures plausibles.",
       structure("tableau"), contient("novembre|nov"), mots_min(150)),
@@ -152,9 +155,6 @@ CAS = [
     C("community-manager", "crise", "Un client a commenté « arnaque » sous notre dernier post. Je réponds quoi ?",
       "Réponse publique sobre + passage en privé, ou renvoie à E-réputation pour la méthode ; ORANGE avant publication.",
       renvoie("E-réputation", "reputation"), un_de("prive", "message prive", "mp"), vouvoie()),
-    C("community-manager", "hashtags", "Propose des hashtags pour une vidéo TikTok sur la cuisine créole.",
-      "10 à 15 hashtags pertinents, mélange local/généraliste ; pas de hashtag trompeur.",
-      contient("#974|#reunion"), contient("#"), mots_max(180)),
     C("community-manager", "rapport", "Fais le rapport des performances de la page du restaurant ce mois-ci.",
       "N'invente aucun chiffre : demande les statistiques ou renvoie à l'Analyste data.",
       un_de("donnees", "statistiques", "chiffres"), renvoie("Analyste"), absent(r"\d+ ?(abonnes|likes|vues)"), route=None),

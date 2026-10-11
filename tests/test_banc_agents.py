@@ -48,9 +48,19 @@ def pas_de_reseau(monkeypatch):
 
 
 # =============================================================== 1. les fiches : structure inchangée, prix inchangés
+CHANGEMENTS_VOULUS = {      # id -> champs modifiés (décision de Will : PixelKréol est basé à Ajaccio, clients en Corse et à La Réunion)
+    "prospecteur": {"nom": "Prospecteur local", "description": "Construit des listes de prospects qualifiés en Corse et à La Réunion et des fiches d'approche."},
+    "veille": {"description": "Surveille outils IA, concurrents, tendances des marchés corse et réunionnais."},
+}
+
+
 def test_les_25_agents_gardent_identite_cerveau_et_description():
+    attendu = []
+    for ident, num, nom, emoji, famille, cerveau, temp, desc in STRUCTURE_AVANT:
+        ch = CHANGEMENTS_VOULUS.get(ident, {})
+        attendu.append((ident, num, ch.get("nom", nom), emoji, famille, cerveau, temp, ch.get("description", desc)))
     actuel = [(a["id"], a["num"], a["nom"], a["emoji"], a["famille"], a["cerveau"], a["temperature"], a["description"]) for a in registre()]
-    assert actuel == [tuple(x) for x in STRUCTURE_AVANT]
+    assert actuel == attendu                                             # mêmes id, numéros, cerveaux, températures ; seuls nom/description « 974 » et « réunionnais » adaptés
 
 
 def test_aucun_avertissement_au_chargement(client):
@@ -98,13 +108,40 @@ def test_les_prix_exacts_sont_dans_les_bons_agents():
     assert "Vitrine 1 500 € HT" in t["commercial"]
 
 
-def test_socle_et_cerveaux_non_modifies():
+SOCLE_REMPLACEMENTS = [      # le SEUL changement autorisé de agents/socle.txt (localisation de PixelKréol)
+    ("Tu fais partie du Bureau IA de PixelKréol, l'atelier numérique de Will à La Réunion (974) :",
+     "Tu fais partie du Bureau IA de PixelKréol, l'atelier numérique de Will, basé à Ajaccio (Corse), avec des clients en Corse et à La Réunion :"),
+    ("Clients : TPE/PME et particuliers de La Réunion, parfois de métropole et de Corse.",
+     "Clients : TPE/PME et particuliers de Corse et de La Réunion, parfois de métropole."),
+    ("Fuseau horaire : Indian/Reunion (UTC+4). Monnaie : euro.",
+     "Fuseaux horaires : Europe/Paris (Ajaccio) et Indian/Reunion (UTC+4) : tu précises toujours le fuseau d'un rendez-vous. Monnaie : euro."),
+]
+
+
+def test_socle_change_seulement_la_localisation():
+    socle = (AGENTS / "socle.txt").read_text(encoding="utf-8")
+    assert "basé à Ajaccio (Corse), avec des clients en Corse et à La Réunion" in socle
+    assert "à La Réunion (974)" not in socle and "Fuseau horaire : Indian/Reunion" not in socle
+    for _, nouveau in SOCLE_REMPLACEMENTS:
+        assert nouveau in socle
+    assert montants(socle) == []                                         # toujours aucun prix dans le socle
+    for regle in ("1. Tu réponds en français clair et direct", "3. Règle des feux :", "Termine toute réponse qui propose une action ORANGE ou ROUGE par une ligne",
+                  "5. Quand une autre compétence du bureau serait plus adaptée", "6. Sois concret"):
+        assert regle in socle, regle                                     # les 6 règles communes sont intactes
+
+
+def test_socle_identique_a_l_ancien_aux_trois_phrases_pres():
     ref = subprocess.run(["git", "-C", str(RACINE), "rev-parse", "--verify", "-q", "origin/serveur-propre"], capture_output=True)
     if ref.returncode:
         pytest.skip("branche de départ absente de ce dépôt")
-    diff = subprocess.run(["git", "-C", str(RACINE), "diff", "--name-only", "origin/serveur-propre", "--", "agents/socle.txt", "agents/cerveaux.yaml",
-                           "agents/perso.yaml"], capture_output=True, text=True).stdout.split()
-    assert diff == []
+    ancien = subprocess.run(["git", "-C", str(RACINE), "show", "origin/serveur-propre:agents/socle.txt"], capture_output=True, text=True).stdout
+    for avant, apres in SOCLE_REMPLACEMENTS:
+        assert avant in ancien
+        ancien = ancien.replace(avant, apres, 1)
+    assert (AGENTS / "socle.txt").read_text(encoding="utf-8") == ancien       # octet pour octet : rien d'autre n'a bougé
+    diff = subprocess.run(["git", "-C", str(RACINE), "diff", "--name-only", "origin/serveur-propre", "--", "agents/cerveaux.yaml", "agents/perso.yaml"],
+                          capture_output=True, text=True).stdout.split()
+    assert diff == []                                                     # cerveaux et agents ajoutés sur le serveur : inchangés
 
 
 def test_instance_abi_et_orchestrateur_inchanges():
@@ -113,7 +150,7 @@ def test_instance_abi_et_orchestrateur_inchanges():
         pytest.skip("branche de départ absente de ce dépôt")
     diff = subprocess.run(["git", "-C", str(RACINE), "diff", "--name-only", "origin/serveur-propre", "--", "instances", "orchestrateur", "config", "docker-compose.yml",
                            "install.sh", "outils"], capture_output=True, text=True).stdout.split()
-    assert diff == []
+    assert diff == []                                                     # dont instances/abi/agents/socle.txt : le socle d'ABI n'est pas touché
     autres = subprocess.run(["git", "-C", str(RACINE), "status", "--porcelain", "--", "instances", "orchestrateur"], capture_output=True, text=True).stdout
     assert autres.strip() == ""
 
@@ -436,7 +473,7 @@ def test_une_copie_cassee_ne_fait_pas_tomber_les_agents(client, h_api, faux, age
 
 
 FICHIERS_A_COPIER = [
-    "agents/registre.yaml",
+    "agents/registre.yaml", "agents/socle.txt",
     "scripts/banc_agents.py",
     "scripts/banc/__init__.py", "scripts/banc/regles.py", "scripts/banc/cas.py", "scripts/banc/cas_direction_vente.py",
     "scripts/banc/cas_production.py", "scripts/banc/cas_gestion_relation.py", "scripts/banc/cas_technique_produit.py",
@@ -680,3 +717,62 @@ def test_banc_lisezmoi_decrit_les_tolerances_et_l_extrait():
     t = (RACINE / "scripts" / "banc" / "LISEZMOI.md").read_text(encoding="utf-8")
     for mot in ("--detail", "extrait", "LaTeX", "espaces insécables", "dérivent"):
         assert mot.lower() in t.lower(), mot
+
+
+# =============================================================== 9. PixelKréol est basé à Ajaccio (Corse), clients en Corse et à La Réunion : aucune région supposée par défaut
+def test_aucune_fiche_ne_suppose_la_reunion_par_defaut():
+    f = {a["id"]: norm(a["consignes"]) for a in registre()}
+    desc = {a["id"]: a["description"] for a in registre()}
+    interdits = ("lecteurs réunionnais", "(fuseau Réunion)", "cibles (secteur, commune, taille) à La Réunion et", "(hashtags #974 compris)",
+                 "des hashtags pertinents (#974 #LaRéunion…)", "météo cyclonique)", "prospects réunionnais")
+    for ident, texte in f.items():
+        for mot in interdits:
+            assert mot not in texte and mot not in desc[ident], (ident, mot)
+    assert "Prospecteur 974" not in [a["nom"] for a in registre()]
+    # chaque point corrigé dit les deux régions
+    assert "en Corse ou à La Réunion (la région est donnée par Will ; sinon tu la demandes)" in f["prospecteur"]
+    assert "lecteurs de la région du client (Corse ou La Réunion" in f["redacteur-seo"] and "#Corse et #Ajaccio pour la Corse" in f["redacteur-seo"]
+    assert "tropicale à La Réunion, méditerranéenne en Corse" in f["photo-video"] and "vent, orages et risque d'incendie en Corse" in f["photo-video"]
+    assert "n'emploies jamais les hashtags de l'autre région" in f["community-manager"] and "quelques mots de corse en Corse" in f["community-manager"]
+    assert "clients corses (TVA au taux normal de 20 %)" in f["comptable"]
+    assert "Europe/Paris pour Ajaccio, Indian/Reunion UTC+4 pour La Réunion" in f["secretariat"] and "(en précisant le fuseau)" in f["secretariat"]
+    assert "ne concerne que des clients de La Réunion" in f["subventions"] and "Collectivité de Corse" in f["subventions"] and "tu demandes toujours où se situe le client" in f["subventions"]
+    assert "HT × 1,20 en métropole et en Corse" in f["qualite"]
+    assert "Kap Numérik ne concerne que les clients de La Réunion" in f["commercial"] and "tu ne supposes jamais la région du prospect" in f["commercial"]
+    assert "CCI de Corse" in f["veille"] and "CCI de Corse ou de La Réunion" in f["prospecteur"]
+
+
+def test_les_prix_et_l_animation_restent_ceux_de_la_grille_apres_le_changement_de_region():
+    f = {a["id"]: norm(a["consignes"]) for a in registre()}
+    assert GOLDEN["devis"] in f["devis"] and GOLDEN["com"] in f["commercial"] and GOLDEN["orch"] in f["orchestrateur"]
+    assert "animation des réseaux 250 € HT par mois" in f["devis"] and 250.0 in GRILLE["presence"]                  # décision de Will : l'animation à 250 € est conservée
+    assert "ne la proposes que si le client la demande" in f["devis"] and "les 3 premiers mois sont compris dans la Présence complète" in f["devis"]
+    autorises = TOUS_LES_PRIX | {127.5, 1627.5}
+    for ident, texte in f.items():
+        assert all(m in autorises for m in montants(texte)), ident
+
+
+def test_cas_community_manager_une_region_une_serie_de_hashtags():
+    corse, reunion = _cas("community-manager/post"), _cas("community-manager/post-reunion")
+    assert "Ajaccio" in corse.question and "La Réunion" in reunion.question
+    assert noter(corse, "Brushing à prix réduit chez Chez Fictif à Ajaccio, jusqu'à samedi ! Réservez au 04 95 00 00 00.\n#Corse #Ajaccio #coiffeur\nFeu : ORANGE — à valider par Will").score >= 0.99
+    assert noter(corse, "Brushing à prix réduit à Ajaccio, réservez !\n#974 #LaRéunion\nFeu : ORANGE — à valider par Will").score < 0.8
+    assert noter(reunion, "Brushing à prix réduit à Saint-Paul ! Venez vite.\n#974 #LaRéunion #coiffure\nFeu : ORANGE — à valider par Will").score >= 0.99
+    assert noter(reunion, "Brushing à Saint-Paul, venez !\n#Corse #Ajaccio\nFeu : ORANGE — à valider par Will").score < 0.8
+
+
+def test_cas_secretariat_deux_fuseaux():
+    cas = _cas("secretariat/rdv")
+    bonne = ("Jeudi après-midi : 1) 14 h 00 à Ajaccio (Europe/Paris) = 16 h 00 à La Réunion (Indian/Reunion, UTC+4) ; 2) 15 h 00 Paris = 17 h 00 Réunion ; "
+             "3) 16 h 00 Paris = 18 h 00 Réunion. Décalage : 2 h en heure d'été, 3 h en heure d'hiver.")
+    assert noter(cas, bonne).score >= 0.99
+    seulement_reunion = "Jeudi : 14 h, 15 h ou 16 h (heure de la Réunion, UTC+4)."
+    assert noter(cas, seulement_reunion).score < 0.8
+    assert len([c for c in cas_mod.tous() if c.agent == "community-manager"]) == 8 and len(cas_mod.tous()) == 200
+
+
+def test_deploiement_mentionne_le_socle():
+    d = (RACINE / "scripts" / "banc" / "DEPLOIEMENT.md").read_text(encoding="utf-8")
+    assert "15 fichiers" in d and "`agents/socle.txt`" in d and "cp /root/lot1/agents/socle.txt agents/socle.txt" in d
+    assert "socle.txt.avant-lot1" in d and "son propre socle" in d and "pour les 14 fichiers" in d
+    assert "agents/socle.txt" in (RACINE / "scripts" / "banc" / "SHA256SUMS").read_text(encoding="utf-8")

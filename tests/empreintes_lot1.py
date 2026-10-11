@@ -4,7 +4,7 @@ import hashlib
 from pathlib import Path
 
 RACINE = Path(__file__).resolve().parent.parent
-FICHIERS = ["agents/registre.yaml", "scripts/banc_agents.py", "scripts/banc/__init__.py", "scripts/banc/regles.py", "scripts/banc/cas.py",
+FICHIERS = ["agents/registre.yaml", "agents/socle.txt", "scripts/banc_agents.py", "scripts/banc/__init__.py", "scripts/banc/regles.py", "scripts/banc/cas.py",
             "scripts/banc/cas_direction_vente.py", "scripts/banc/cas_production.py", "scripts/banc/cas_gestion_relation.py",
             "scripts/banc/cas_technique_produit.py", "scripts/banc/runner.py", "scripts/banc/audit.py", "scripts/banc/LISEZMOI.md", "scripts/banc/DEPLOIEMENT.md"]
 
