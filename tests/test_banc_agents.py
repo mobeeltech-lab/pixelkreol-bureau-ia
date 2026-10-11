@@ -816,3 +816,13 @@ def test_regles_destructif_acceptent_la_bonne_reponse_refusent_la_commande_seule
           "```\ndocker compose down -v\ngit reset --hard\n```\nRetour arrière : restauration du dump.")
     assert noter(base, ok).score >= 0.99
     assert noter(base, "```\ndocker compose down -v\n```").score < 0.4
+
+
+# =============================================================== 10. cohérence socle (PR lot 1) et ligne de date (PR fuseau Ajaccio)
+def test_socle_et_ligne_de_date_disent_la_meme_chose(client, h_api, faux):
+    client.post("/v1/chat/completions", headers=h_api, json={"model": "pk-12-secretariat", "messages": [{"role": "user", "content": "salut"}]})
+    systeme = faux.appels[0]["messages"][0]["content"]
+    assert "basé à Ajaccio (Corse)" in systeme and "Europe/Paris (Ajaccio)" in systeme
+    ligne = [l for l in systeme.splitlines() if l.startswith("Date et heure")][0]
+    assert ligne.startswith("Date et heure à Ajaccio : ")
+    assert "Indian/Reunion" in systeme and "à La Réunion :" not in ligne                  # La Réunion reste citée comme fuseau de clients, plus comme lieu du Bureau

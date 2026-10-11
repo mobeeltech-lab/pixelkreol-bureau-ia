@@ -622,7 +622,6 @@ def test_pixelkreol_et_abi_existant_inchanges():
     for f in ("docker-compose.yml", "install.sh", "verifier.sh", "LISEZMOI.txt"):
         assert "abi_standard" not in (RACINE / f).read_text(encoding="utf-8")
     assert "standard" not in (ABI / "docker-compose.yml").read_text(encoding="utf-8").lower().replace("# ", "")
-    # (le contrôle « seuls les fichiers du module ont changé » comparait à la branche abi-nas ; la PR est fusionnée, chaque lot a désormais son propre garde-fou)
 
 
 # =====================================================================  8. briques
