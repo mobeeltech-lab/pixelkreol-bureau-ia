@@ -124,9 +124,9 @@ def test_coupure_d_urgence_en_une_commande(tmp_path):
     assert "ABI_NAS_ACTIF=0" in envfile and "COMPOSE_FILE" not in envfile
     assert "ABI_API_KEY=abc" in envfile and "ABI_ADMIN_KEY=def" in envfile                       # le reste de .env est intact
     appels = journal.read_text().splitlines()
-    assert "docker compose up -d --no-deps --force-recreate abi_orchestrateur" in appels          # seulement l'orchestrateur
+    assert "docker compose -p abi --project-directory . up -d --no-deps --force-recreate abi_orchestrateur" in appels          # seulement l'orchestrateur
     assert "umount /mnt/nas-abi" in appels
-    assert appels.index("docker compose up -d --no-deps --force-recreate abi_orchestrateur") < appels.index("umount /mnt/nas-abi")
+    assert appels.index("docker compose -p abi --project-directory . up -d --no-deps --force-recreate abi_orchestrateur") < appels.index("umount /mnt/nas-abi")
     assert any(l.startswith("# [coupure d'urgence] //100.1.2.3/PARTAGE") for l in fstab.read_text().splitlines())
     assert "UUID=1234 / ext4 defaults 0 1" in fstab.read_text().splitlines()                      # le reste de fstab est intact
     assert not any(l.startswith("tailscale") for l in appels)
@@ -172,7 +172,7 @@ def test_script_de_coupure_executable_et_sans_commande_destructrice():
 def test_procedure_serveur_complete():
     t = (ABI / "NAS-LISEZMOI.md").read_text(encoding="utf-8")
     for mot in ("Tailscale", "Synology", "QNAP", "bureau-ia", "Lecture seule", "cifs-utils", "/root/.nas-abi-identifiants", "600",
-                "/etc/fstab", "ro,", "ABI_NAS_ACTIF", "docker compose up -d --no-deps abi_orchestrateur", "nas-coupure-urgence.sh",
+                "/etc/fstab", "ro,", "ABI_NAS_ACTIF", "dc up -d --no-deps abi_orchestrateur", "nas-coupure-urgence.sh",
                 "COUPURE D'URGENCE", "Désinstallation complète", "terminal Hostinger", "touch /mnt/nas-abi/essai.txt", "tailscale up",
                 "Disable key expiry", "SMB 3", "docker volume rm abi_nas_index", "tailscale logout"):
         assert mot in t, mot

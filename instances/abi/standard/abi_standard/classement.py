@@ -72,19 +72,22 @@ def masquer_numero(numero: str) -> str:
 
 # ---------------------------------------------------------------------- règles de secours
 # Urgence 5 : sinistre ou danger. La transcription est abîmée (accents perdus, mots coupés, « des gâts d'eau »…) : on cherche des RACINES et des
-# variantes sur un texte sans accents, ni ponctuation, puis, pour les mots longs, sur le texte « collé » (« dé gâts des eaux » → « degatsdeseaux »).
-# « hors d'eau » (étape de chantier courante dans les appels de fonds) n'est PAS un dégât des eaux.
+# variantes sur un texte sans accents ni ponctuation, puis, pour les racines longues, sur le texte « collé » (« dé gât des eaux » → « degatdeseaux »).
+#
+# Deux familles :
+#  * racines FORTES, qui déclenchent seules (dégât, inondé, incendie, fumée, pompiers, blessé, accident, effraction, cambriolé, sinistre,
+#    effondrement, « l'eau coule », odeur de gaz…) ;
+#  * mots AMBIGUS (fuite, plafond), qui ne comptent qu'associés à un mot de sens voisin dans la même phrase ou à quelques mots près
+#    (« fuite d'eau », « fuite de gaz », « plafond fissuré »). « Chauffage au gaz », « plafond de loyer », « fuite d'informations »,
+#    « hors d'eau » (étape de chantier) ne déclenchent rien.
 MOTS_URGENCE_5 = (
     (r"\bde ?gats?\b|\bdes ?gats?\b|\bdegat", "dégât"),
-    (r"\bdes eaux\b|(?<!hors )\bd ?eaux?\b|\bdeaux\b", "des eaux"),
-    (r"\bfui(?:te|t)s?\b", "fuite"),
     (r"\binond", "inondation"),
     (r"\b(?:l ?eau|eau|l o) (?:qui |ca )?(?:coule|coul)", "l'eau coule"),
-    (r"\bplafond", "plafond"),
     (r"\bin ?cend|\bencend", "incendie"),
     (r"\bprend(?:s|re)? feu|\bpris feu|\ba pris feu", "feu"),
     (r"\bfumees?\b", "fumée"),
-    (r"\bgaz\b", "gaz"),
+    (r"\bodeur (?:de |du )?gaz\b|\bsent (?:le |du )?gaz\b|\bsentent? (?:le )?gaz\b", "odeur de gaz"),
     (r"\bbless", "blessé"),
     (r"\bef ?frac\w*|\be+f+rac\w*", "effraction"),
     (r"\bcam ?bri[oa]", "cambriolage"),
@@ -95,11 +98,21 @@ MOTS_URGENCE_5 = (
     (r"\belectrocut|\bcourt ?circuit", "électrocution"),
     (r"\bdanger", "danger"),
 )
+# Associations : (mot ambigu, mots qui le rendent grave, nom donné à l'alerte). Comparaison mot à mot sur le texte simplifié.
+FUITE = r"fui(?:te|tes|t|ts)"
+EAU, GAZ, INONDE = r"(?:eaux?|leau|deau|deaux)", r"gaz", r"inond\w*"
+PLAFOND = r"plafonds?"
+ASSOCIATIONS = (
+    (FUITE, f"(?:{EAU}|{GAZ}|{PLAFOND}|{INONDE})", "fuite d'eau ou de gaz"),
+    (PLAFOND, rf"(?:{EAU}|coul\w*|tomb\w*|effondr\w*|fissur\w*|{FUITE}|mouill\w*|infiltr\w*|ecroul\w*)", "plafond endommagé"),
+)
+FENETRE_MOTS = 6        # « à quelques mots près » quand les deux mots ne sont pas dans la même phrase
 # racines longues recherchées aussi dans le texte collé (sans espaces) : « in cendie », « dé gât des eaux »…
-RACINES_COLLEES = (("degat", "dégât"), ("deseaux", "des eaux"), ("inond", "inondation"), ("incend", "incendie"),
+RACINES_COLLEES = (("degat", "dégât"), ("inond", "inondation"), ("incend", "incendie"),
                    ("effrac", "effraction"), ("cambriol", "cambriolage"), ("sinistre", "sinistre"), ("blessure", "blessé"),
                    ("ambulance", "secours"), ("pompier", "secours"), ("effondr", "effondrement"), ("electrocut", "électrocution"),
-                   ("courtcircuit", "électrocution"), ("eaucoule", "l'eau coule"), ("fuitedeau", "fuite"), ("fuitedegaz", "fuite"))
+                   ("courtcircuit", "électrocution"), ("eaucoule", "l'eau coule"), ("odeurdegaz", "odeur de gaz"),
+                   ("fuitedeau", "fuite d'eau ou de gaz"), ("fuitedegaz", "fuite d'eau ou de gaz"))
 MOTS_URGENCE_4 = ("urgent", "urgence", "tres rapidement", "des que possible", "au plus vite", "ce matin", "aujourd'hui meme",
                   "mise en demeure", "huissier", "tribunal", "avocat", "bloque", "arret de chantier")
 MOTS_CATEGORIE = {
@@ -125,21 +138,37 @@ def texte_simple(texte: str) -> str:
     return re.sub(r"\s+", " ", t).strip()
 
 
+def mots_avec_phrase(texte: str) -> list[tuple[str, int]]:
+    """Mots simplifiés du texte, chacun avec le numéro de sa phrase (coupure sur . ! ? ; et sauts de ligne)."""
+    sortie: list[tuple[str, int]] = []
+    for n, phrase in enumerate(re.split(r"[.!?;…\n]+", texte or "")):
+        sortie += [(m, n) for m in texte_simple(phrase).split()]
+    return sortie
+
+
+def associes(texte: str, ambigu: str, partenaires: str) -> bool:
+    """Le mot ambigu est-il accompagné d'un partenaire dans la même phrase ou à FENETRE_MOTS mots près ?"""
+    mots = mots_avec_phrase(texte)
+    a = [i for i, (m, _) in enumerate(mots) if re.fullmatch(ambigu, m)]
+    b = [i for i, (m, _) in enumerate(mots) if re.fullmatch(partenaires, m)]
+    return any(i != j and (mots[i][1] == mots[j][1] or abs(i - j) <= FENETRE_MOTS) for i in a for j in b)
+
+
 def urgence_5_detectee(texte: str) -> list[str]:
-    """Mots d'alerte trouvés (liste vide = aucun). Tolère accents perdus, mots coupés et variantes courantes d'une transcription abîmée."""
+    """Mots d'alerte trouvés (liste vide = aucun). Tolère accents perdus, mots coupés et variantes courantes d'une transcription abîmée ;
+    « fuite » et « plafond » ne comptent qu'avec un mot de sens voisin (eau, gaz, coule, tombe…)."""
     t = texte_simple(texte)
     trouves: list[str] = []
     for motif, nom in MOTS_URGENCE_5:
         if nom not in trouves and re.search(motif, t):
             trouves.append(nom)
-    collé = t.replace(" ", "")
-    horsd = "horsdeau" in collé
+    for ambigu, partenaires, nom in ASSOCIATIONS:
+        if nom not in trouves and associes(texte, ambigu, partenaires):
+            trouves.append(nom)
+    colle = t.replace(" ", "")
     for racine, nom in RACINES_COLLEES:
-        if nom in trouves or racine not in collé:
-            continue
-        if racine == "deseaux" and horsd and collé.replace("horsdeau", "").find(racine) == -1:
-            continue                                         # « hors d'eau » : étape de chantier, pas un sinistre
-        trouves.append(nom)
+        if nom not in trouves and racine in colle:
+            trouves.append(nom)
     return trouves
 
 

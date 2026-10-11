@@ -633,7 +633,9 @@ def test_pixelkreol_et_abi_existant_inchanges():
     nouveaux = subprocess.run(["git", "-C", str(RACINE), "ls-files", "--others", "--exclude-standard"], capture_output=True, text=True).stdout.splitlines()
     ajoutes_ou_modifies = [l.split("\t", 1)[1] for l in modifies] + nouveaux
     permis_modifies = {"instances/abi/.env.exemple", "instances/abi/LISEZMOI.md",       # simple renvoi vers le nouveau module
-                       "orchestrateur/documents.py", "tests/test_nas.py", "tests/test_nas_orchestrateur.py"}   # correctif à part : noms en gras/backticks
+                       "orchestrateur/documents.py", "tests/test_nas.py", "tests/test_nas_orchestrateur.py",
+                       "instances/abi/NAS-LISEZMOI.md", "instances/abi/nas-coupure-urgence.sh",          # chemins /opt/abi-bureau-ia et projet « abi »
+                       "tests/test_abi.py", "tests/test_nas_deploiement.py", "tests/test_chemins_serveur.py"}   # correctif à part : noms en gras/backticks
     hors_perimetre = [f for f in ajoutes_ou_modifies if not (f.startswith(("instances/abi/standard/", "instances/abi/STANDARD-")) or
                                                               f in permis_modifies or f.startswith("instances/abi/docker-compose.standard") or
                                                               f.startswith("tests/") and "standard" in f or f == "tests/fabrique_voix.py" or
@@ -842,7 +844,7 @@ def test_compose_rend_small_et_1280m_par_defaut():
 # ---- urgence 5 tolérante aux transcriptions abîmées
 ABIMEES = [
     "Bonjour il y a des gâts d'eau dans mon appartement", "DEGATS DES EAUX chez ma voisine", "j'ai un dé gât des eaux", "un degat des eau au deuxième",
-    "dégat des os", "l'eau coule du plafond", "leau coule partout", "ça fuit depuis ce matin", "il y a une fuite", "le plafond est tombé",
+    "dégat des os", "l'eau coule du plafond", "leau coule partout", "ça fuit au plafond depuis ce matin", "il y a une fuite d'eau", "le plafond est tombé",
     "inondation dans le garage", "le sous-sol est inondé", "un incendie au chantier", "in cendie dans la cave", "de la fumée dans l'escalier",
     "odeur de gaz dans le couloir", "un ouvrier blessé", "il y a des blessés", "une ef fraction cette nuit", "effraction sur le chantier",
     "cambriolage cette nuit", "on a été cambriolés", "un accident de chantier", "un axident grave", "appelez les pompiers", "le mur s'est effondré",
@@ -865,7 +867,8 @@ def test_pas_d_urgence_5_sur_un_message_ordinaire(texte):
 
 
 def test_mots_d_alerte_nommes():
-    assert set(secretaire.urgence_5_detectee("des gâts d'eau, le plafond, de la fumée et du gaz")) >= {"dégât", "des eaux", "plafond", "fumée", "gaz"}
+    assert set(secretaire.urgence_5_detectee("des gâts d'eau, le plafond est tombé, de la fumée et une odeur de gaz")) >= {
+        "dégât", "plafond endommagé", "fumée", "odeur de gaz"}
     assert secretaire.urgence_5_detectee("hors d'eau mais aussi un dégât des eaux") != []
 
 
@@ -945,3 +948,49 @@ def test_resume_toujours_recopie_est_reconstitue_et_signale(banc):
 def test_consigne_de_la_secretaire_exige_un_vrai_resume():
     c = secretaire.CONSIGNE
     assert "exactement 2 lignes" in c and "Tu ne recopies jamais" in c and "120 caractères" in c
+
+
+# ---- mots ambigus resserrés : « fuite », « plafond » et « gaz » ne déclenchent plus seuls
+FAUX_POSITIFS = [
+    "chauffage au gaz", "le chauffage au gaz de l'immeuble", "la facture de gaz", "le gaz", "plafond de loyer", "le plafond de loyer est dépassé",
+    "plafond de verre", "le plafonnement de l'IRL", "le plafond", "fuite d'informations", "une fuite des cerveaux", "il y a une fuite",
+    "ça fuit", "hors d'eau", "la tranche hors d'eau", "livraison hors d'eau et hors d'air",
+    "Il y a eu une fuite d'informations chez notre fournisseur. Merci de me rappeler. L'eau est coupée demain matin pour les travaux.",
+]
+ASSOCIATIONS_GRAVES = [
+    "une fuite d'eau", "fuite de gaz", "ça sent le gaz", "odeur de gaz dans la cage d'escalier", "une fuite, le gaz est coupé", "fuite dans le plafond",
+    "ça fuit au plafond", "plafond fissuré", "le plafond est tombé", "plafond mouillé et l'eau monte", "le plafond s'est effondré", "plafond qui coule",
+    "fuite et inondé", "Il y a une fuite. L'eau monte.", "gaz fuite", "du plafond ça tombe",
+]
+
+
+@pytest.mark.parametrize("texte", FAUX_POSITIFS)
+def test_mots_ambigus_seuls_ne_declenchent_pas(texte):
+    assert secretaire.urgence_5_detectee(texte) == [], texte
+
+
+@pytest.mark.parametrize("texte", ASSOCIATIONS_GRAVES)
+def test_mots_ambigus_associes_declenchent(texte):
+    assert secretaire.urgence_5_detectee(texte), texte
+
+
+def test_association_distance_et_phrases():
+    # même phrase : quelle que soit la distance ; phrases voisines : jusqu'à 6 mots ; au-delà, rien
+    assert secretaire.urgence_5_detectee("Il y a une fuite quelque part dans le grand bâtiment du fond de la cour avec de l'eau")
+    assert secretaire.urgence_5_detectee("Une fuite. Il y a de l'eau")
+    assert not secretaire.urgence_5_detectee("Une fuite chez le fournisseur. Merci de me rappeler au plus vite demain matin. Pour l'eau, rien à signaler")
+
+
+def test_racines_fortes_restent_seules():
+    for t in ("dégât des eaux", "inondé", "un incendie", "de la fumée", "appelez les pompiers", "un blessé", "un accident", "effraction", "cambriolé",
+              "un sinistre", "effondrement du mur", "l'eau coule"):
+        assert secretaire.urgence_5_detectee(t), t
+
+
+@voix
+def test_pipeline_pas_d_alerte_sur_un_message_ordinaire_avec_mots_ambigus(banc):
+    banc.deposer_audio(fabrique_voix.ton(banc.tmp / "p.wav", 5),
+                       "Bonjour, je vous appelle pour le plafond de loyer du bail A et la facture du chauffage au gaz. Merci de me rappeler demain.")
+    banc.std.cycle()
+    e = banc.envoyes()[0]
+    assert not fs.message_recu(e)["Subject"].startswith("[URGENT") and fs.ASTREINTE not in a_qui(e)

@@ -46,13 +46,13 @@ getent hosts abi.mebeeltech.online
 Après la fusion de la pull request, utiliser la branche `serveur-propre` (avant : `abi-tests`).
 ```bash
 cd /opt
-git clone --branch serveur-propre https://github.com/mobeeltech-lab/pixelkreol-bureau-ia.git pk-abi
-cd /opt/pk-abi/instances/abi
+git clone --branch serveur-propre https://github.com/mobeeltech-lab/pixelkreol-bureau-ia.git abi-bureau-ia
+cd /opt/abi-bureau-ia/instances/abi
 ```
 
 ### 4. Créer le fichier de réglages `.env` *(terminal Hostinger)*
 ```bash
-cd /opt/pk-abi/instances/abi
+cd /opt/abi-bureau-ia/instances/abi
 cp .env.exemple .env && chmod 600 .env
 for V in ABI_API_KEY ABI_ADMIN_KEY ABI_POSTGRES_PASSWORD ABI_WEBUI_SECRET_KEY; do
   sed -i "s|^$V=.*|$V=$(openssl rand -hex 24)|" .env
@@ -72,16 +72,21 @@ sed -i "s|^ABI_LITELLM_KEY=.*|ABI_LITELLM_KEY=$K|" .env && unset K
 ```
 
 ### 6. Démarrer *(terminal Hostinger)*
+La commande `dc` ci-dessous remplace `docker compose` partout dans ce document : elle se place dans `/opt/abi-bureau-ia/instances/abi` (là où sont le `.env` et les
+fichiers compose) et vise toujours le projet Docker Compose `abi`, quel que soit le dossier où l'on se trouve. À retaper à chaque nouvelle ouverture du terminal :
 ```bash
-cd /opt/pk-abi/instances/abi
-docker compose config -q && echo "réglages OK"
-docker compose up -d --build
-docker compose ps
+dc() { (cd /opt/abi-bureau-ia/instances/abi && docker compose -p abi --project-directory . "$@"); }
+```
+```bash
+cd /opt/abi-bureau-ia/instances/abi
+dc config -q && echo "réglages OK"
+dc up -d --build
+dc ps
 ```
 Les trois conteneurs doivent être `running` (et `healthy` pour la base et l'orchestrateur). Si
 `ghcr.io/open-webui/open-webui:v0.6.18` est introuvable, prendre une version qui existe (jamais `latest`) :
 `docker inspect pk_openwebui --format '{{.Config.Image}}'` donne celle de l'instance PixelKréol ; l'écrire dans `.env`
-sous `ABI_OPENWEBUI_IMAGE=`, puis relancer `docker compose up -d`.
+sous `ABI_OPENWEBUI_IMAGE=`, puis relancer `dc up -d`.
 
 Vérifier que les 9 agents sont chargés :
 ```bash
@@ -91,7 +96,7 @@ La réponse doit contenir `"agents":9` et `"litellm":true`.
 
 ### 7. Publier en HTTPS *(terminal Hostinger)*
 ```bash
-cp /opt/pk-abi/instances/abi/nginx/abi.mebeeltech.online.conf /etc/nginx/sites-available/
+cp /opt/abi-bureau-ia/instances/abi/nginx/abi.mebeeltech.online.conf /etc/nginx/sites-available/
 ln -sf /etc/nginx/sites-available/abi.mebeeltech.online.conf /etc/nginx/sites-enabled/abi.mebeeltech.online.conf
 nginx -t && systemctl reload nginx
 certbot --nginx -d abi.mebeeltech.online -m mobeeltech@gmail.com --agree-tos --redirect
@@ -102,12 +107,12 @@ ne pas faire la ligne `ln`.) Ouvrir ensuite `https://abi.mebeeltech.online` : la
 ### 8. Créer le compte administrateur, puis fermer les inscriptions *(terminal + navigateur)*
 Les inscriptions sont **fermées par défaut**. Le temps de créer le compte administrateur :
 ```bash
-cd /opt/pk-abi/instances/abi
-sed -i 's|^ABI_OPENWEBUI_SIGNUP=.*|ABI_OPENWEBUI_SIGNUP=true|' .env && docker compose up -d
+cd /opt/abi-bureau-ia/instances/abi
+sed -i 's|^ABI_OPENWEBUI_SIGNUP=.*|ABI_OPENWEBUI_SIGNUP=true|' .env && dc up -d
 ```
 Dans le navigateur, créer le compte (le premier compte est administrateur). Puis refermer **tout de suite** :
 ```bash
-sed -i 's|^ABI_OPENWEBUI_SIGNUP=.*|ABI_OPENWEBUI_SIGNUP=false|' .env && docker compose up -d
+sed -i 's|^ABI_OPENWEBUI_SIGNUP=.*|ABI_OPENWEBUI_SIGNUP=false|' .env && dc up -d
 ```
 Vérifier en navigation privée que la page n'offre plus de création de compte. Les autres testeurs sont créés
 depuis l'administration d'Open WebUI.
@@ -118,15 +123,15 @@ Dans le chat, choisir le modèle `pk-auto` (ou `pk-equipe` pour plusieurs agents
 - « Prépare l'appel de fonds hors d'eau pour les Oliviers » (colle `echeancier-vefa.md` et `attestations-avancement.md`) ;
 - « Trie ces mails » (colle `mails-entrants.md`) ; « Révise le loyer de BAIL-A selon l'IRL » (colle `baux-et-quittances.md`).
 
-## Démarrage, arrêt, mise à jour *(terminal Hostinger, dossier `/opt/pk-abi/instances/abi`)*
+## Démarrage, arrêt, mise à jour *(terminal Hostinger, dossier `/opt/abi-bureau-ia/instances/abi`)*
 
 | Action | Commande | Effet sur les données |
 |---|---|---|
-| Démarrer | `docker compose up -d` | — |
-| Mettre en pause | `docker compose stop` | rien n'est perdu |
-| Arrêter (retirer les conteneurs) | `docker compose down` | comptes et historique conservés (volumes) |
-| Mettre à jour | `cd /opt/pk-abi && git pull && cd instances/abi && docker compose up -d --build` | conservées |
-| Voir les journaux | `docker compose logs --tail 50 abi_orchestrateur` | — |
+| Démarrer | `dc up -d` | — |
+| Mettre en pause | `dc stop` | rien n'est perdu |
+| Arrêter (retirer les conteneurs) | `dc down` | comptes et historique conservés (volumes) |
+| Mettre à jour | `cd /opt/abi-bureau-ia && git pull && cd instances/abi && dc up -d --build` | conservées |
+| Voir les journaux | `dc logs --tail 50 abi_orchestrateur` | — |
 
 ## Retour arrière *(terminal Hostinger)*
 Avant une mise à jour, sauvegarder le chat :
@@ -136,9 +141,9 @@ docker run --rm -v abi_openwebui_data:/d:ro -v /opt/pk-sauvegardes:/s alpine:3 t
 ```
 Pour revenir à la version précédente du code :
 ```bash
-cd /opt/pk-abi && git log --oneline -5          # repérer l'ancienne version
+cd /opt/abi-bureau-ia && git log --oneline -5          # repérer l'ancienne version
 git checkout <numéro-de-la-version-précédente>
-cd instances/abi && docker compose up -d --build
+cd instances/abi && dc up -d --build
 ```
 (Pour repartir de la version courante : `git checkout serveur-propre`.)
 
@@ -146,13 +151,13 @@ cd instances/abi && docker compose up -d --build
 Attention : `down -v` efface **les données de l'instance ABI** (comptes, historique, base). Il ne touche jamais aux
 volumes de l'instance PixelKréol (leurs noms commencent par `pixelkreol-`).
 ```bash
-cd /opt/pk-abi/instances/abi
-docker compose down -v
+cd /opt/abi-bureau-ia/instances/abi
+dc down -v
 docker image rm abi/orchestrateur:2
 rm -f /etc/nginx/sites-enabled/abi.mebeeltech.online.conf /etc/nginx/sites-available/abi.mebeeltech.online.conf
 nginx -t && systemctl reload nginx
 certbot delete --cert-name abi.mebeeltech.online
-cd /opt && rm -rf pk-abi
+cd /opt && rm -rf abi-bureau-ia
 ```
 Il reste ensuite à supprimer l'enregistrement DNS `abi`.
 
@@ -173,7 +178,7 @@ Procédure, questions à poser au client, texte du répondeur : **[STANDARD-LISE
 ## Limites connues
 - **Clé LiteLLM dédiée** : impossible tant que le LiteLLM n'a pas de base de données (voir étape 5).
 - **Agents en lecture seule** : le dossier `agents/` est monté en lecture seule ; l'ajout d'un agent par l'API
-  (`/admin/agents`) est donc refusé. Modifier `agents/registre.yaml` puis `docker compose restart abi_orchestrateur`.
+  (`/admin/agents`) est donc refusé. Modifier `agents/registre.yaml` puis `dc restart abi_orchestrateur`.
 - **Les agents ne lisent pas les dossiers du serveur** : ils travaillent sur ce qui est collé ou joint dans le chat.
 - **Noms des modèles** : ils gardent le préfixe technique `pk-` (`pk-auto`, `pk-04-appels-de-fonds`…).
 - **Modèles en ligne** : c'est le contraire de la promesse finale (« aucune donnée dans le cloud ») ; d'où les données fictives.

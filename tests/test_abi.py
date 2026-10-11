@@ -392,7 +392,7 @@ def test_nginx_modele():
 
 def test_lisezmoi_abi_complet():
     t = (ABI / "LISEZMOI.md").read_text(encoding="utf-8")
-    for mot in ("terminal Hostinger", "docker compose up -d --build", "docker compose stop", "docker compose down",
+    for mot in ("terminal Hostinger", "dc up -d --build", "dc stop", "dc down",
                 "git checkout", "down -v", "certbot --nginx -d abi.mebeeltech.online", "nginx -t", "DNS", "données fictives",
                 "ABI_OPENWEBUI_SIGNUP", "ABI_LITELLM_KEY", "docker stats"):
         assert mot in t, mot
