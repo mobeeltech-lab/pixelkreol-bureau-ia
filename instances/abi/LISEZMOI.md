@@ -160,6 +160,11 @@ Il reste ensuite à supprimer l'enregistrement DNS `abi`.
 L'Archiviste peut chercher et lire des extraits de documents d'un NAS, **en lecture seule**, via Tailscale et un montage SMB.
 Procédure complète, coupure d'urgence et désinstallation : **[NAS-LISEZMOI.md](NAS-LISEZMOI.md)**.
 
+## Standard téléphonique IA (messages vocaux, facultatif, éteint par défaut)
+Un service séparé relève une boîte mail dédiée (messagerie vocale de l'opérateur → e-mail), transcrit les messages **sur le serveur**, les fait classer par la
+Secrétaire et prévient la bonne personne par e-mail, avec une tâche de rappel. Il ne rappelle et n'écrit jamais à un client.
+Procédure, questions à poser au client, texte du répondeur : **[STANDARD-LISEZMOI.md](STANDARD-LISEZMOI.md)**.
+
 ## Règle de routage particulière
 - **Bail + relecture → Juriste.** Dès qu'une demande contient « bail » (ou « baux ») ET un verbe de relecture (relis, relire, relecture,
   « vérifie les clauses »…), `pk-auto` choisit le Juriste, même si la demande parle aussi de loyer, de locataire ou d'IRL
