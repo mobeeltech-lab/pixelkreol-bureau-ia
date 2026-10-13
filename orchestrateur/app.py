@@ -140,14 +140,43 @@ def texte_du_message(message: dict) -> str:
     return ""
 
 
+TEXTE_IMAGE_ANCIENNE = "[image envoyée plus tôt dans la conversation — non relue]"
+TEXTE_IMAGE_ILLISIBLE = "[image non lue : les modèles de lecture d'images sont indisponibles pour le moment]"
+AVERTISSEMENT_IMAGE = ("⚠️ Je n'ai pas pu lire l'image (modèles d'images indisponibles pour le moment) : "
+                       "je réponds à partir du texte seulement.")
+
+
+def _partie_image(p: Any) -> bool:
+    return isinstance(p, dict) and p.get("type") in ("image_url", "input_image")
+
+
+def message_a_image(m: Any) -> bool:
+    c = m.get("content") if isinstance(m, dict) else None
+    return isinstance(c, list) and any(_partie_image(p) for p in c)
+
+
+def indice_dernier_utilisateur(messages: list[dict]) -> int:
+    for i in range(len(messages) - 1, -1, -1):
+        if isinstance(messages[i], dict) and messages[i].get("role") == "user":
+            return i
+    return -1
+
+
 def contient_image(messages: list[dict]) -> bool:
-    for m in messages:
-        if not isinstance(m, dict):
-            continue
-        c = m.get("content")
-        if isinstance(c, list) and any(isinstance(p, dict) and p.get("type") in ("image_url", "input_image") for p in c):
-            return True
-    return False
+    """Image « active » : présente dans le DERNIER message de l'utilisateur seulement (une image envoyée plus tôt
+    ne doit pas forcer le cerveau d'images pour toutes les questions suivantes)."""
+    i = indice_dernier_utilisateur(messages)
+    return i >= 0 and message_a_image(messages[i])
+
+
+def remplacer_images(messages: list[dict], texte: str, sauf: int = -1) -> list[dict]:
+    """Remplace chaque image par `texte` (le reste du message est gardé), sauf dans le message d'indice `sauf`."""
+    sortie = []
+    for i, m in enumerate(messages):
+        if i != sauf and message_a_image(m):
+            m = {**m, "content": [({"type": "text", "text": texte} if _partie_image(p) else p) for p in m["content"]]}
+        sortie.append(m)
+    return sortie
 
 
 def dernier_message_utilisateur(messages: list[dict]) -> str:
@@ -624,21 +653,35 @@ def borner(messages: list[dict]) -> list[dict]:
     return ms
 
 
+class ChaineCerveaux(list):
+    """Liste de cerveaux à essayer. `repli` (facultatif) : chaîne TEXTE à utiliser, images retirées, si le cerveau d'images échoue."""
+
+    def __init__(self, cerveaux, agent_id: str = "", repli: list[str] | None = None):
+        super().__init__(cerveaux)
+        self.agent_id, self.repli = agent_id, repli
+
+
 def preparer_corps(corps: dict, agent: dict) -> tuple[dict, list[str]]:
     messages = [m for m in corps.get("messages", []) if isinstance(m, dict)]
     systeme_client = tronquer_milieu("\n\n".join(texte_du_message(m) for m in messages if m.get("role") == "system").strip(), MAX_MESSAGE)
     systeme = REGISTRE.prompt_systeme(agent)
     if systeme_client:
         systeme += "\n\n## Consignes supplémentaires de l'utilisateur\n" + systeme_client
-    nouveaux = [{"role": "system", "content": systeme}] + borner([nettoyer_message(m) for m in messages if m.get("role") != "system"])
+    sans_systeme = [nettoyer_message(m) for m in messages if m.get("role") != "system"]
+    image_active = contient_image(sans_systeme)
+    # ordre : nettoyer -> remplacer les images anciennes -> borner
+    sans_systeme = remplacer_images(sans_systeme, TEXTE_IMAGE_ANCIENNE, sauf=indice_dernier_utilisateur(sans_systeme) if image_active else -1)
+    nouveaux = [{"role": "system", "content": systeme}] + borner(sans_systeme)
     sortie = {k: v for k, v in corps.items() if k not in ("messages", "model") and option_autorisee(k)}
     sortie["messages"] = nouveaux
     sortie.setdefault("temperature", agent.get("temperature", 0.4))
-    cerveau = "pk-vision" if contient_image(messages) else agent["cerveau"]
-    chaine = [cerveau] + [c for c in REGISTRE.secours(cerveau) if c != cerveau]
-    if cerveau == "pk-vision":  # une image ne doit pas partir vers un cerveau texte seul
-        chaine = ["pk-vision"]
-    return sortie, chaine
+    cerveau = agent["cerveau"]
+    normale = [cerveau] + [c for c in REGISTRE.secours(cerveau) if c != cerveau]
+    if not image_active:
+        return sortie, ChaineCerveaux(normale, agent["id"])
+    # image dans le dernier message : cerveau d'images d'abord ; s'il est épuisé, repli TEXTE (images retirées, avertissement)
+    repli = [c for c in normale if c != "pk-vision"]
+    return sortie, ChaineCerveaux(["pk-vision"], agent["id"], repli)
 
 
 class EchecCerveaux(Exception):
@@ -697,7 +740,7 @@ def erreur_du_bloc(bloc: bytes) -> tuple[int, str] | None:
     return None
 
 
-async def appeler(client: httpx.AsyncClient, corps: dict, chaine: list[str]) -> tuple[dict, str]:
+async def _appeler(client: httpx.AsyncClient, corps: dict, chaine: list[str]) -> tuple[dict, str]:
     dernier = (502, "aucun cerveau essayé")
     essayes: list[str] = []
     for cerveau in chaine:
@@ -729,7 +772,7 @@ async def appeler(client: httpx.AsyncClient, corps: dict, chaine: list[str]) -> 
     raise EchecCerveaux(*dernier, essayes=essayes)
 
 
-async def ouvrir_flux(client: httpx.AsyncClient, corps: dict, chaine: list[str]):
+async def _ouvrir_flux(client: httpx.AsyncClient, corps: dict, chaine: list[str]):
     """Ouvre le flux du premier cerveau qui démarre vraiment. Renvoie (réponse, cerveau, 1er bloc, suite).
 
     On lit le premier bloc AVANT de s'engager : un flux vide ou qui commence par une erreur permet encore
@@ -782,6 +825,63 @@ async def ouvrir_flux(client: httpx.AsyncClient, corps: dict, chaine: list[str])
             continue
         return r, cerveau, premier, suite
     raise EchecCerveaux(*dernier, essayes=essayes)
+
+
+def corps_sans_images(corps: dict) -> dict:
+    return {**corps, "messages": remplacer_images(corps.get("messages", []), TEXTE_IMAGE_ILLISIBLE)}
+
+
+def repli_texte_possible(chaine: Any, e: "EchecCerveaux") -> bool:
+    """Le cerveau d'images a échoué avec une erreur qui justifie une bascule (429, 404, 408, 5xx, réponse vide).
+    Une erreur 400 / 401 / 403 (requête refusée, clé invalide) ne déclenche PAS de nouvel envoi ailleurs."""
+    return bool(getattr(chaine, "repli", None)) and statut_rebascule(e.statut)
+
+
+def journaliser_repli_texte(chaine: Any, e: "EchecCerveaux", cerveau: str) -> None:
+    LOG.warning("bascule vision -> texte : agent=%s cerveau_origine=%s cerveau_utilise=%s statut=%s",
+                getattr(chaine, "agent_id", "?"), "pk-vision", cerveau, e.statut)
+
+
+def avertir_image(rep: dict) -> dict:
+    """Ajoute en tête du texte final la ligne d'avertissement (jamais sur une réponse qui n'est qu'un appel d'outil)."""
+    try:
+        msg = rep["choices"][0]["message"]
+    except (KeyError, IndexError, TypeError):
+        return rep
+    if isinstance(msg, dict) and not msg.get("tool_calls") and not msg.get("function_call"):
+        msg["content"] = AVERTISSEMENT_IMAGE + "\n\n" + (msg.get("content") if isinstance(msg.get("content"), str) else "")
+    return rep
+
+
+async def appeler(client: httpx.AsyncClient, corps: dict, chaine: list[str]) -> tuple[dict, str]:
+    try:
+        return await _appeler(client, corps, chaine)
+    except EchecCerveaux as e:
+        if not repli_texte_possible(chaine, e):
+            raise
+        try:
+            rep, cerveau = await _appeler(client, corps_sans_images(corps), list(chaine.repli))
+        except EchecCerveaux as e2:
+            e2.essayes = e.essayes + e2.essayes
+            raise
+        journaliser_repli_texte(chaine, e, cerveau)
+        return avertir_image(rep), cerveau
+
+
+async def ouvrir_flux(client: httpx.AsyncClient, corps: dict, chaine: list[str]):
+    """Comme _ouvrir_flux, avec le repli texte du cerveau d'images. Renvoie (réponse, cerveau, 1er bloc, suite, avertissement)."""
+    try:
+        return (*await _ouvrir_flux(client, corps, chaine), "")
+    except EchecCerveaux as e:
+        if not repli_texte_possible(chaine, e):
+            raise
+        try:
+            r, cerveau, premier, suite = await _ouvrir_flux(client, corps_sans_images(corps), list(chaine.repli))
+        except EchecCerveaux as e2:
+            e2.essayes = e.essayes + e2.essayes
+            raise
+        journaliser_repli_texte(chaine, e, cerveau)
+        return r, cerveau, premier, suite, AVERTISSEMENT_IMAGE + "\n\n"
 
 
 def morceau_sse(modele: str, contenu: str | None = None, fin: str | None = None, cid: str | None = None) -> bytes:
@@ -1343,7 +1443,7 @@ async def chat(request: Request):
         return JSONResponse(reponse, headers={"X-PK-Agent": agent["id"], "X-PK-Cerveau": cerveau})
 
     try:
-        amont, cerveau, premier, suite = await ouvrir_flux(client, corps_final, chaine)
+        amont, cerveau, premier, suite, avert = await ouvrir_flux(client, corps_final, chaine)
     except EchecCerveaux as e:
         await JOURNAL.ecrire(agent["id"], mode, "-", debut, False, e.detail)
         return erreur(e.statut if e.statut >= 400 else 502, e.message(agent["nom"]), "cerveaux_indisponibles")
@@ -1354,6 +1454,8 @@ async def chat(request: Request):
         try:
             if annonce:
                 yield morceau_sse(agent["modele"], annonce)
+            if avert:
+                yield morceau_sse(agent["modele"], avert)
             fin_vue = b""
             try:
                 yield premier
