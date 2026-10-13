@@ -253,3 +253,16 @@ def test_abi_flux_vision_429(client_abi, h_api):
     faux.scenarios["pk-long"] = [flux_ok("réponse")]
     texte, fin, _ = lire_sse(poser(client_abi, h_api, "pk-09-archiviste", conversation_image_recente(), stream=True))
     assert texte.startswith(AVERT) and texte.endswith("réponse") and fin
+
+
+# =============================================================== 7. DeepSeek retiré des chaînes (solde épuisé : 402 certain à chaque appel, offre payante)
+def test_deepseek_n_est_plus_dans_les_chaines():
+    import yaml
+    from conftest import RACINE
+    cerveaux = yaml.safe_load((RACINE / "agents" / "cerveaux.yaml").read_text(encoding="utf-8"))
+    assert "deepseek" not in cerveaux["fournisseurs"]
+    assert all(m["f"] != "deepseek" for c in cerveaux["cerveaux"].values() for m in c["chaine"])
+    config = yaml.safe_load((RACINE / "config" / "litellm_config.yaml").read_text(encoding="utf-8"))
+    assert not any("deepseek" in str(m["litellm_params"]) for m in config["model_list"])
+    noms = {m["model_name"] for m in config["model_list"]}
+    assert all(x in noms for f in config["router_settings"]["fallbacks"] for v in f.values() for x in v)     # aucun secours orphelin

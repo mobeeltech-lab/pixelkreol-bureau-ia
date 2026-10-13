@@ -83,13 +83,6 @@ model_list:
     stream_timeout: 75
   model_info:
     description: pk-costaud via groq
-- model_name: pk-costaud--8
-  litellm_params:
-    model: deepseek/deepseek-chat
-    api_key: os.environ/DEEPSEEK_API_KEY
-    stream_timeout: 75
-  model_info:
-    description: pk-costaud via deepseek
 - model_name: pk-costaud--9
   litellm_params:
     model: openrouter/openrouter/free
@@ -231,7 +224,6 @@ router_settings:
     - pk-costaud--2
     - pk-costaud--6
     - pk-costaud--3
-    - pk-costaud--8
     - pk-costaud--4
     - pk-costaud--9
   - pk-code:

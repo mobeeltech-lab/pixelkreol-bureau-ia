@@ -20,7 +20,7 @@ fournisseurs:
   mistral:    {prefixe: mistral,    cle: MISTRAL_API_KEY}
   cerebras:   {prefixe: cerebras,   cle: CEREBRAS_API_KEY}
   openrouter: {prefixe: openrouter, cle: OPENROUTER_API_KEY}
-  deepseek:   {prefixe: deepseek,   cle: DEEPSEEK_API_KEY}   # payant (quelques centimes) : toujours en fin de chaîne
+  # deepseek : retiré des chaînes le 13/10/2026 (solde épuisé : erreur 402 certaine à chaque appel, offre payante)
 
 cerveaux:
   pk-rapide:
@@ -45,7 +45,6 @@ cerveaux:
       - {f: openrouter, modele: qwen/qwen3.8-27b:free}
       - {f: groq,       modele: qwen/qwen3.8-27b}
       - {f: cerebras,   modele: gpt-oss-120b}
-      - {f: deepseek,   modele: deepseek-chat}
       - {f: openrouter, modele: openrouter/free}
 
   pk-code:
