@@ -62,15 +62,17 @@ cerveaux:
   pk-vision:
     role: "Lecture d'images, captures, factures scannées, direction artistique"
     chaine:
+      - {f: mistral,    modele: mistral-small-latest}
+      - {f: gemini,     modele: gemini-flash-lite-latest}
       - {f: gemini,     modele: gemini-flash-latest}
       - {f: openrouter, modele: google/gemma-4-31b-it:free}
       - {f: openrouter, modele: qwen/qwen3.8-27b:free}
-      - {f: mistral,    modele: mistral-small-latest}
       - {f: openrouter, modele: openrouter/free}
 
   pk-long:
     role: "Documents très longs (contrats, cahiers des charges, veille massive)"
     chaine:
+      - {f: gemini,     modele: gemini-flash-lite-latest}
       - {f: gemini,     modele: gemini-flash-latest}
       - {f: openrouter, modele: nvidia/nemotron-3-ultra-550b-a55b:free}
       - {f: openrouter, modele: google/gemma-4-31b-it:free}

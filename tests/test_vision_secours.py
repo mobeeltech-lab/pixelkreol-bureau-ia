@@ -266,3 +266,32 @@ def test_deepseek_n_est_plus_dans_les_chaines():
     assert not any("deepseek" in str(m["litellm_params"]) for m in config["model_list"])
     noms = {m["model_name"] for m in config["model_list"]}
     assert all(x in noms for f in config["router_settings"]["fallbacks"] for v in f.values() for x in v)     # aucun secours orphelin
+
+
+# =============================================================== 8. ordre des cerveaux d'images et de documents longs (13/10/2026)
+def ordre_litellm(cerveau):
+    import yaml
+    from conftest import RACINE
+    c = yaml.safe_load((RACINE / "config" / "litellm_config.yaml").read_text(encoding="utf-8"))
+    modeles = {m["model_name"]: m["litellm_params"]["model"] for m in c["model_list"]}
+    secours = {k: v for f in c["router_settings"]["fallbacks"] for k, v in f.items()}
+    return [modeles[n] for n in [cerveau] + secours[cerveau]]
+
+
+def ordre_yaml(cerveau):
+    import yaml
+    from conftest import RACINE
+    c = yaml.safe_load((RACINE / "agents" / "cerveaux.yaml").read_text(encoding="utf-8"))
+    return [f"{m['f']}/{m['modele']}" for m in c["cerveaux"][cerveau]["chaine"]]
+
+
+def test_pk_vision_mistral_puis_gemini_lite_puis_gemini_flash():
+    attendu = ["mistral/mistral-small-latest", "gemini/gemini-flash-lite-latest", "gemini/gemini-flash-latest"]
+    assert ordre_yaml("pk-vision")[:3] == attendu
+    assert ordre_litellm("pk-vision")[:3] == attendu
+
+
+def test_pk_long_gemini_lite_avant_flash():
+    attendu = ["gemini/gemini-flash-lite-latest", "gemini/gemini-flash-latest"]
+    assert ordre_yaml("pk-long")[:2] == attendu
+    assert ordre_litellm("pk-long")[:2] == attendu
