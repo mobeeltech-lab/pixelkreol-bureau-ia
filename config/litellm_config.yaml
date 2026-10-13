@@ -83,13 +83,6 @@ model_list:
     stream_timeout: 75
   model_info:
     description: pk-costaud via groq
-- model_name: pk-costaud--8
-  litellm_params:
-    model: deepseek/deepseek-chat
-    api_key: os.environ/DEEPSEEK_API_KEY
-    stream_timeout: 75
-  model_info:
-    description: pk-costaud via deepseek
 - model_name: pk-costaud--9
   litellm_params:
     model: openrouter/openrouter/free
@@ -141,11 +134,11 @@ model_list:
     description: pk-code via openrouter
 - model_name: pk-vision
   litellm_params:
-    model: gemini/gemini-flash-latest
-    api_key: os.environ/GEMINI_API_KEY
+    model: mistral/mistral-small-latest
+    api_key: os.environ/MISTRAL_API_KEY
     stream_timeout: 75
   model_info:
-    description: pk-vision via gemini
+    description: pk-vision via mistral
 - model_name: pk-vision--2
   litellm_params:
     model: openrouter/google/gemma-4-31b-it:free
@@ -155,11 +148,11 @@ model_list:
     description: pk-vision via openrouter
 - model_name: pk-vision--4
   litellm_params:
-    model: mistral/mistral-small-latest
-    api_key: os.environ/MISTRAL_API_KEY
+    model: gemini/gemini-flash-latest
+    api_key: os.environ/GEMINI_API_KEY
     stream_timeout: 75
   model_info:
-    description: pk-vision via mistral
+    description: pk-vision via gemini
 - model_name: pk-vision--5
   litellm_params:
     model: openrouter/openrouter/free
@@ -169,7 +162,7 @@ model_list:
     description: pk-vision via openrouter
 - model_name: pk-long
   litellm_params:
-    model: gemini/gemini-flash-latest
+    model: gemini/gemini-flash-lite-latest
     api_key: os.environ/GEMINI_API_KEY
     stream_timeout: 75
   model_info:
@@ -209,7 +202,7 @@ model_list:
     stream_timeout: 75
 - model_name: pk-long--lite
   litellm_params:
-    model: gemini/gemini-flash-lite-latest
+    model: gemini/gemini-flash-latest
     api_key: os.environ/GEMINI_API_KEY
     stream_timeout: 75
 - model_name: pk-vision--lite
@@ -231,7 +224,6 @@ router_settings:
     - pk-costaud--2
     - pk-costaud--6
     - pk-costaud--3
-    - pk-costaud--8
     - pk-costaud--4
     - pk-costaud--9
   - pk-code:

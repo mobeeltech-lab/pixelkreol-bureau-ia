@@ -97,12 +97,16 @@ def test_les_secrets_ne_sont_pas_dans_les_journaux(client, h_api, faux, caplog):
         assert secret not in texte
 
 
-def test_vision_ne_bascule_pas_vers_un_cerveau_texte(client, h_api, faux):
-    faux.par_defaut = ST(503, "off")
+def test_vision_epuisee_bascule_sur_le_texte_avec_avertissement(client, h_api, faux):
+    """Avant : seul pk-vision était appelé et l'agent ne répondait plus. Maintenant : repli texte, images retirées, avertissement honnête."""
+    faux.scenarios["pk-vision"] = [ST(503, "off")]
+    faux.scenarios["pk-costaud"] = [OK("réponse sans l'image")]
     r = client.post("/v1/chat/completions", headers=h_api, json={"model": "pk-09-designer", "messages": [
         {"role": "user", "content": [{"type": "text", "text": "?"},
                                      {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}}]}]})
-    assert r.status_code >= 400 and set(faux.modeles_appeles()) == {"pk-vision"}
+    assert r.status_code == 200 and faux.modeles_appeles() == ["pk-vision", "pk-costaud"]
+    assert r.json()["choices"][0]["message"]["content"].startswith("⚠️ Je n'ai pas pu lire l'image")
+    assert "image_url" not in json.dumps(faux.appels[-1]["messages"])
 
 
 # ---------------------------------------------------------------- flux (streaming)

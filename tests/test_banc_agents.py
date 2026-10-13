@@ -153,9 +153,9 @@ def test_socle_porte_la_localisation_ajaccio_et_rien_d_autre_n_a_bouge():
     ref = subprocess.run(["git", "-C", str(RACINE), "rev-parse", "--verify", "-q", "origin/serveur-propre"], capture_output=True)
     if ref.returncode:
         pytest.skip("branche de départ absente de ce dépôt")
-    diff = subprocess.run(["git", "-C", str(RACINE), "diff", "--name-only", "origin/serveur-propre", "--", "agents/cerveaux.yaml", "agents/perso.yaml", "agents/socle.txt"],
+    diff = subprocess.run(["git", "-C", str(RACINE), "diff", "--name-only", "origin/serveur-propre", "--", "agents/perso.yaml", "agents/socle.txt"],
                           capture_output=True, text=True).stdout.split()
-    assert diff == []                                                     # socle, cerveaux et agents ajoutés sur le serveur : inchangés par la branche courante
+    assert diff == []                                                     # socle et agents ajoutés sur le serveur : inchangés par la branche courante (cerveaux.yaml : DeepSeek retiré le 13/10)
 
 
 def test_instance_abi_et_orchestrateur_inchanges():
@@ -166,7 +166,8 @@ def test_instance_abi_et_orchestrateur_inchanges():
     diff = subprocess.run(["git", "-C", str(RACINE), "diff", "--name-only", "origin/serveur-propre", "--", "instances", "config", "docker-compose.yml",
                            "install.sh", "outils"], capture_output=True, text=True).stdout.split()
     # seuls le registre d'ABI (Spécialiste Prompt n° 10), son LISEZMOI et ses modèles de demandes changent : le socle et les cerveaux d'ABI ne sont pas touchés
-    assert set(diff) <= {"instances/abi/agents/registre.yaml", "instances/abi/LISEZMOI.md", "instances/abi/modeles-de-demandes.txt"}
+    assert set(diff) <= {"instances/abi/agents/registre.yaml", "instances/abi/LISEZMOI.md", "instances/abi/modeles-de-demandes.txt",
+                    "config/litellm_config.yaml"}   # DeepSeek retiré (402)
     orch = subprocess.run(["git", "-C", str(RACINE), "diff", "--name-only", "origin/serveur-propre", "--", "orchestrateur"], capture_output=True, text=True).stdout.split()
     assert set(orch) <= {"orchestrateur/app.py", "orchestrateur/mcp_client.py", "orchestrateur/mcp_serveur.py", "orchestrateur/Dockerfile"}
 
