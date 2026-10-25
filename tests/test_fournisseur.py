@@ -37,7 +37,7 @@ class PoolEnregistreur:
         pass
 
     def fournisseurs(self):
-        return [a[-1] for s, a in self.ecritures if "INTO pk_journal" in s]
+        return [a[-2] for s, a in self.ecritures if "INTO pk_journal" in s]
 
 
 def reponse(modele, entetes=None):

@@ -101,7 +101,7 @@ def test_le_journal_enregistre_demandeur_sujet_et_fournisseur(client, h_api, fau
                  {"x-openwebui-user-name": "Marie", "x-openwebui-user-id": "u42"})
     assert r.status_code == 200
     attendre(pool)
-    agent, mode, cerveau, duree, ok, detail, demandeur, sujet, fournisseur = pool.journal()[0]
+    agent, mode, cerveau, duree, ok, detail, demandeur, sujet, fournisseur, secours = pool.journal()[0]
     assert (agent, ok, demandeur, fournisseur) == ("secretariat", True, "Marie (u42)", "mistral-small-latest")
     assert sujet == "Rédige un post Instagram pour la boulangerie"
     assert cerveau.startswith("pk-")
@@ -115,7 +115,7 @@ def test_le_fournisseur_est_aussi_lu_dans_un_flux(client, h_api, faux):
     r = client.post("/v1/chat/completions", headers=h_api, json={"model": "pk-12-secretariat", "stream": True, "messages": msg()})
     assert r.status_code == 200
     attendre(pool)
-    assert pool.journal()[0][-1] == "gemini-flash-lite-latest"
+    assert pool.journal()[0][-2] == "gemini-flash-lite-latest"
 
 
 def test_la_demande_sans_nom_est_attribuee_a_api(client, h_api):
