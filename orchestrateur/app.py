@@ -29,6 +29,7 @@ import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, AsyncIterator
+from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
@@ -790,7 +791,7 @@ async def _appeler(client: httpx.AsyncClient, corps: dict, chaine: list[str]) ->
                 LOG.warning("bascule : %s", dernier[1])
                 JOURNAL.maillon(cerveau, 502, "", "trafic", int((time.monotonic() - t0) * 1000))
                 continue
-            modele = rep.get("model") if isinstance(rep, dict) else None
+            modele = fournisseur_reel(rep.get("model") if isinstance(rep, dict) else None, r.headers, client)
             noter_fournisseur(modele)
             JOURNAL.maillon(cerveau, 200, modele or "", "trafic", int((time.monotonic() - t0) * 1000))
             return rep, cerveau
@@ -865,7 +866,7 @@ async def _ouvrir_flux(client: httpx.AsyncClient, corps: dict, chaine: list[str]
                 break
             LOG.warning("bascule (flux) : %s a signalé l'erreur %s", cerveau, err[0])
             continue
-        modele = modele_du_bloc(premier)
+        modele = fournisseur_reel(modele_du_bloc(premier), r.headers, client)
         noter_fournisseur(modele)
         JOURNAL.maillon(cerveau, 200, modele, "trafic", int((time.monotonic() - t0) * 1000))
         return r, cerveau, premier, suite
@@ -998,6 +999,73 @@ def noter_fournisseur(modele: Any) -> None:
     ctx = CTX_DEMANDE.get()
     if ctx is not None and isinstance(modele, str) and modele:
         ctx["fournisseur"] = masquer(modele)[:80]
+
+
+# Modèle réellement servi : LiteLLM renvoie parfois le nom du CERVEAU (« pk-code ») dans le champ « model » (Mistral, Groq…) au lieu du
+# modèle. Dans ce cas on lit les en-têtes de la réponse (déjà reçus, aucune attente) : x-litellm-model-id est traduit par /model/info,
+# gardé en cache et rafraîchi EN ARRIÈRE-PLAN (au plus toutes les 10 min) ; à défaut, x-litellm-model-api-base donne au moins le fournisseur.
+MODELES_LITELLM: dict[str, Any] = {"par_id": {}, "t": 0.0, "essai": 0.0, "tache": None}
+RAFRAICHIR_MODELES_S = 600
+
+
+def _etat_cache_modeles() -> tuple[float, float]:
+    return MODELES_LITELLM["t"], MODELES_LITELLM["essai"]
+
+
+async def rafraichir_modeles(client: httpx.AsyncClient) -> None:
+    """Relit /model/info de LiteLLM : identifiant de déploiement -> (maillon, modèle). Ne lève jamais ; garde l'ancien cache en cas d'échec."""
+    MODELES_LITELLM["essai"] = time.monotonic()
+    try:
+        r = await client.get(f"{LITELLM_URL}/model/info", headers=entetes_litellm(), timeout=10)
+        if r.status_code != 200:
+            LOG.warning("LiteLLM /model/info : erreur %s (fournisseur déduit des en-têtes seulement)", r.status_code)
+            return
+        table = {}
+        for m in r.json().get("data") or []:
+            ident = ((m.get("model_info") or {}).get("id")) if isinstance(m, dict) else None
+            modele = ((m.get("litellm_params") or {}).get("model")) if isinstance(m, dict) else None
+            if isinstance(ident, str) and isinstance(modele, str) and modele:
+                table[ident] = {"maillon": str(m.get("model_name") or ""), "modele": modele}
+        if table:
+            MODELES_LITELLM["par_id"], MODELES_LITELLM["t"] = table, time.monotonic()
+    except Exception as e:  # noqa: BLE001 — en arrière-plan : jamais d'erreur vers l'utilisateur
+        LOG.warning("LiteLLM /model/info illisible (%s)", masquer(str(e) or type(e).__name__)[:160])
+
+
+def planifier_modeles(client: httpx.AsyncClient) -> None:
+    """Programme (sans attendre) la relecture de /model/info : jamais plus d'une à la fois, une par 10 min (1 min tant que le cache est vide)."""
+    tache = MODELES_LITELLM["tache"]
+    if tache is not None and not tache.done():
+        return
+    t, essai = _etat_cache_modeles()
+    if time.monotonic() - essai < (RAFRAICHIR_MODELES_S if t else 60) and essai:
+        return
+    try:
+        MODELES_LITELLM["tache"] = asyncio.get_running_loop().create_task(rafraichir_modeles(client))
+    except RuntimeError:       # pas de boucle d'événements
+        pass
+
+
+def fournisseur_reel(modele: Any, entetes: Any, client: httpx.AsyncClient | None = None) -> str:
+    """Nom du modèle réellement utilisé. Rend le champ « model » de la réponse s'il n'est pas un nom de cerveau (« pk-… »)."""
+    m = modele if isinstance(modele, str) else ""
+    if m and not m.startswith("pk-"):
+        return m
+    try:
+        ident = (entetes.get("x-litellm-model-id") or "").strip() if entetes is not None else ""
+        if ident:
+            connu = MODELES_LITELLM["par_id"].get(ident)
+            if connu:
+                return connu["modele"]
+            if client is not None:
+                planifier_modeles(client)
+        base = (entetes.get("x-litellm-model-api-base") or "").strip() if entetes is not None else ""
+        hote = (urlsplit(base).hostname or "") if base else ""
+        if hote:
+            return hote
+    except (AttributeError, ValueError):
+        pass
+    return m
 
 
 def statut_maillon(statut: int) -> str:
@@ -1633,7 +1701,7 @@ async def tester_maillons(request: Request):
                     statut = rep.status_code
                     if statut == 200:
                         try:
-                            modele = str(rep.json().get("model") or "")
+                            modele = fournisseur_reel(str(rep.json().get("model") or ""), rep.headers, client)
                         except ValueError:
                             pass
                 except httpx.HTTPError as e:
