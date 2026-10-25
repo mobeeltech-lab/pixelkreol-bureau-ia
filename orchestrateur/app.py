@@ -436,6 +436,21 @@ class Registre:
                 return a
         return None
 
+    def modeles_du_cerveau(self, cerveau: str) -> list[str]:
+        """Chaîne d'un cerveau dans l'ordre de cerveaux.yaml, en « fournisseur/modèle » (le nom que LiteLLM renvoie dans x-litellm-model-name),
+        sans doublon (comme outils/generer_litellm.py)."""
+        cfg = self.cerveaux if isinstance(self.cerveaux, dict) else {}
+        fournisseurs = cfg.get("fournisseurs") if isinstance(cfg.get("fournisseurs"), dict) else {}
+        spec = (cfg.get("cerveaux") or {}).get(cerveau) if isinstance(cfg.get("cerveaux"), dict) else None
+        sortie: list[str] = []
+        for m in (spec.get("chaine") if isinstance(spec, dict) and isinstance(spec.get("chaine"), list) else []):
+            f = fournisseurs.get(m.get("f")) if isinstance(m, dict) else None
+            if isinstance(f, dict) and isinstance(f.get("prefixe"), str) and isinstance(m.get("modele"), str):
+                nom = f"{f['prefixe']}/{m['modele']}"
+                if nom not in sortie:
+                    sortie.append(nom)
+        return sortie
+
     def secours(self, cerveau: str) -> list[str]:
         table = self.cerveaux.get("secours_entre_cerveaux") if isinstance(self.cerveaux, dict) else None
         suite = table.get(cerveau) if isinstance(table, dict) else None
@@ -793,7 +808,9 @@ async def _appeler(client: httpx.AsyncClient, corps: dict, chaine: list[str]) ->
                 continue
             modele = fournisseur_reel(rep.get("model") if isinstance(rep, dict) else None, r.headers, client)
             noter_fournisseur(modele)
-            JOURNAL.maillon(cerveau, 200, modele or "", "trafic", int((time.monotonic() - t0) * 1000))
+            secours, sautes, repondant = maillons_sautes(cerveau, r.headers, client)
+            noter_secours(secours)
+            JOURNAL.maillon(repondant, 200, modele or "", "trafic", int((time.monotonic() - t0) * 1000), secours, sautes)
             return rep, cerveau
         dernier = (r.status_code, masquer(f"{cerveau} : {r.text[:300]}"))
         JOURNAL.maillon(cerveau, r.status_code, "", "trafic", int((time.monotonic() - t0) * 1000))
@@ -868,7 +885,9 @@ async def _ouvrir_flux(client: httpx.AsyncClient, corps: dict, chaine: list[str]
             continue
         modele = fournisseur_reel(modele_du_bloc(premier), r.headers, client)
         noter_fournisseur(modele)
-        JOURNAL.maillon(cerveau, 200, modele, "trafic", int((time.monotonic() - t0) * 1000))
+        secours, sautes, repondant = maillons_sautes(cerveau, r.headers, client)
+        noter_secours(secours)
+        JOURNAL.maillon(repondant, 200, modele, "trafic", int((time.monotonic() - t0) * 1000), secours, sautes)
         return r, cerveau, premier, suite
     raise EchecCerveaux(*dernier, essayes=essayes)
 
@@ -987,7 +1006,7 @@ CTX_DEMANDE: contextvars.ContextVar = contextvars.ContextVar("pk_demande", defau
 def ouvrir_demande(demandeur: str, corps: dict | None = None, agent: str = "", mode: str = "") -> dict:
     """Prépare le contexte de la demande en cours (lu par le journal) et l'inscrit parmi les demandes « en cours »."""
     sujet = masquer_sujet(dernier_message_utilisateur(corps.get("messages") or [])) if (SUJET_ACTIF and isinstance(corps, dict)) else ""
-    ctx = {"id": uuid.uuid4().hex[:10], "demandeur": masquer(demandeur or "api")[:120], "sujet": sujet, "fournisseur": "",
+    ctx = {"id": uuid.uuid4().hex[:10], "demandeur": masquer(demandeur or "api")[:120], "sujet": sujet, "fournisseur": "", "secours": 0,
            "agent": agent, "mode": mode, "debut": time.time()}
     CTX_DEMANDE.set(ctx)
     JOURNAL.commencer(ctx)
@@ -1052,6 +1071,9 @@ def fournisseur_reel(modele: Any, entetes: Any, client: httpx.AsyncClient | None
     if m and not m.startswith("pk-"):
         return m
     try:
+        nom = (entetes.get("x-litellm-model-name") or "").strip() if entetes is not None else ""   # confirmé sur le serveur : le modèle réel, dès la 1re demande
+        if nom:
+            return nom[:80]
         ident = (entetes.get("x-litellm-model-id") or "").strip() if entetes is not None else ""
         if ident:
             connu = MODELES_LITELLM["par_id"].get(ident)
@@ -1066,6 +1088,135 @@ def fournisseur_reel(modele: Any, entetes: Any, client: httpx.AsyncClient | None
     except (AttributeError, ValueError):
         pass
     return m
+
+
+def secours_de(entetes: Any) -> int:
+    """x-litellm-attempted-fallbacks : nombre de maillons que LiteLLM a passés avant de répondre. Absent, vide ou illisible : 0."""
+    try:
+        v = (entetes.get("x-litellm-attempted-fallbacks") or "").strip() if entetes is not None else ""
+        return max(0, min(int(v), 50)) if v else 0
+    except (AttributeError, ValueError, TypeError):
+        return 0
+
+
+def groupe_de(entetes: Any) -> str:
+    """x-litellm-model-group : le maillon (groupe de modèles) qui a répondu."""
+    try:
+        return ((entetes.get("x-litellm-model-group") or "").strip() if entetes is not None else "")[:80]
+    except AttributeError:
+        return ""
+
+
+# Ordre des maillons sautés : d'abord agents/cerveaux.yaml (que l'orchestrateur lit déjà, chaîne dans l'ordre) rapproché du nom renvoyé par
+# x-litellm-model-name, en ne gardant que les modèles que LiteLLM a réellement chargés (fournisseurs sans clé ignorés, via /model/info en cache).
+# En dernier repli seulement : router_settings.fallbacks relu sur LiteLLM (/router/settings puis /config/yaml), au plus toutes les 10 min,
+# en arrière-plan. De /config/yaml on ne garde QUE router_settings.fallbacks, en mémoire : rien d'autre n'est stocké, journalisé ni renvoyé.
+# Illisible partout = on garde le nombre de secours sans nommer les maillons.
+CHAINES_LITELLM: dict[str, Any] = {"par_cerveau": {}, "t": 0.0, "essai": 0.0, "tache": None}
+ROUTES_REGLAGES = ("/router/settings", "/config/yaml")
+
+
+def _table_secours(liste: Any) -> dict[str, list[str]]:
+    """[{cerveau: [maillons…]}, …] -> {cerveau: [maillons…]} : seulement des noms, en quantité bornée."""
+    table: dict[str, list[str]] = {}
+    for e in (liste if isinstance(liste, list) else [])[:60]:
+        if isinstance(e, dict):
+            for k, v in e.items():
+                if isinstance(k, str) and isinstance(v, list):
+                    table[k[:80]] = [x[:80] for x in v[:40] if isinstance(x, str)]
+    return table
+
+
+def _trouver_secours(noeud: Any, profondeur: int = 0, seulement_router: bool = False) -> dict[str, list[str]]:
+    """Cherche la liste « fallbacks » dans la réponse de LiteLLM. `seulement_router` (config complète, /config/yaml) : uniquement
+    router_settings.fallbacks, tout le reste de la config (clés comprises) est ignoré aussitôt."""
+    if isinstance(noeud, str):
+        try:
+            noeud = yaml.safe_load(noeud)
+        except yaml.YAMLError:
+            return {}
+    if not isinstance(noeud, dict):
+        return {}
+    if seulement_router:
+        reglages = noeud.get("router_settings")
+        return _table_secours(reglages.get("fallbacks")) if isinstance(reglages, dict) else {}
+    if profondeur > 6:
+        return {}
+    table = _table_secours(noeud.get("fallbacks"))
+    if table:
+        return table
+    for v in noeud.values():
+        r = _trouver_secours(v, profondeur + 1)
+        if r:
+            return r
+    return {}
+
+
+async def rafraichir_chaines(client: httpx.AsyncClient) -> None:
+    CHAINES_LITELLM["essai"] = time.monotonic()
+    for route in ROUTES_REGLAGES:
+        try:
+            r = await client.get(f"{LITELLM_URL}{route}", headers=entetes_litellm(), timeout=10)
+            if r.status_code != 200:
+                continue
+            try:
+                corps: Any = r.json()
+            except ValueError:
+                corps = r.text
+            table = _trouver_secours(corps, seulement_router=(route == "/config/yaml"))
+            if table:
+                CHAINES_LITELLM["par_cerveau"], CHAINES_LITELLM["t"] = table, time.monotonic()
+                return
+        except Exception as e:  # noqa: BLE001 — en arrière-plan : jamais d'erreur vers l'utilisateur
+            LOG.warning("LiteLLM %s illisible (%s)", route, type(e).__name__)
+
+
+def planifier_chaines(client: httpx.AsyncClient) -> None:
+    tache = CHAINES_LITELLM["tache"]
+    if tache is not None and not tache.done():
+        return
+    if CHAINES_LITELLM["essai"] and time.monotonic() - CHAINES_LITELLM["essai"] < (RAFRAICHIR_MODELES_S if CHAINES_LITELLM["t"] else 300):
+        return
+    try:
+        CHAINES_LITELLM["tache"] = asyncio.get_running_loop().create_task(rafraichir_chaines(client))
+    except RuntimeError:
+        pass
+
+
+def maillons_sautes(cerveau: str, entetes: Any, client: httpx.AsyncClient | None = None) -> tuple[int, list[str], str]:
+    """(nombre de secours passés, noms des maillons sautés si on peut les nommer, maillon qui a réellement répondu).
+    Lecture des en-têtes déjà reçus et de caches seulement : aucun appel pendant la demande."""
+    n = secours_de(entetes)
+    if n == 0:
+        return 0, [], cerveau
+    groupe = groupe_de(entetes)
+    repondant = groupe if (groupe.startswith("pk-") and groupe != cerveau) else cerveau
+    try:
+        nom = (entetes.get("x-litellm-model-name") or "").strip()
+    except AttributeError:
+        nom = ""
+    # 1. cerveaux.yaml + modèles réellement chargés par LiteLLM (/model/info en cache : un fournisseur sans clé n'y figure pas)
+    charges = {i["modele"]: i["maillon"] for i in MODELES_LITELLM["par_id"].values()
+               if i["maillon"] == cerveau or i["maillon"].startswith(cerveau + "--")}
+    if not charges and client is not None:
+        planifier_modeles(client)
+    ordre = [m for m in REGISTRE.modeles_du_cerveau(cerveau) if m in charges]
+    if nom and nom in ordre:
+        return n, [charges[m] for m in ordre[:ordre.index(nom)]][:10], charges[nom]
+    # 2. dernier repli : router_settings.fallbacks relu sur LiteLLM, avec le groupe qui a répondu
+    chaine = CHAINES_LITELLM["par_cerveau"].get(cerveau)
+    if chaine is None and client is not None:
+        planifier_chaines(client)
+    complete = [cerveau] + [m for m in (chaine or []) if m != cerveau]
+    if groupe and groupe != cerveau and groupe in complete:
+        return n, complete[:complete.index(groupe)][:10], repondant
+    return n, [], repondant
+
+
+def noter_secours(n: int) -> None:
+    ctx = CTX_DEMANDE.get()
+    if ctx is not None:
+        ctx["secours"] = int(n)
 
 
 def statut_maillon(statut: int) -> str:
@@ -1100,10 +1251,12 @@ class Journal:
                     agent TEXT, mode TEXT, cerveau TEXT, duree_ms INTEGER, ok BOOLEAN, detail TEXT)""")
                 for col in ("demandeur", "sujet", "fournisseur"):
                     await c.execute(f"ALTER TABLE pk_journal ADD COLUMN IF NOT EXISTS {col} TEXT")
+                await c.execute("ALTER TABLE pk_journal ADD COLUMN IF NOT EXISTS secours INTEGER")
                 await c.execute("CREATE INDEX IF NOT EXISTS pk_journal_ts ON pk_journal(ts)")
                 await c.execute("""CREATE TABLE IF NOT EXISTS pk_maillons (
                     id BIGSERIAL PRIMARY KEY, ts TIMESTAMPTZ NOT NULL DEFAULT now(),
                     maillon TEXT, fournisseur TEXT, statut INTEGER, resultat TEXT, source TEXT, duree_ms INTEGER)""")
+                await c.execute("ALTER TABLE pk_maillons ADD COLUMN IF NOT EXISTS secours_sautes INTEGER")
                 await c.execute("CREATE INDEX IF NOT EXISTS pk_maillons_ts ON pk_maillons(ts)")
             LOG.info("Journal Postgres actif")
             self._lancer(self._purger())
@@ -1157,18 +1310,24 @@ class Journal:
         if self.pool is None:
             return
         self._lancer(self._executer(
-            "INSERT INTO pk_journal(agent,mode,cerveau,duree_ms,ok,detail,demandeur,sujet,fournisseur) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+            "INSERT INTO pk_journal(agent,mode,cerveau,duree_ms,ok,detail,demandeur,sujet,fournisseur,secours) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)",
             agent, mode, cerveau, int((time.monotonic() - debut) * 1000), ok, masquer(detail)[:500],
-            ctx.get("demandeur", ""), ctx.get("sujet", "") if SUJET_ACTIF else "", ctx.get("fournisseur", "")))
+            ctx.get("demandeur", ""), ctx.get("sujet", "") if SUJET_ACTIF else "", ctx.get("fournisseur", ""), int(ctx.get("secours") or 0)))
 
-    def maillon(self, maillon: str, statut: int, fournisseur: str = "", source: str = "trafic", duree_ms: int = 0) -> None:
-        """Résultat réel d'un appel à un cerveau (ou d'un test lancé à la main). Ne bloque jamais, ne lève jamais."""
+    def maillon(self, maillon: str, statut: int, fournisseur: str = "", source: str = "trafic", duree_ms: int = 0,
+                secours: int = 0, sautes: Any = ()) -> None:
+        """Résultat réel d'un appel à un cerveau (ou d'un test lancé à la main). `secours` : maillons que LiteLLM a passés avant de répondre ;
+        `sautes` : leurs noms si on les connaît (une ligne « sauté » chacun, sans statut). Ne bloque jamais, ne lève jamais."""
         if self.pool is None:
             return
         try:
             self._lancer(self._executer(
-                "INSERT INTO pk_maillons(maillon,fournisseur,statut,resultat,source,duree_ms) VALUES($1,$2,$3,$4,$5,$6)",
-                str(maillon)[:80], masquer(str(fournisseur))[:80], int(statut), statut_maillon(int(statut)), source, int(duree_ms)))
+                "INSERT INTO pk_maillons(maillon,fournisseur,statut,resultat,source,duree_ms,secours_sautes) VALUES($1,$2,$3,$4,$5,$6,$7)",
+                str(maillon)[:80], masquer(str(fournisseur))[:80], int(statut), statut_maillon(int(statut)), source, int(duree_ms), int(secours or 0)))
+            for saute in list(sautes)[:10]:
+                self._lancer(self._executer(
+                    "INSERT INTO pk_maillons(maillon,fournisseur,statut,resultat,source,duree_ms,secours_sautes) VALUES($1,$2,0,'sauté','saute',0,0)",
+                    str(saute)[:80], ""))
         except RuntimeError:       # pas de boucle d'événements (appel hors serveur)
             pass
 
@@ -1619,13 +1778,13 @@ async def activite(request: Request, agent: str = "", demandeur: str = "", limit
     try:
         async with JOURNAL.pool.acquire() as con:
             lignes = await asyncio.wait_for(con.fetch(
-                """SELECT ts, agent, mode, cerveau, fournisseur, demandeur, sujet, duree_ms, ok, detail FROM pk_journal
+                """SELECT ts, agent, mode, cerveau, fournisseur, demandeur, sujet, duree_ms, ok, detail, secours FROM pk_journal
                    WHERE ($1::text = '' OR agent = $1::text) AND ($2::text = '' OR demandeur = $2::text) ORDER BY ts DESC LIMIT $3""",
                 agent, demandeur, limite), 10)
             sortie["dernieres"] = [{"ts": _iso(r["ts"]), "agent": r["agent"], "mode": r["mode"], "cerveau": r["cerveau"],
                                     "fournisseur": r["fournisseur"] or "", "demandeur": r["demandeur"] or "",
                                     "sujet": r["sujet"] or "", "duree_ms": r["duree_ms"], "ok": r["ok"],
-                                    "detail": r["detail"] or ""} for r in lignes]
+                                    "detail": r["detail"] or "", "secours": r["secours"] or 0} for r in lignes]
             jour = await asyncio.wait_for(con.fetch(
                 "SELECT agent, count(*) AS n, count(*) FILTER (WHERE NOT ok) AS echecs FROM pk_journal WHERE ts >= $1 GROUP BY agent ORDER BY n DESC",
                 minuit), 10)
@@ -1642,9 +1801,10 @@ async def activite(request: Request, agent: str = "", demandeur: str = "", limit
 
 
 async def _sante_maillons(con) -> list[dict]:
-    """Santé de chaque maillon d'après les appels réels (et les tests lancés à la main) ; rouge = 402/404 depuis plus de 24 h."""
+    """Santé de chaque maillon d'après les appels réels (et les tests lancés à la main).
+    Rouge = 402/404 vus directement depuis plus de 24 h. Orange (« suspect ») = LiteLLM saute ce maillon (secours) depuis plus de 24 h sans qu'il ait jamais répondu depuis."""
     dernier = await con.fetch("""SELECT DISTINCT ON (maillon) maillon, ts, statut, resultat, source, fournisseur FROM pk_maillons
-                                 WHERE ts > now() - interval '30 days' ORDER BY maillon, ts DESC""")
+                                 WHERE source <> 'saute' AND ts > now() - interval '30 days' ORDER BY maillon, ts DESC""")
     dernier_ok = {r["maillon"]: r for r in await con.fetch(
         """SELECT DISTINCT ON (maillon) maillon, ts, fournisseur FROM pk_maillons
            WHERE statut = 200 AND ts > now() - interval '30 days' ORDER BY maillon, ts DESC""")}
@@ -1655,18 +1815,28 @@ async def _sante_maillons(con) -> list[dict]:
         """SELECT m.maillon, min(m.ts) AS depuis FROM pk_maillons m
            WHERE m.statut IN (402, 404) AND m.ts > COALESCE((SELECT max(x.ts) FROM pk_maillons x WHERE x.maillon = m.maillon AND x.statut = 200), '-infinity')
            GROUP BY m.maillon""")}
+    sautes = {r["maillon"]: r for r in await con.fetch(
+        """SELECT m.maillon, count(*) FILTER (WHERE m.ts > now() - interval '24 hours') AS sautes_24h,
+                  min(m.ts) AS depuis, max(m.ts) AS dernier FROM pk_maillons m
+           WHERE m.source = 'saute' AND m.ts > COALESCE((SELECT max(x.ts) FROM pk_maillons x WHERE x.maillon = m.maillon AND x.statut = 200), '-infinity')
+           GROUP BY m.maillon""")}
     limite = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=24)
+    lignes = {r["maillon"]: r for r in dernier}
+    for m, sa in sautes.items():             # maillon jamais appelé directement, seulement sauté : il apparaît quand même
+        lignes.setdefault(m, {"maillon": m, "ts": sa["dernier"], "statut": 0, "resultat": "sauté", "source": "saute", "fournisseur": ""})
     sortie = []
-    for r in dernier:
-        m = r["maillon"]
+    for m, r in lignes.items():
         d = depuis.get(m)
         mort = r["statut"] in (402, 404) and d is not None and d < limite
+        sa = sautes.get(m)
+        suspect = (not mort) and sa is not None and sa["sautes_24h"] > 0 and sa["depuis"] < limite
         ok = dernier_ok.get(m)
         sortie.append({"maillon": m, "dernier": {"ts": _iso(r["ts"]), "resultat": r["resultat"], "statut": r["statut"], "source": r["source"]},
                        "fournisseur": (ok["fournisseur"] if ok else "") or r["fournisseur"] or "",
                        "appels_24h": (j24.get(m) or {}).get("appels", 0), "echecs_24h": (j24.get(m) or {}).get("echecs", 0),
+                       "sautes_24h": sa["sautes_24h"] if sa else 0, "suspect": suspect, "saute_depuis": _iso(sa["depuis"]) if (suspect and sa) else "",
                        "dernier_ok": _iso(ok["ts"]) if ok else "", "mort": mort, "depuis": _iso(d) if (d and r["statut"] in (402, 404)) else ""})
-    sortie.sort(key=lambda x: (not x["mort"], x["maillon"]))
+    sortie.sort(key=lambda x: (not x["mort"], not x["suspect"], x["maillon"]))
     return sortie
 
 
