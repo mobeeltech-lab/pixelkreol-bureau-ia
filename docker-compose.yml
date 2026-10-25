@@ -120,6 +120,7 @@ services:
       OPENAI_API_BASE_URLS: "http://pk_orchestrateur:4001/v1;http://pk_litellm:4000/v1"
       OPENAI_API_KEYS: "${PK_API_KEY:-${LITELLM_MASTER_KEY}};${LITELLM_MASTER_KEY}"
       ENABLE_OLLAMA_API: "false"
+      ENABLE_FORWARD_USER_INFO_HEADERS: "true"
       WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY:?WEBUI_SECRET_KEY manquant dans .env}
       WEBUI_NAME: "PixelKréol — Bureau IA"
       WEBUI_URL: https://${PK_DOMAINE_AGENTS:-agents.mebeeltech.online}
