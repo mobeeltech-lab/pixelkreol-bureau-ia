@@ -12,6 +12,7 @@ API compatible OpenAI placée devant LiteLLM :
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import datetime as dt
 import importlib.util
 import hmac
@@ -119,8 +120,29 @@ def normaliser(texte: str) -> str:
     return re.sub(r"\s+", " ", texte)
 
 
-_SECRETS = re.compile(r"(sk-[A-Za-z0-9_-]{16,}|gsk_[A-Za-z0-9]{16,}|AIza[0-9A-Za-z_-]{20,}"
+_SECRETS = re.compile(r"(sk-[A-Za-z0-9_-]{16,}|gsk_[A-Za-z0-9]{16,}|AIza[0-9A-Za-z_-]{20,}|nvapi-[A-Za-z0-9_-]{16,}"
+                      r"|(?:hf|ghp|gho|xox[bp])[_-][A-Za-z0-9_-]{16,}"
                       r"|(?i:bearer)\s+[A-Za-z0-9._~+/=-]{6,})")
+# Données personnelles et mots de passe qui ne doivent JAMAIS finir dans le sujet d'une demande (journal d'activité).
+_PERSO = (
+    (re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+"), "[e-mail]"),
+    (re.compile(r"\b[A-Z]{2}\d{2}(?:[ -]?[A-Z0-9]{4}){2,7}(?:[ -]?[A-Z0-9]{1,4})?\b", re.I), "[IBAN]"),
+    (re.compile(r"(?<!\d)(?:\d[ -]?){13,19}(?!\d)"), "[carte]"),
+    (re.compile(r"(?<!\w)(?:\+|00)?\d(?:[\s.()-]?\d){7,14}(?!\w)"), "[téléphone]"),
+)
+_MOT_DE_PASSE = re.compile(r"(?i)\b(mot\s+de\s+passe|mdp|password|passwd|pwd|passphrase|secret|jeton|token|api[ _-]?key|cl[ée]\s+(?:api|secr[èe]te))"
+                           r"(\s*(?:est|is|=|:|->|→)?\s*)(\S+)")
+
+
+def masquer_sujet(texte: str, longueur: int = 80) -> str:
+    """Sujet d'une demande pour le journal d'activité : clés, mots de passe, e-mails, téléphones, IBAN et cartes retirés
+    AVANT la coupe à `longueur` caractères (une clé coupée en deux ne doit pas laisser son début)."""
+    t = " ".join(str(texte or "")[:2000].split())
+    t = masquer(t)
+    t = _MOT_DE_PASSE.sub(lambda m: f"{m.group(1)}{m.group(2)}***", t)
+    for motif, remplacement in _PERSO:
+        t = motif.sub(remplacement, t)
+    return t[:longueur]
 
 
 def masquer(texte: str) -> str:
@@ -745,6 +767,7 @@ async def _appeler(client: httpx.AsyncClient, corps: dict, chaine: list[str]) ->
     essayes: list[str] = []
     for cerveau in chaine:
         essayes.append(cerveau)
+        t0 = time.monotonic()
         try:
             r = await client.post(f"{LITELLM_URL}/v1/chat/completions", json={**corps, "model": cerveau, "stream": False},
                                   headers=entetes_litellm(), timeout=TIMEOUT)
@@ -752,6 +775,7 @@ async def _appeler(client: httpx.AsyncClient, corps: dict, chaine: list[str]) ->
             delai = isinstance(e, httpx.TimeoutException)
             dernier = (504 if delai else 503, f"{cerveau} {'délai dépassé' if delai else 'injoignable'} ({type(e).__name__})")
             LOG.warning("bascule : %s", dernier[1])
+            JOURNAL.maillon(cerveau, dernier[0], "", "trafic", int((time.monotonic() - t0) * 1000))
             continue
         if r.status_code == 200:
             try:
@@ -759,17 +783,29 @@ async def _appeler(client: httpx.AsyncClient, corps: dict, chaine: list[str]) ->
             except ValueError:
                 dernier = (502, f"{cerveau} : réponse illisible (pas du JSON)")
                 LOG.warning("bascule : %s", dernier[1])
+                JOURNAL.maillon(cerveau, 502, "", "trafic", int((time.monotonic() - t0) * 1000))
                 continue
             if reponse_vide(rep):
                 dernier = (502, f"{cerveau} : réponse vide")
                 LOG.warning("bascule : %s", dernier[1])
+                JOURNAL.maillon(cerveau, 502, "", "trafic", int((time.monotonic() - t0) * 1000))
                 continue
+            modele = rep.get("model") if isinstance(rep, dict) else None
+            noter_fournisseur(modele)
+            JOURNAL.maillon(cerveau, 200, modele or "", "trafic", int((time.monotonic() - t0) * 1000))
             return rep, cerveau
         dernier = (r.status_code, masquer(f"{cerveau} : {r.text[:300]}"))
+        JOURNAL.maillon(cerveau, r.status_code, "", "trafic", int((time.monotonic() - t0) * 1000))
         if not statut_rebascule(r.status_code):
             break
         LOG.warning("bascule : %s a répondu %s", cerveau, r.status_code)
     raise EchecCerveaux(*dernier, essayes=essayes)
+
+
+def modele_du_bloc(bloc: bytes) -> str:
+    """Champ « model » du premier bloc d'un flux SSE (le modèle réellement servi par LiteLLM), sinon chaîne vide."""
+    m = re.search(rb'"model"\s*:\s*"([^"\\]{1,100})"', bloc[:4096])
+    return m.group(1).decode("utf-8", "replace") if m else ""
 
 
 async def _ouvrir_flux(client: httpx.AsyncClient, corps: dict, chaine: list[str]):
@@ -782,6 +818,7 @@ async def _ouvrir_flux(client: httpx.AsyncClient, corps: dict, chaine: list[str]
     essayes: list[str] = []
     for cerveau in chaine:
         essayes.append(cerveau)
+        t0 = time.monotonic()
         req = client.build_request("POST", f"{LITELLM_URL}/v1/chat/completions",
                                    json={**corps, "model": cerveau, "stream": True},
                                    headers=entetes_litellm(), timeout=httpx.Timeout(TIMEOUT, connect=10))
@@ -791,11 +828,13 @@ async def _ouvrir_flux(client: httpx.AsyncClient, corps: dict, chaine: list[str]
             delai = isinstance(e, httpx.TimeoutException)
             dernier = (504 if delai else 503, f"{cerveau} {'délai dépassé' if delai else 'injoignable'} ({type(e).__name__})")
             LOG.warning("bascule (flux) : %s", dernier[1])
+            JOURNAL.maillon(cerveau, dernier[0], "", "trafic", int((time.monotonic() - t0) * 1000))
             continue
         if r.status_code != 200:
             texte = (await r.aread()).decode("utf-8", "replace")[:300]
             await r.aclose()
             dernier = (r.status_code, masquer(f"{cerveau} : {texte}"))
+            JOURNAL.maillon(cerveau, r.status_code, "", "trafic", int((time.monotonic() - t0) * 1000))
             if not statut_rebascule(r.status_code):
                 break
             LOG.warning("bascule (flux) : %s a répondu %s", cerveau, r.status_code)
@@ -809,20 +848,26 @@ async def _ouvrir_flux(client: httpx.AsyncClient, corps: dict, chaine: list[str]
             await r.aclose()
             dernier = (503, f"{cerveau} : flux coupé avant le premier octet ({type(e).__name__})")
             LOG.warning("bascule (flux) : %s", dernier[1])
+            JOURNAL.maillon(cerveau, 503, "", "trafic", int((time.monotonic() - t0) * 1000))
             continue
         if not premier.strip():
             await r.aclose()
             dernier = (502, f"{cerveau} : flux vide")
             LOG.warning("bascule (flux) : %s", dernier[1])
+            JOURNAL.maillon(cerveau, 502, "", "trafic", int((time.monotonic() - t0) * 1000))
             continue
         err = erreur_du_bloc(premier)
         if err:
             await r.aclose()
             dernier = (err[0], masquer(f"{cerveau} : {err[1]}"))
+            JOURNAL.maillon(cerveau, err[0], "", "trafic", int((time.monotonic() - t0) * 1000))
             if not statut_rebascule(err[0]):
                 break
             LOG.warning("bascule (flux) : %s a signalé l'erreur %s", cerveau, err[0])
             continue
+        modele = modele_du_bloc(premier)
+        noter_fournisseur(modele)
+        JOURNAL.maillon(cerveau, 200, modele, "trafic", int((time.monotonic() - t0) * 1000))
         return r, cerveau, premier, suite
     raise EchecCerveaux(*dernier, essayes=essayes)
 
@@ -924,11 +969,56 @@ async def flux_texte(modele: str, texte: str) -> AsyncIterator[bytes]:
 # =====================================================================
 #  Journal (Postgres si disponible, sinon mémoire)
 # =====================================================================
+# Journal d'activité (qui demande quoi à quel agent, quel maillon de la chaîne a répondu).
+# Le « sujet » (80 premiers caractères de la demande, secrets et données personnelles retirés) n'est enregistré que pour
+# l'instance PixelKréol ET si PK_JOURNAL_SUJET=1 : toute autre marque (ABI Holding…) le garde ÉTEINT, quel que soit le réglage.
+MARQUE_SUJET = "PixelKréol"
+SUJET_ACTIF = cfg("PK_JOURNAL_SUJET", "1").strip().lower() in ("1", "true", "oui", "yes", "on") and MARQUE == MARQUE_SUJET
+if cfg("PK_JOURNAL_SUJET", "").strip().lower() in ("1", "true", "oui", "yes", "on") and MARQUE != MARQUE_SUJET:
+    logging.getLogger("pk").error("PK_JOURNAL_SUJET=1 ignoré : le sujet des demandes n'est enregistré que pour « %s » (instance « %s » : aucun texte de demande conservé)",
+                                  MARQUE_SUJET, MARQUE)
+JOURNAL_JOURS = 90                  # purge automatique au-delà
+ATTENTE_ECRITURE = 5.0              # secondes accordées à Postgres pour une écriture (en arrière-plan, jamais sur la réponse)
+ECRITURES_MAX = 200                 # écritures simultanées en attente ; au-delà, on abandonne (Postgres bloqué) au lieu d'empiler
+CTX_DEMANDE: contextvars.ContextVar = contextvars.ContextVar("pk_demande", default=None)
+
+
+def ouvrir_demande(demandeur: str, corps: dict | None = None, agent: str = "", mode: str = "") -> dict:
+    """Prépare le contexte de la demande en cours (lu par le journal) et l'inscrit parmi les demandes « en cours »."""
+    sujet = masquer_sujet(dernier_message_utilisateur(corps.get("messages") or [])) if (SUJET_ACTIF and isinstance(corps, dict)) else ""
+    ctx = {"id": uuid.uuid4().hex[:10], "demandeur": masquer(demandeur or "api")[:120], "sujet": sujet, "fournisseur": "",
+           "agent": agent, "mode": mode, "debut": time.time()}
+    CTX_DEMANDE.set(ctx)
+    JOURNAL.commencer(ctx)
+    return ctx
+
+
+def noter_fournisseur(modele: Any) -> None:
+    """Retient le modèle réellement utilisé par LiteLLM (champ « model » de la réponse) pour la demande en cours."""
+    ctx = CTX_DEMANDE.get()
+    if ctx is not None and isinstance(modele, str) and modele:
+        ctx["fournisseur"] = masquer(modele)[:80]
+
+
+def statut_maillon(statut: int) -> str:
+    if statut == 200:
+        return "ok"
+    if statut in (408, 504):
+        return "délai"
+    if statut in (402, 404, 429):
+        return str(statut)
+    return "erreur" if statut >= 500 or statut < 400 else str(statut)
+
+
 class Journal:
     def __init__(self) -> None:
         self.pool = None
         self.compteurs: dict[str, dict[str, int]] = {}
         self.echecs_ecriture = 0
+        self.en_cours: dict[str, dict] = {}
+        self.attente: set = set()
+        self.abandons = 0
+        self.derniere_purge = 0.0
 
     async def demarrer(self) -> None:
         if not DATABASE_URL:
@@ -940,28 +1030,93 @@ class Journal:
                 await c.execute("""CREATE TABLE IF NOT EXISTS pk_journal (
                     id BIGSERIAL PRIMARY KEY, ts TIMESTAMPTZ NOT NULL DEFAULT now(),
                     agent TEXT, mode TEXT, cerveau TEXT, duree_ms INTEGER, ok BOOLEAN, detail TEXT)""")
+                for col in ("demandeur", "sujet", "fournisseur"):
+                    await c.execute(f"ALTER TABLE pk_journal ADD COLUMN IF NOT EXISTS {col} TEXT")
+                await c.execute("CREATE INDEX IF NOT EXISTS pk_journal_ts ON pk_journal(ts)")
+                await c.execute("""CREATE TABLE IF NOT EXISTS pk_maillons (
+                    id BIGSERIAL PRIMARY KEY, ts TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    maillon TEXT, fournisseur TEXT, statut INTEGER, resultat TEXT, source TEXT, duree_ms INTEGER)""")
+                await c.execute("CREATE INDEX IF NOT EXISTS pk_maillons_ts ON pk_maillons(ts)")
             LOG.info("Journal Postgres actif")
+            self._lancer(self._purger())
         except Exception as e:  # noqa: BLE001
             LOG.warning("Journal Postgres indisponible (%s) — journal en mémoire seulement", masquer(str(e))[:200])
             self.pool = None
 
-    async def ecrire(self, agent: str, mode: str, cerveau: str, debut: float, ok: bool, detail: str = "") -> None:
-        c = self.compteurs.setdefault(agent, {"ok": 0, "echec": 0})
-        c["ok" if ok else "echec"] += 1
-        if self.pool is None:
+    # --- demandes en cours (mémoire) -----------------------------------------------------------
+    def commencer(self, ctx: dict) -> None:
+        if len(self.en_cours) > 500:                       # filet : jamais de fuite mémoire
+            self.en_cours.clear()
+        self.en_cours[ctx["id"]] = ctx
+
+    def demandes_en_cours(self) -> list[dict]:
+        limite = time.time() - 900                           # une demande « en cours » depuis plus de 15 min est oubliée
+        for k in [k for k, v in self.en_cours.items() if v["debut"] < limite]:
+            self.en_cours.pop(k, None)
+        return [{"debut": v["debut"], "agent": v["agent"], "mode": v["mode"], "demandeur": v["demandeur"], "sujet": v["sujet"]}
+                for v in sorted(self.en_cours.values(), key=lambda v: v["debut"])]
+
+    # --- écriture : toujours en arrière-plan ---------------------------------------------------
+    def _lancer(self, coro) -> None:
+        if len(self.attente) >= ECRITURES_MAX:
+            coro.close()
+            self.abandons += 1
             return
+        t = asyncio.get_running_loop().create_task(coro)
+        self.attente.add(t)
+        t.add_done_callback(self.attente.discard)
+
+    async def _executer(self, sql: str, *args) -> None:
         try:
-            async with self.pool.acquire() as con:
-                await con.execute("INSERT INTO pk_journal(agent,mode,cerveau,duree_ms,ok,detail) VALUES($1,$2,$3,$4,$5,$6)",
-                                  agent, mode, cerveau, int((time.monotonic() - debut) * 1000), ok, masquer(detail)[:500])
+            async def ecrire_en_base() -> None:
+                async with self.pool.acquire() as con:
+                    await con.execute(sql, *args)
+            await asyncio.wait_for(ecrire_en_base(), ATTENTE_ECRITURE)
             self.echecs_ecriture = 0
         except Exception as e:  # noqa: BLE001 — le journal ne doit jamais bloquer une réponse
             self.echecs_ecriture += 1
             if self.echecs_ecriture == 1 or self.echecs_ecriture % 100 == 0:   # pas une ligne par requête
                 LOG.warning("journal Postgres : écriture impossible (%s) — %d échec(s) de suite",
-                            masquer(str(e))[:200], self.echecs_ecriture)
+                            masquer(str(e) or type(e).__name__)[:200], self.echecs_ecriture)
+
+    async def ecrire(self, agent: str, mode: str, cerveau: str, debut: float, ok: bool, detail: str = "") -> None:
+        """Compte la demande (mémoire) puis programme l'écriture Postgres EN ARRIÈRE-PLAN : cet appel rend la main aussitôt."""
+        c = self.compteurs.setdefault(agent, {"ok": 0, "echec": 0})
+        c["ok" if ok else "echec"] += 1
+        ctx = CTX_DEMANDE.get() or {}
+        if ctx.get("id"):
+            self.en_cours.pop(ctx["id"], None)
+        if self.pool is None:
+            return
+        self._lancer(self._executer(
+            "INSERT INTO pk_journal(agent,mode,cerveau,duree_ms,ok,detail,demandeur,sujet,fournisseur) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+            agent, mode, cerveau, int((time.monotonic() - debut) * 1000), ok, masquer(detail)[:500],
+            ctx.get("demandeur", ""), ctx.get("sujet", "") if SUJET_ACTIF else "", ctx.get("fournisseur", "")))
+
+    def maillon(self, maillon: str, statut: int, fournisseur: str = "", source: str = "trafic", duree_ms: int = 0) -> None:
+        """Résultat réel d'un appel à un cerveau (ou d'un test lancé à la main). Ne bloque jamais, ne lève jamais."""
+        if self.pool is None:
+            return
+        try:
+            self._lancer(self._executer(
+                "INSERT INTO pk_maillons(maillon,fournisseur,statut,resultat,source,duree_ms) VALUES($1,$2,$3,$4,$5,$6)",
+                str(maillon)[:80], masquer(str(fournisseur))[:80], int(statut), statut_maillon(int(statut)), source, int(duree_ms)))
+        except RuntimeError:       # pas de boucle d'événements (appel hors serveur)
+            pass
+
+    async def _purger(self) -> None:
+        for table in ("pk_journal", "pk_maillons"):
+            await self._executer(f"DELETE FROM {table} WHERE ts < now() - make_interval(days => {int(JOURNAL_JOURS)})")
+        self.derniere_purge = time.time()
+
+    def purge_due(self) -> None:
+        if self.pool is not None and time.time() - self.derniere_purge > 6 * 3600:
+            self.derniere_purge = time.time()
+            self._lancer(self._purger())
 
     async def arreter(self) -> None:
+        if self.attente:
+            await asyncio.wait(list(self.attente), timeout=3)
         if self.pool is not None:
             await self.pool.close()
 
@@ -1364,6 +1519,134 @@ async def stats(request: Request):
     return {"par_agent": JOURNAL.compteurs, "journal_postgres": JOURNAL.pool is not None}
 
 
+# =====================================================================
+#  Activité : qui demande quoi, quel maillon répond (lecture protégée par la clé admin, jamais publique)
+# =====================================================================
+def _iso(v: Any) -> str:
+    try:
+        return v.astimezone(TZ).isoformat(timespec="seconds")
+    except AttributeError:
+        return str(v or "")
+
+
+def _filtre(valeur: str, defaut: str = "") -> str:
+    """Valeur de filtre venue d'une requête : courte, sans caractères de contrôle (elle n'est utilisée qu'en paramètre SQL)."""
+    return "".join(ch for ch in (valeur or defaut)[:120] if ch.isprintable())
+
+
+@app.get("/admin/activite")
+async def activite(request: Request, agent: str = "", demandeur: str = "", limite: int = 100):
+    if not autorise(request, ADMIN_KEY):
+        return erreur(401, "Clé admin invalide", "auth")
+    limite = max(1, min(int(limite), 500))
+    agent, demandeur = _filtre(agent), _filtre(demandeur)
+    sortie: dict[str, Any] = {"sujet_actif": SUJET_ACTIF, "journal_postgres": JOURNAL.pool is not None, "marque": MARQUE,
+                              "en_cours": JOURNAL.demandes_en_cours(), "dernieres": [], "compteurs_jour": [],
+                              "agents": [], "personnes": [], "maillons": [], "jours_conserves": JOURNAL_JOURS,
+                              "abandons": JOURNAL.abandons}
+    if JOURNAL.pool is None:
+        sortie["compteurs_memoire"] = JOURNAL.compteurs
+        return sortie
+    minuit = dt.datetime.now(TZ).replace(hour=0, minute=0, second=0, microsecond=0)
+    try:
+        async with JOURNAL.pool.acquire() as con:
+            lignes = await asyncio.wait_for(con.fetch(
+                """SELECT ts, agent, mode, cerveau, fournisseur, demandeur, sujet, duree_ms, ok, detail FROM pk_journal
+                   WHERE ($1::text = '' OR agent = $1::text) AND ($2::text = '' OR demandeur = $2::text) ORDER BY ts DESC LIMIT $3""",
+                agent, demandeur, limite), 10)
+            sortie["dernieres"] = [{"ts": _iso(r["ts"]), "agent": r["agent"], "mode": r["mode"], "cerveau": r["cerveau"],
+                                    "fournisseur": r["fournisseur"] or "", "demandeur": r["demandeur"] or "",
+                                    "sujet": r["sujet"] or "", "duree_ms": r["duree_ms"], "ok": r["ok"],
+                                    "detail": r["detail"] or ""} for r in lignes]
+            jour = await asyncio.wait_for(con.fetch(
+                "SELECT agent, count(*) AS n, count(*) FILTER (WHERE NOT ok) AS echecs FROM pk_journal WHERE ts >= $1 GROUP BY agent ORDER BY n DESC",
+                minuit), 10)
+            sortie["compteurs_jour"] = [{"agent": r["agent"], "total": r["n"], "echecs": r["echecs"]} for r in jour]
+            sortie["agents"] = [r["agent"] for r in await con.fetch(
+                "SELECT DISTINCT agent FROM pk_journal WHERE ts > now() - interval '30 days' AND agent IS NOT NULL ORDER BY agent LIMIT 100")]
+            sortie["personnes"] = [r["demandeur"] for r in await con.fetch(
+                "SELECT DISTINCT demandeur FROM pk_journal WHERE ts > now() - interval '30 days' AND demandeur <> '' ORDER BY demandeur LIMIT 100")]
+            sortie["maillons"] = await _sante_maillons(con)
+    except Exception as e:  # noqa: BLE001 — une panne de base ne casse pas la page
+        LOG.warning("activité : lecture impossible (%s)", masquer(str(e) or type(e).__name__)[:200])
+        sortie["erreur"] = "Lecture du journal impossible pour le moment"
+    return sortie
+
+
+async def _sante_maillons(con) -> list[dict]:
+    """Santé de chaque maillon d'après les appels réels (et les tests lancés à la main) ; rouge = 402/404 depuis plus de 24 h."""
+    dernier = await con.fetch("""SELECT DISTINCT ON (maillon) maillon, ts, statut, resultat, source, fournisseur FROM pk_maillons
+                                 WHERE ts > now() - interval '30 days' ORDER BY maillon, ts DESC""")
+    dernier_ok = {r["maillon"]: r for r in await con.fetch(
+        """SELECT DISTINCT ON (maillon) maillon, ts, fournisseur FROM pk_maillons
+           WHERE statut = 200 AND ts > now() - interval '30 days' ORDER BY maillon, ts DESC""")}
+    j24 = {r["maillon"]: r for r in await con.fetch(
+        """SELECT maillon, count(*) AS appels, count(*) FILTER (WHERE statut <> 200) AS echecs FROM pk_maillons
+           WHERE source = 'trafic' AND ts > now() - interval '24 hours' GROUP BY maillon""")}
+    depuis = {r["maillon"]: r["depuis"] for r in await con.fetch(
+        """SELECT m.maillon, min(m.ts) AS depuis FROM pk_maillons m
+           WHERE m.statut IN (402, 404) AND m.ts > COALESCE((SELECT max(x.ts) FROM pk_maillons x WHERE x.maillon = m.maillon AND x.statut = 200), '-infinity')
+           GROUP BY m.maillon""")}
+    limite = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=24)
+    sortie = []
+    for r in dernier:
+        m = r["maillon"]
+        d = depuis.get(m)
+        mort = r["statut"] in (402, 404) and d is not None and d < limite
+        ok = dernier_ok.get(m)
+        sortie.append({"maillon": m, "dernier": {"ts": _iso(r["ts"]), "resultat": r["resultat"], "statut": r["statut"], "source": r["source"]},
+                       "fournisseur": (ok["fournisseur"] if ok else "") or r["fournisseur"] or "",
+                       "appels_24h": (j24.get(m) or {}).get("appels", 0), "echecs_24h": (j24.get(m) or {}).get("echecs", 0),
+                       "dernier_ok": _iso(ok["ts"]) if ok else "", "mort": mort, "depuis": _iso(d) if (d and r["statut"] in (402, 404)) else ""})
+    sortie.sort(key=lambda x: (not x["mort"], x["maillon"]))
+    return sortie
+
+
+TEST_VERROU = asyncio.Lock()
+
+
+@app.post("/admin/activite/tester")
+async def tester_maillons(request: Request):
+    """« Tester maintenant » : UN mot à chaque fournisseur de LiteLLM, un par un et sans bascule (comme verifier.sh).
+    Lancé à la main seulement : ça consomme un peu des quotas gratuits. Le résultat alimente la santé des maillons."""
+    if not autorise(request, ADMIN_KEY):
+        return erreur(401, "Clé admin invalide", "auth")
+    if TEST_VERROU.locked():
+        return erreur(409, "Un test est déjà en cours", "occupe")
+    async with TEST_VERROU:
+        client: httpx.AsyncClient = request.app.state.client
+        try:
+            r = await client.get(f"{LITELLM_URL}/v1/models", headers=entetes_litellm(), timeout=15)
+            maillons = sorted(m["id"] for m in r.json()["data"] if isinstance(m, dict) and isinstance(m.get("id"), str))
+        except (httpx.HTTPError, ValueError, KeyError, TypeError) as e:
+            return erreur(502, f"Liste des cerveaux illisible ({type(e).__name__})", "cerveaux_indisponibles")
+        feu = asyncio.Semaphore(4)
+
+        async def un(maillon: str) -> dict:
+            async with feu:
+                t0 = time.monotonic()
+                modele, statut = "", 0
+                try:
+                    rep = await client.post(f"{LITELLM_URL}/v1/chat/completions", headers=entetes_litellm(), timeout=45, json={
+                        "model": maillon, "max_tokens": 8, "temperature": 0, "disable_fallbacks": True,
+                        "messages": [{"role": "user", "content": "Réponds seulement : OK"}]})
+                    statut = rep.status_code
+                    if statut == 200:
+                        try:
+                            modele = str(rep.json().get("model") or "")
+                        except ValueError:
+                            pass
+                except httpx.HTTPError as e:
+                    statut = 504 if isinstance(e, httpx.TimeoutException) else 503
+                ms = int((time.monotonic() - t0) * 1000)
+                JOURNAL.maillon(maillon, statut, modele, "test", ms)
+                return {"maillon": maillon, "statut": statut, "resultat": statut_maillon(statut), "fournisseur": masquer(modele)[:80], "ms": ms}
+
+        resultats = await asyncio.gather(*[un(m) for m in maillons])
+        bons = sum(1 for x in resultats if x["statut"] == 200)
+        return {"ok": bons == len(resultats), "bons": bons, "total": len(resultats), "resultats": resultats}
+
+
 @app.post("/route")
 async def tester_routage(request: Request):
     """Dit quel agent pk-auto choisirait, sans appeler de modèle (sauf routage IA en cas de doute)."""
@@ -1419,6 +1702,8 @@ async def chat(request: Request):
 
     corps_final, chaine = preparer_corps(corps, agent)
     debut = time.monotonic()
+    ouvrir_demande(demandeur_de(request, corps), corps, agent["id"], mode)
+    JOURNAL.purge_due()
     avec_outils = utilise_outils(agent, corps_final) or utilise_mcp(agent, corps_final)
 
     if not flux or avec_outils:
@@ -1510,6 +1795,9 @@ async def executer_agent(client: httpx.AsyncClient, agent: dict, messages: list[
     """Fait travailler un agent. Ne lève jamais d'exception : renvoie (texte, réussi)."""
     corps, chaine = preparer_corps({"messages": messages, "max_tokens": 1200}, agent)
     debut = time.monotonic()
+    base = CTX_DEMANDE.get()
+    if base is not None:      # une copie par agent (travail en parallèle) : son propre fournisseur, sans toucher aux demandes « en cours »
+        CTX_DEMANDE.set({**base, "id": "", "fournisseur": ""})
     try:
         rep, cerveau = await asyncio.wait_for(appeler_agent(client, corps, chaine, agent, demandeur), DELAI_AGENT)
         cumuler_usage(usage, rep)
@@ -1549,6 +1837,14 @@ def choisir_taches(plan: Any, demande: str, ids: list[str]) -> list[tuple[dict, 
 
 
 async def mode_equipe(client: httpx.AsyncClient, corps: dict, flux: bool, demandeur: str = "api"):
+    ctx = ouvrir_demande(demandeur, corps, "pk-equipe", "equipe")
+    try:
+        return await _mode_equipe(client, corps, flux, demandeur)
+    finally:
+        JOURNAL.en_cours.pop(ctx["id"], None)
+
+
+async def _mode_equipe(client: httpx.AsyncClient, corps: dict, flux: bool, demandeur: str = "api"):
     messages = [m for m in corps["messages"] if isinstance(m, dict) and m.get("role") != "system"]
     demande = dernier_message_utilisateur(messages)
     directeur = REGISTRE.agents.get("orchestrateur")
@@ -1956,6 +2252,7 @@ async def _poser_a_un_agent(agent_id: str, question: str) -> str:
         raise RuntimeError("agent absent du registre")
     corps, chaine = preparer_corps({"messages": [{"role": "user", "content": question}], "max_tokens": 1200}, {**a, "outils": []})
     debut = time.monotonic()
+    CTX_DEMANDE.set({"id": "", "demandeur": "mcp", "sujet": "", "fournisseur": ""})
     try:
         rep, cerveau = await appeler(app.state.client, corps, chaine)
     except EchecCerveaux:
