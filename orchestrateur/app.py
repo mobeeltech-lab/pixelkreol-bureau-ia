@@ -436,6 +436,21 @@ class Registre:
                 return a
         return None
 
+    def modeles_du_cerveau(self, cerveau: str) -> list[str]:
+        """Chaîne d'un cerveau dans l'ordre de cerveaux.yaml, en « fournisseur/modèle » (le nom que LiteLLM renvoie dans x-litellm-model-name),
+        sans doublon (comme outils/generer_litellm.py)."""
+        cfg = self.cerveaux if isinstance(self.cerveaux, dict) else {}
+        fournisseurs = cfg.get("fournisseurs") if isinstance(cfg.get("fournisseurs"), dict) else {}
+        spec = (cfg.get("cerveaux") or {}).get(cerveau) if isinstance(cfg.get("cerveaux"), dict) else None
+        sortie: list[str] = []
+        for m in (spec.get("chaine") if isinstance(spec, dict) and isinstance(spec.get("chaine"), list) else []):
+            f = fournisseurs.get(m.get("f")) if isinstance(m, dict) else None
+            if isinstance(f, dict) and isinstance(f.get("prefixe"), str) and isinstance(m.get("modele"), str):
+                nom = f"{f['prefixe']}/{m['modele']}"
+                if nom not in sortie:
+                    sortie.append(nom)
+        return sortie
+
     def secours(self, cerveau: str) -> list[str]:
         table = self.cerveaux.get("secours_entre_cerveaux") if isinstance(self.cerveaux, dict) else None
         suite = table.get(cerveau) if isinstance(table, dict) else None
@@ -1092,36 +1107,48 @@ def groupe_de(entetes: Any) -> str:
         return ""
 
 
-# Ordre des secours de LiteLLM (router_settings.fallbacks), relu EN ARRIÈRE-PLAN (au plus toutes les 10 min) sur le routeur lui-même :
-# le seul fichier qui le contient n'est pas monté dans l'orchestrateur. Illisible = on garde le nombre de secours sans nommer les maillons.
+# Ordre des maillons sautés : d'abord agents/cerveaux.yaml (que l'orchestrateur lit déjà, chaîne dans l'ordre) rapproché du nom renvoyé par
+# x-litellm-model-name, en ne gardant que les modèles que LiteLLM a réellement chargés (fournisseurs sans clé ignorés, via /model/info en cache).
+# En dernier repli seulement : router_settings.fallbacks relu sur LiteLLM (/router/settings puis /config/yaml), au plus toutes les 10 min,
+# en arrière-plan. De /config/yaml on ne garde QUE router_settings.fallbacks, en mémoire : rien d'autre n'est stocké, journalisé ni renvoyé.
+# Illisible partout = on garde le nombre de secours sans nommer les maillons.
 CHAINES_LITELLM: dict[str, Any] = {"par_cerveau": {}, "t": 0.0, "essai": 0.0, "tache": None}
 ROUTES_REGLAGES = ("/router/settings", "/config/yaml")
 
 
-def _trouver_secours(noeud: Any, profondeur: int = 0) -> dict[str, list[str]]:
-    """Cherche une liste « fallbacks » ([{cerveau: [maillons…]}, …]) dans la réponse de LiteLLM, quelle qu'en soit la forme."""
-    if profondeur > 6:
-        return {}
+def _table_secours(liste: Any) -> dict[str, list[str]]:
+    """[{cerveau: [maillons…]}, …] -> {cerveau: [maillons…]} : seulement des noms, en quantité bornée."""
+    table: dict[str, list[str]] = {}
+    for e in (liste if isinstance(liste, list) else [])[:60]:
+        if isinstance(e, dict):
+            for k, v in e.items():
+                if isinstance(k, str) and isinstance(v, list):
+                    table[k[:80]] = [x[:80] for x in v[:40] if isinstance(x, str)]
+    return table
+
+
+def _trouver_secours(noeud: Any, profondeur: int = 0, seulement_router: bool = False) -> dict[str, list[str]]:
+    """Cherche la liste « fallbacks » dans la réponse de LiteLLM. `seulement_router` (config complète, /config/yaml) : uniquement
+    router_settings.fallbacks, tout le reste de la config (clés comprises) est ignoré aussitôt."""
     if isinstance(noeud, str):
         try:
             noeud = yaml.safe_load(noeud)
         except yaml.YAMLError:
             return {}
-    if isinstance(noeud, dict):
-        liste = noeud.get("fallbacks")
-        if isinstance(liste, list):
-            table: dict[str, list[str]] = {}
-            for e in liste:
-                if isinstance(e, dict):
-                    for k, v in e.items():
-                        if isinstance(k, str) and isinstance(v, list):
-                            table[k] = [x for x in v if isinstance(x, str)]
-            if table:
-                return table
-        for v in noeud.values():
-            r = _trouver_secours(v, profondeur + 1)
-            if r:
-                return r
+    if not isinstance(noeud, dict):
+        return {}
+    if seulement_router:
+        reglages = noeud.get("router_settings")
+        return _table_secours(reglages.get("fallbacks")) if isinstance(reglages, dict) else {}
+    if profondeur > 6:
+        return {}
+    table = _table_secours(noeud.get("fallbacks"))
+    if table:
+        return table
+    for v in noeud.values():
+        r = _trouver_secours(v, profondeur + 1)
+        if r:
+            return r
     return {}
 
 
@@ -1136,12 +1163,12 @@ async def rafraichir_chaines(client: httpx.AsyncClient) -> None:
                 corps: Any = r.json()
             except ValueError:
                 corps = r.text
-            table = _trouver_secours(corps)
+            table = _trouver_secours(corps, seulement_router=(route == "/config/yaml"))
             if table:
                 CHAINES_LITELLM["par_cerveau"], CHAINES_LITELLM["t"] = table, time.monotonic()
                 return
         except Exception as e:  # noqa: BLE001 — en arrière-plan : jamais d'erreur vers l'utilisateur
-            LOG.warning("LiteLLM %s illisible (%s)", route, masquer(str(e) or type(e).__name__)[:160])
+            LOG.warning("LiteLLM %s illisible (%s)", route, type(e).__name__)
 
 
 def planifier_chaines(client: httpx.AsyncClient) -> None:
@@ -1157,17 +1184,30 @@ def planifier_chaines(client: httpx.AsyncClient) -> None:
 
 
 def maillons_sautes(cerveau: str, entetes: Any, client: httpx.AsyncClient | None = None) -> tuple[int, list[str], str]:
-    """(nombre de secours passés, noms des maillons sautés si l'ordre est connu, maillon qui a réellement répondu).
-    Lecture des en-têtes déjà reçus uniquement."""
+    """(nombre de secours passés, noms des maillons sautés si on peut les nommer, maillon qui a réellement répondu).
+    Lecture des en-têtes déjà reçus et de caches seulement : aucun appel pendant la demande."""
     n = secours_de(entetes)
     if n == 0:
         return 0, [], cerveau
     groupe = groupe_de(entetes)
+    repondant = groupe if (groupe.startswith("pk-") and groupe != cerveau) else cerveau
+    try:
+        nom = (entetes.get("x-litellm-model-name") or "").strip()
+    except AttributeError:
+        nom = ""
+    # 1. cerveaux.yaml + modèles réellement chargés par LiteLLM (/model/info en cache : un fournisseur sans clé n'y figure pas)
+    charges = {i["modele"]: i["maillon"] for i in MODELES_LITELLM["par_id"].values()
+               if i["maillon"] == cerveau or i["maillon"].startswith(cerveau + "--")}
+    if not charges and client is not None:
+        planifier_modeles(client)
+    ordre = [m for m in REGISTRE.modeles_du_cerveau(cerveau) if m in charges]
+    if nom and nom in ordre:
+        return n, [charges[m] for m in ordre[:ordre.index(nom)]][:10], charges[nom]
+    # 2. dernier repli : router_settings.fallbacks relu sur LiteLLM, avec le groupe qui a répondu
     chaine = CHAINES_LITELLM["par_cerveau"].get(cerveau)
     if chaine is None and client is not None:
         planifier_chaines(client)
     complete = [cerveau] + [m for m in (chaine or []) if m != cerveau]
-    repondant = groupe if (groupe.startswith("pk-") and groupe != cerveau) else cerveau
     if groupe and groupe != cerveau and groupe in complete:
         return n, complete[:complete.index(groupe)][:10], repondant
     return n, [], repondant

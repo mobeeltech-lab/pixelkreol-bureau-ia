@@ -240,3 +240,116 @@ def test_dernier_et_dernier_ok_n_ignorent_que_les_lignes_sautees(appli):
     import inspect
     src = inspect.getsource(appli._sante_maillons)
     assert "source <> 'saute'" in src
+
+
+# --- l'ordre vient d'abord de agents/cerveaux.yaml ------------------------------------------------
+def charges(appli, **par_nom):
+    """Modèles que LiteLLM a chargés (comme /model/info) : un fournisseur sans clé n'y figure pas."""
+    appli.MODELES_LITELLM["par_id"] = {f"id-{n}": {"maillon": n, "modele": m} for n, m in par_nom.items()}
+    appli.MODELES_LITELLM["t"] = appli.MODELES_LITELLM["essai"] = time.monotonic()
+
+
+CHARGES = {"pk-code": "mistral/codestral-latest", "pk-code--2": "groq/qwen/qwen3.8-27b", "pk-code--3": "groq/openai/gpt-oss-120b"}
+
+
+def test_la_chaine_de_cerveaux_yaml_est_lue_dans_l_ordre(appli):
+    assert appli.REGISTRE.modeles_du_cerveau("pk-code")[:4] == [
+        "mistral/codestral-latest", "groq/qwen/qwen3.8-27b", "openrouter/qwen/qwen3.8-27b:free", "groq/openai/gpt-oss-120b"]
+    assert appli.REGISTRE.modeles_du_cerveau("inconnu") == []
+
+
+def test_maillons_sautes_par_cerveaux_yaml_en_ignorant_les_fournisseurs_sans_cle(appli):
+    charges(appli, **CHARGES)   # openrouter/qwen…:free absent : pas de clé OpenRouter
+    e = {"x-litellm-model-name": "groq/openai/gpt-oss-120b", "x-litellm-attempted-fallbacks": "2", "x-litellm-model-group": "pk-code--3"}
+    assert appli.maillons_sautes("pk-code", e) == (2, ["pk-code", "pk-code--2"], "pk-code--3")
+    e = {"x-litellm-model-name": "groq/qwen/qwen3.8-27b", "x-litellm-attempted-fallbacks": "1"}
+    assert appli.maillons_sautes("pk-code", e) == (1, ["pk-code"], "pk-code--2")           # même sans x-litellm-model-group
+    e = {"x-litellm-model-name": "mistral/codestral-latest", "x-litellm-attempted-fallbacks": "1"}
+    assert appli.maillons_sautes("pk-code", e) == (1, [], "pk-code")
+
+
+def test_cerveaux_yaml_prime_sur_le_routeur(appli):
+    charges(appli, **CHARGES)
+    appli.CHAINES_LITELLM["par_cerveau"] = {"pk-code": ["autre-1", "autre-2"]}
+    e = {"x-litellm-model-name": "groq/openai/gpt-oss-120b", "x-litellm-attempted-fallbacks": "2", "x-litellm-model-group": "autre-2"}
+    assert appli.maillons_sautes("pk-code", e)[1] == ["pk-code", "pk-code--2"]
+
+
+def test_sans_correspondance_on_se_rabat_sur_le_routeur_puis_sur_le_nombre(appli):
+    charges(appli, **CHARGES)
+    appli.CHAINES_LITELLM["par_cerveau"] = {"pk-code": ["pk-code--2", "pk-code--3"]}
+    e = {"x-litellm-model-name": "modele/inconnu", "x-litellm-attempted-fallbacks": "2", "x-litellm-model-group": "pk-code--3"}
+    assert appli.maillons_sautes("pk-code", e) == (2, ["pk-code", "pk-code--2"], "pk-code--3")
+    appli.CHAINES_LITELLM["par_cerveau"] = {}
+    assert appli.maillons_sautes("pk-code", e) == (2, [], "pk-code--3")
+
+
+def test_de_bout_en_bout_l_ordre_vient_de_cerveaux_yaml_sans_toucher_au_routeur(client, h_api, faux):
+    pool = PoolEnregistreur()
+    client.appli.JOURNAL.pool = pool
+    vus = []
+    info = {"data": [{"model_name": n, "litellm_params": {"model": m}, "model_info": {"id": f"id-{n}"}} for n, m in CHARGES.items()]}
+
+    async def servir(requete):
+        vus.append(requete.url.path)
+        if requete.url.path.endswith("/model/info"):
+            return httpx.Response(200, json=info)
+        return faux(requete)
+    client.app.state.client = httpx.AsyncClient(transport=httpx.MockTransport(servir))
+    client.appli.MODELES_LITELLM["par_id"] = {f"id-{n}": {"maillon": n, "modele": m} for n, m in CHARGES.items()}
+    faux.par_defaut = lambda c: reponse("pk-code", {**ENTETES, "x-litellm-model-name": "groq/openai/gpt-oss-120b",
+                                                    "x-litellm-attempted-fallbacks": "2", "x-litellm-model-group": "pk-code--3"})
+    demander(client, h_api)
+    assert attendre(lambda: len(maillons(pool)) == 3)
+    assert sorted(a[0] for a in maillons(pool) if len(a) == 2) == ["pk-code", "pk-code--2"]
+    assert not any(p in ("/router/settings", "/config/yaml") for p in vus)
+
+
+# --- /config/yaml : on n'en garde que router_settings.fallbacks, en mémoire --------------------------------
+CLE_FICTIVE = "sk" + "-fictive-" + "A1b2C3d4E5f6"
+CLE_FOURNISSEUR = "gsk" + "_fictive_" + "Z9y8X7w6V5"
+CONFIG_COMPLETE = {
+    "model_list": [{"model_name": "pk-code", "litellm_params": {"model": "mistral/codestral-latest", "api_key": CLE_FOURNISSEUR}}],
+    "router_settings": {"fallbacks": CHAINE, "num_retries": 0, "redis_password": CLE_FICTIVE},
+    "litellm_settings": {"fallbacks": [{"pk-x": ["pk-y"]}], "master_key": CLE_FICTIVE},
+    "general_settings": {"master_key": CLE_FICTIVE, "database_url": "postgresql://u:" + CLE_FICTIVE + "@h/db"},
+}
+
+
+@pytest.mark.parametrize("forme", ["json", "yaml"])
+def test_config_yaml_ne_garde_que_router_settings_fallbacks(appli, forme):
+    import yaml
+    corps = CONFIG_COMPLETE if forme == "json" else yaml.safe_dump(CONFIG_COMPLETE)
+    table = appli._trouver_secours(corps, seulement_router=True)
+    assert table == {"pk-code": ["pk-code--2", "pk-code--4", "pk-code--5"], "pk-rapide": ["pk-rapide--2"]}
+    assert CLE_FICTIVE not in repr(table) and CLE_FOURNISSEUR not in repr(table)
+
+
+def test_config_yaml_aucune_cle_stockee_journalisee_ni_renvoyee(client, h_api, h_admin, faux, caplog):
+    pool = PoolEnregistreur()
+    client.appli.JOURNAL.pool = pool
+    vus = []
+
+    async def servir(requete):
+        vus.append(requete.url.path)
+        if requete.url.path == "/router/settings":
+            return httpx.Response(404, text="non")
+        if requete.url.path == "/config/yaml":
+            return httpx.Response(200, json=CONFIG_COMPLETE)
+        return faux(requete)
+    client.app.state.client = httpx.AsyncClient(transport=httpx.MockTransport(servir))
+    faux.par_defaut = lambda c: reponse("pk-code", {**ENTETES, "x-litellm-model-name": "modele/inconnu", "x-litellm-attempted-fallbacks": "2",
+                                                    "x-litellm-model-group": "pk-code--4"})
+    with caplog.at_level("DEBUG"):
+        demander(client, h_api)
+        assert attendre(lambda: client.appli.CHAINES_LITELLM["par_cerveau"].get("pk-code"))
+        demander(client, h_api)
+        assert attendre(lambda: any(len(a) == 2 for a in maillons(pool)))
+    assert "/config/yaml" in vus
+    assert client.appli.CHAINES_LITELLM["par_cerveau"]["pk-code"] == ["pk-code--2", "pk-code--4", "pk-code--5"]
+    for secret in (CLE_FICTIVE, CLE_FOURNISSEUR):
+        assert secret not in repr(client.appli.CHAINES_LITELLM)                       # rien en mémoire hors des noms de maillons
+        assert secret not in repr(pool.ecritures)                                     # rien en base
+        assert secret not in caplog.text                                              # rien dans les journaux
+        assert secret not in client.get("/admin/activite", headers=h_admin).text      # rien renvoyé au dashboard
+    assert set(client.appli.CHAINES_LITELLM["par_cerveau"]) == {"pk-code", "pk-rapide"}   # le fallbacks de litellm_settings n'est pas retenu
