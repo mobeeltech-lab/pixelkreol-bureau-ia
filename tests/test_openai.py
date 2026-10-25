@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import time
 
 import httpx
 import pytest
@@ -151,6 +152,7 @@ def test_journal_postgres_en_panne_est_trace_sans_bloquer_la_reponse(client, h_a
         for _ in range(3):
             r = client.post("/v1/chat/completions", headers=h_api, json={"model": "pk-12-secretariat", "messages": msg()})
             assert r.status_code == 200
+        time.sleep(0.3)                                    # l'écriture Postgres part en arrière-plan : on lui laisse le temps d'échouer
     lignes = [rec.getMessage() for rec in caplog.records if "journal" in rec.getMessage().lower()]
     assert len(lignes) == 1                                # une alerte, pas une par requête
     assert "cle-litellm-de-test" not in lignes[0]
