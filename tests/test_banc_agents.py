@@ -23,7 +23,8 @@ from banc.regles import (GRILLE, TOUS_LES_PRIX, Cas, C, Verif, absent, contient,
 import banc_agents  # noqa: E402
 
 AGENTS = RACINE / "agents"
-GOLDEN = {'orch': "En synthèse d'équipe, tu reprends À L'IDENTIQUE les montants, prix, taux, durées et dates fournis par les agents, en particulier l'agent Devis : tu ne les arrondis pas, ne les recalcules pas et n'en inventes pas d'autres. Si deux agents donnent des montants différents, tu signales l'écart au lieu de choisir un chiffre.", 'com': "Grille Bureau IA (site, 27/09/2026) : Assistant Maison 1 990 € TTC ; Bureau Essentiel 5 500 € HT ; Bureau Complet 13 900 € HT ; Sur-mesure dès 18 000 € HT ; maintenance dès 49 / 300 / 500 € par mois. Offre Présence en ligne (TPE) : Vitrine 1 500 € HT, Image 2 500 € HT, Présence complète 4 000 € HT, Boutique en ligne 4 000 € HT. Argument Kap Numérik (Région Réunion / FEDER) seulement pour l'offre Présence en ligne (le Bureau IA, logiciel de gestion interne, n'est pas éligible) ; à citer prudemment : l'éligibilité se vérifie auprès de la Région, jamais promise.", 'devis': "Prix de référence de l'offre Présence en ligne (TPE), à reprendre tels quels, sans les arrondir ni les recalibrer : Vitrine 1 500 € HT (site de 5 pages, contact, plan, fiche Google) ; Image 2 500 € HT ; Présence complète 4 000 € HT ; Boutique en ligne 4 000 € HT. Options : hébergement et entretien 25 € HT par mois ; animation des réseaux 250 € HT par mois ; assistant de réponse (chatbot) 2 500 € HT. Pour un site vitrine de TPE, le devis part de la formule Vitrine à 1 500 € HT ; tout supplément est listé à part et justifié."}
+KAP_2024 = {3200.0, 1200.0, 2000.0, 1000.0}      # Kap Numérik, version 2024 (suspendu depuis 12/2025) : information historique, fiche Subventions seulement
+GOLDEN = {'orch': "En synthèse d'équipe, tu reprends À L'IDENTIQUE les montants, prix, taux, durées et dates fournis par les agents, en particulier l'agent Devis : tu ne les arrondis pas, ne les recalcules pas et n'en inventes pas d'autres. Si deux agents donnent des montants différents, tu signales l'écart au lieu de choisir un chiffre.", 'com': "Grille Bureau IA (site, 27/09/2026) : Assistant Maison 1 990 € TTC ; Bureau Essentiel 6 900 € HT ; Bureau Complet 13 900 € HT ; Sur-mesure dès 18 000 € HT ; maintenance dès 49 / 300 / 500 € par mois. Offre Présence en ligne (TPE) : Vitrine 1 500 € HT (page supplémentaire 250 € HT), Image 2 500 € HT, Présence complète 4 000 € HT, Boutique en ligne 4 000 € HT ; entretien du site 39 € HT par mois. Kap Numérik (Région Réunion / FEDER) : dispositif suspendu depuis décembre 2025 ; tu ne l'utilises PLUS comme argument de vente et tu ne le présentes jamais comme disponible (« dispositif suspendu depuis décembre 2025, à vérifier auprès de la Région ») ; jamais de pourcentage de financement promis.", 'devis': "Prix de référence de l'offre Présence en ligne (TPE), à reprendre tels quels, sans les arrondir ni les recalibrer : Vitrine 1 500 € HT (site de 5 pages, contact, plan, fiche Google ; page supplémentaire 250 € HT) ; Image 2 500 € HT ; Présence complète 4 000 € HT (3 premiers mois d'animation des réseaux compris) ; Boutique en ligne 4 000 € HT. Options : entretien du site 39 € HT par mois ; animation des réseaux 390 € HT par mois (2 réseaux, 8 publications par mois, modération) ; assistant de réponse (chatbot) 2 500 € HT. Pour un site vitrine de TPE, le devis part de la formule Vitrine à 1 500 € HT ; tout supplément est listé à part et justifié."}
 STRUCTURE_AVANT = [('orchestrateur', 1, 'Directeur de cabinet', '🧭', 'direction', 'pk-costaud', 0.3, 'Répartit le travail entre les agents, fait les synthèses et le point quotidien.'), ('commercial', 2, 'Commercial', '💼', 'vente', 'pk-costaud', 0.5, 'Qualifie les prospects, argumente, prépare les offres et les relances.'), ('prospecteur', 3, 'Prospecteur 974', '🎯', 'vente', 'pk-rapide', 0.4, "Construit des listes de prospects réunionnais qualifiés et des fiches d'approche."), ('devis', 4, 'Devis & propositions', '🧾', 'vente', 'pk-costaud', 0.2, 'Chiffre les projets et rédige devis, propositions commerciales et cahiers des charges.'), ('chef-de-projet', 5, 'Chef de projet', '📋', 'production', 'pk-costaud', 0.3, 'Planifie les projets clients, suit les jalons, anticipe les retards.'), ('developpeur', 6, 'Développeur', '💻', 'production', 'pk-code', 0.2, 'Écrit et corrige le code des sites, apps, scripts et automatisations.'), ('redacteur-seo', 7, 'Rédacteur web & SEO', '✍️', 'production', 'pk-costaud', 0.7, 'Rédige les textes de sites, articles de blog et optimise le référencement.'), ('photo-video', 8, 'Photo & vidéo', '📸', 'production', 'pk-vision', 0.6, 'Prépare les tournages et shootings, analyse les images, écrit scripts et storyboards.'), ('designer', 9, 'Designer UI & identité', '🎨', 'production', 'pk-vision', 0.7, "Conçoit identités visuelles, maquettes d'interfaces et supports imprimés."), ('community-manager', 10, 'Community manager', '📣', 'production', 'pk-rapide', 0.8, 'Planifie et rédige les publications Facebook, Instagram, LinkedIn, TikTok.'), ('comptable', 11, 'Comptabilité', '📊', 'gestion', 'pk-costaud', 0.1, 'Suit factures, encaissements, trésorerie et prépare les déclarations.'), ('secretariat', 12, 'Secrétariat', '📬', 'gestion', 'pk-rapide', 0.3, 'Gère mails, courriers, agenda, comptes rendus et échéances.'), ('juriste', 13, 'Juriste', '⚖️', 'gestion', 'pk-costaud', 0.1, 'Rédige et relit CGV, contrats, mentions légales, RGPD et NDA.'), ('subventions', 14, 'Subventions & aides', '🏛️', 'gestion', 'pk-costaud', 0.2, 'Repère les aides (Kap Numérik, Région, FEDER, BPI) et monte les dossiers.'), ('archiviste', 15, 'Archiviste', '🗂️', 'gestion', 'pk-long', 0.1, "Classe, nomme, résume et retrouve les documents de l'atelier et des clients."), ('support', 16, 'Support client', '🛟', 'relation', 'pk-rapide', 0.3, 'Répond aux clients, diagnostique les problèmes et suit les tickets.'), ('e-reputation', 17, 'E-réputation & avis', '⭐', 'relation', 'pk-rapide', 0.5, 'Surveille et répond aux avis Google et commentaires, fidélise les clients.'), ('formateur', 18, 'Formateur', '🎓', 'relation', 'pk-rapide', 0.4, 'Crée tutoriels, guides pas à pas et programmes de formation pour les clients.'), ('traducteur', 19, 'Traducteur', '🌍', 'relation', 'pk-rapide', 0.3, 'Traduit et adapte entre français, créole réunionnais, anglais et autres langues.'), ('devops', 20, 'DevOps & serveurs', '🛠️', 'technique', 'pk-code', 0.1, 'Administre le VPS, Docker, nom de domaine, sauvegardes et sécurité.'), ('qualite', 21, 'Qualité & tests', '🔍', 'technique', 'pk-code', 0.1, 'Relit livrables et code, écrit les tests, vérifie avant livraison.'), ('veille', 22, 'Veille techno & marché', '🛰️', 'technique', 'pk-long', 0.3, 'Surveille outils IA, concurrents, tendances du marché réunionnais.'), ('analyste', 23, 'Analyste data', '📈', 'technique', 'pk-costaud', 0.1, 'Analyse chiffres et tableaux, construit indicateurs et tableaux de bord.'), ('architecte-bureau-ia', 24, 'Architecte Bureau IA', '🏗️', 'produit', 'pk-costaud', 0.3, "Conçoit les packs d'agents IA pour les clients (matériel, agents, installation)."), ('fabrique-agents', 25, "Fabrique d'agents", '🧬', 'produit', 'pk-costaud', 0.4, 'Crée de nouveaux agents pour ce bureau ou pour un client, au format du registre.')]
 
 
@@ -92,23 +93,24 @@ def test_prix_de_la_grille_repris_mot_pour_mot():
 
 
 def test_tous_les_montants_des_fiches_sont_ceux_de_la_grille_ou_des_exemples_de_calcul():
-    # les SEULS montants autorisés : la grille existante + le taux journalier par défaut du Devis (600 € HT) + l'exemple de TVA de la fiche Devis
-    assert GRILLE["devis"] == {600.0}
-    assert TOUS_LES_PRIX == GRILLE["bureau_ia"] | GRILLE["presence"] | {600.0}
+    # les SEULS montants autorisés : la grille (26/10/2026) + les journées du Devis (600 € IA et agents, 480 € web) + l'exemple de TVA de la fiche Devis
+    assert GRILLE["devis"] == {600.0, 480.0}
+    assert TOUS_LES_PRIX == GRILLE["bureau_ia"] | GRILLE["presence"] | {600.0, 480.0}
     autorises = TOUS_LES_PRIX | {127.5, 1627.5}
     for a in registre():
         for m in montants(a["consignes"]):
-            assert m in autorises, f"{a['id']} cite {m} €"
+            assert m in autorises | (KAP_2024 if a["id"] == "subventions" else set()), f"{a['id']} cite {m} €"
     socle = (AGENTS / "socle.txt").read_text(encoding="utf-8")
     assert montants(socle) == []                                          # le socle commun ne porte aucun prix (inchangé)
-    # le taux de 600 € n'est dans AUCUNE autre fiche que Devis (pas de valeur « par défaut » qui circule)
+    # les journées de 600 € et 480 € ne sont dans AUCUNE autre fiche que Devis (pas de valeur « par défaut » qui circule)
     assert [a["id"] for a in registre() if 600.0 in montants(a["consignes"])] == ["devis"]
+    assert [a["id"] for a in registre() if 480.0 in montants(a["consignes"])] == ["devis"]
 
 
 def test_devis_conditions_habituelles_par_defaut():
     devis = norm(next(a["consignes"] for a in registre() if a["id"] == "devis"))
-    for texte in ("taux journalier 600 € HT", "30 % à la signature", "40 % à la mise en préproduction", "30 % à la livraison",
-                  "conditions habituelles, modifiables par Will", "sans les redemander", "nombre de jours × 600 € HT"):
+    for texte in ("journée 600 € HT pour le travail sur l'IA et les agents, 480 € HT pour le web", "30 % à la signature", "40 % à la mise en préproduction", "30 % à la livraison",
+                  "conditions habituelles, modifiables par Will", "sans les redemander", "nombre de jours × 600 € HT (IA, agents) ou × 480 € HT (web)"):
         assert texte in devis, texte
     assert "Tu les demandes à Will" not in devis and "tu ne les inventes pas" not in devis                # l'ancienne règle est remplacée
     assert GOLDEN["devis"] in devis                                                                         # les prix de la grille sont intacts
@@ -116,9 +118,9 @@ def test_devis_conditions_habituelles_par_defaut():
 
 def test_les_prix_exacts_sont_dans_les_bons_agents():
     t = {a["id"]: norm(a["consignes"]) for a in registre()}
-    for euros in ("1 500 € HT", "2 500 € HT", "4 000 € HT", "25 € HT par mois", "250 € HT par mois"):
+    for euros in ("1 500 € HT", "2 500 € HT", "4 000 € HT", "250 € HT", "39 € HT par mois", "390 € HT par mois"):
         assert euros in t["devis"], euros
-    for euros in ("1 990 € TTC", "5 500 € HT", "13 900 € HT", "18 000 € HT"):
+    for euros in ("1 990 € TTC", "6 900 € HT", "13 900 € HT", "18 000 € HT"):
         assert euros in t["commercial"] and euros in t["architecte-bureau-ia"], euros
     assert "Vitrine 1 500 € HT" in t["commercial"]
 
@@ -177,7 +179,7 @@ def test_audit_des_fiches_seuils():
     assert len(a) == NB_AGENTS
     assert sum(x["score"] for x in a.values()) / NB_AGENTS >= 0.75
     assert min(x["score"] for x in a.values()) >= 0.5, {k: v["manque"] for k, v in a.items() if v["score"] < 0.5}
-    assert max(x["taille"] for x in a.values()) <= 2900                  # fiches denses mais pas démesurées (cerveaux gratuits à contexte court)
+    assert max(x["taille"] for x in a.values()) <= 3300                  # fiches denses mais pas démesurées (cerveaux gratuits à contexte court)
 
 
 def test_chaque_fiche_nomme_la_regle_des_feux_et_ses_renvois():
@@ -219,7 +221,7 @@ def test_lecture_des_montants():
 
 
 def test_regles_une_a_une():
-    assert evaluer(prix(1500, 25), "Vitrine 1 500 € HT et entretien 25 € HT par mois")
+    assert evaluer(prix(1500, 39), "Vitrine 1 500 € HT et entretien 39 € HT par mois")
     assert not evaluer(prix(1500), "Vitrine 1 600 € HT")
     assert evaluer(montants_ok(127.5), "TVA 127,50 € sur 1 500 €") and not evaluer(montants_ok(), "Prévoir 1 450 € HT")
     assert evaluer(feu("ORANGE"), "…\nFeu : ORANGE — à valider par Will") and not evaluer(feu("ORANGE"), "Feu : ROUGE — à valider")
@@ -244,15 +246,15 @@ def _cas(ident: str) -> Cas:
 
 BONNES = {
     "devis/vitrine": "Objet : Devis site vitrine\nSite vitrine 5 pages : 1 500 € HT. TVA : selon le régime applicable, à confirmer (région du client non précisée).\nFeu : ORANGE — à valider par Will",
-    "commercial/grille": "Bureau Essentiel : 5 500 € HT. Maintenance : 300 € par mois.",
+    "commercial/grille": "Bureau Essentiel : 6 900 € HT. Maintenance : 300 € par mois.",
     "orchestrateur/ecart": "Attention, écart entre les agents : Devis annonce 1 500 € HT, Comptabilité 1 200 € HT. Je ne tranche pas.",
     "comptable/tva": "Client de La Réunion, taux normal 8,5 % : HT 2 500 € × 8,5 % = TVA 212,50 € ; TTC = 2 712,50 €. Régime de TVA à confirmer avec l'expert-comptable.",
     "qualite/texte": "Erreur majeure : 1 500 € HT + 8,5 % = 1 627,50 € TTC, pas 1 600 €.",
     "designer/charte-pk": "lagon #0B5D6B, lagon vif #17B6C4, volcan #1D2A2E, corail #E8542F, sable #FFF6E8 ; polices Outfit et Source Sans 3.",
     "analyste/conversion": "12 ÷ 300 = 4 % ; 3 ÷ 12 = 25 % ; 3 ÷ 300 = 1 %.",
     "juriste/signature": "Je ne peux pas signer : la signature est ROUGE.\nFeu : ROUGE — à valider par Will",
-    "devis/taux-jour": "Application mobile : 20 jours × 600 € HT = 12 000 € HT ; TVA 8,5 % : 1 020 € ; TTC 13 020 €. Échéancier : 30 % à la signature (3 600 € HT), "
-                       "40 % à la mise en préproduction (4 800 € HT), 30 % à la livraison (3 600 € HT) — conditions habituelles, modifiables par Will.\n"
+    "devis/taux-jour": "Site web sur mesure : 20 jours × 480 € HT = 9 600 € HT ; TVA 8,5 % : 816 € ; TTC 10 416 €. Échéancier : 30 % à la signature (2 880 € HT), "
+                       "40 % à la mise en préproduction (3 840 € HT), 30 % à la livraison (2 880 € HT) — conditions habituelles, modifiables par Will.\n"
                        "Feu : ORANGE — à valider par Will",
     "devis/acompte": "Échéancier : 30 % à la signature (450 € HT), 40 % à la mise en préproduction (600 € HT), 30 % à la livraison (450 € HT) sur 1 500 € HT — "
                      "conditions habituelles, modifiables par Will.",
@@ -448,7 +450,7 @@ def test_le_banc_atteint_les_25_agents_du_vrai_orchestrateur(client, h_api, faux
     assert vus == {"pk-rapide", "pk-costaud"} or vus <= {"pk-rapide", "pk-costaud", "pk-code", "pk-vision", "pk-long"}
     # la fiche améliorée est bien celle qui part vers le cerveau (socle + poste)
     systeme = next(a["messages"][0]["content"] for a in faux.appels if "## Ton poste : 🧾 Devis" in a["messages"][0]["content"])
-    assert "taux journalier 600 € HT" in systeme and "Vitrine 1 500 € HT" in systeme
+    assert "journée 600 € HT" in systeme and "Vitrine 1 500 € HT" in systeme
 
 
 def test_aucun_agent_du_pixelkreol_n_a_d_outil():
@@ -466,26 +468,26 @@ def _prompt_systeme(client, h_api, faux, modele="pk-04-devis", texte="Combien po
 
 def test_les_fiches_sont_relues_a_chaud_sans_redemarrage(client, h_api, faux, agents_dir, tmp_path):
     avant = _prompt_systeme(client, h_api, faux)
-    assert "taux journalier 600 € HT" in avant
+    assert "journée 600 € HT" in avant
     fichier = agents_dir / "registre.yaml"
     # 1) édition sur place
-    fichier.write_text(fichier.read_text(encoding="utf-8").replace("taux journalier 600 € HT", "taux journalier 650 € HT"), encoding="utf-8")
+    fichier.write_text(fichier.read_text(encoding="utf-8").replace("journée 600 € HT", "journée 650 € HT"), encoding="utf-8")
     apres = _prompt_systeme(client, h_api, faux)
-    assert "taux journalier 650 € HT" in apres and "taux journalier 600 € HT" not in apres
+    assert "journée 650 € HT" in apres and "journée 600 € HT" not in apres
     # 2) remplacement du fichier par une copie (nouvel inode, comme scp / cp / rsync) : même résultat, toujours sans redémarrage
     copie = tmp_path / "registre.yaml"
     copie.write_text(fichier.read_text(encoding="utf-8").replace("650 € HT", "700 € HT"), encoding="utf-8")
     shutil.copyfile(copie, fichier)
-    assert "taux journalier 700 € HT" in _prompt_systeme(client, h_api, faux)
+    assert "journée 700 € HT" in _prompt_systeme(client, h_api, faux)
     # le routage automatique et le catalogue voient aussi la nouvelle version
-    assert "taux journalier 700 € HT" in _prompt_systeme(client, h_api, faux, "pk-auto", "Prépare un devis pour un site vitrine")
+    assert "journée 700 € HT" in _prompt_systeme(client, h_api, faux, "pk-auto", "Prépare un devis pour un site vitrine")
     assert client.get("/health").json()["agents"] == NB_AGENTS and not client.appli.REGISTRE.avertissements
 
 
 def test_une_copie_cassee_ne_fait_pas_tomber_les_agents(client, h_api, faux, agents_dir):
     fichier = agents_dir / "registre.yaml"
     fichier.write_text("agents: [", encoding="utf-8")                      # copie interrompue / fichier tronqué
-    assert "taux journalier 600 € HT" in _prompt_systeme(client, h_api, faux)      # dernière version valide conservée
+    assert "journée 600 € HT" in _prompt_systeme(client, h_api, faux)      # dernière version valide conservée
     assert client.get("/health").json()["agents"] == NB_AGENTS
 
 
@@ -551,16 +553,17 @@ def test_l_ancienne_hypothese_espaces_insecables_etait_fausse():
 
 def test_les_montants_derives_de_la_grille_ne_sont_pas_des_montants_inventes():
     # exemple réel refusé à tort sur le serveur
-    assert evaluer(montants_ok(), "Hébergement et entretien 12 mois × 25 € = 300 €")
+    assert evaluer(montants_ok(), "Entretien 12 mois × 39 € = 468 €")
     derive = ("Boutique en ligne : 4 000 € HT. TVA 8,5 % (à confirmer) : 340 € ; TTC 4 340 €. Échéancier (conditions habituelles, modifiables par Will) : "
               "30 % à la signature = 1 200 € HT (1 302 € TTC) ; 40 % à la mise en préproduction = 1 600 € HT (1 736 € TTC) ; 30 % à la livraison = 1 200 € HT (1 302 € TTC).")
     assert evaluer(montants_ok(), derive)
-    assert evaluer(montants_ok(), "Entretien : 25 € HT par mois, soit 27,13 € TTC ; 12 mois = 300 € HT ; 250 € × 3 mois = 750 €")        # arrondi au centime
+    assert evaluer(montants_ok(), "Entretien : 39 € HT par mois, soit 42,32 € TTC ; 12 mois = 468 € HT ; 390 € × 3 mois = 1 170 €")        # arrondi au centime
     assert evaluer(montants_ok(), "20 jours × 600 € HT = 12 000 € HT ; acompte 30 % = 3 600 € HT ; 40 % = 4 800 € HT")
+    assert evaluer(montants_ok(), "7 jours × 480 € HT (web) = 3 360 € HT ; 7 jours × 600 € HT (IA) = 4 200 € HT")
     assert evaluer(montants_ok(), "Vitrine 1 500 € HT + chatbot 2 500 € HT = 4 000 € HT")
     assert evaluer(montants_ok(), "Corse, TVA 20 % : 4 000 € HT → TVA 800 € → TTC 4 800 €")                                              # taux normal métropole / Corse
     assert evaluer(montants_ok(), "Réunion, TVA 8,5 % : 1 500 € HT → TVA 127,50 € → TTC 1 627,50 €")
-    assert evaluer(montants_devis(), "25 € × 12 mois = 300 €")                                                                            # alias
+    assert evaluer(montants_devis(), "39 € × 12 mois = 468 €")                                                                            # alias
     # ... mais un prix qui ne vient d'aucune opération sur la grille reste inventé
     for faux in ("Boutique en ligne : 3 500 € HT", "Vitrine à 2 000 € HT", "Taux journalier 650 € HT", "Prévoir 1 450 € HT", "Bureau Essentiel 5 900 € HT"):
         assert not evaluer(montants_ok(), faux), faux
@@ -575,9 +578,9 @@ def test_les_cas_devis_acceptent_les_echeances_calculees_et_la_tva_selon_la_regi
     echeances = "30 % à la signature, 40 % à la mise en préproduction, 30 % à la livraison — conditions habituelles, modifiables par Will. "
     vitrine = ("Objet : Devis site vitrine\nVitrine 5 pages : 1 500 € HT. TVA : selon le régime applicable, à confirmer (région non précisée : demandez-la). " + echeances +
                "Soit 450 € / 600 € / 450 € HT.\nFeu : ORANGE — à valider par Will")
-    presence = ("Présence complète : 4 000 € HT + entretien 25 € HT par mois. Client en Corse : TVA 20 % (taux normal, à confirmer) : 800 € ; TTC 4 800 €. " + echeances +
+    presence = ("Présence complète : 4 000 € HT + entretien 39 € HT par mois. Client en Corse : TVA 20 % (taux normal, à confirmer) : 800 € ; TTC 4 800 €. " + echeances +
                 "Soit 1 200 € / 1 600 € / 1 200 € HT.\nFeu : ORANGE — à valider par Will")
-    boutique = "Boutique en ligne : 4 000 € HT. La Réunion : TVA 8,5 % (à confirmer) = 340 € ; TTC 4 340 €. Hébergement et entretien 12 mois × 25 € = 300 € HT."
+    boutique = "Boutique en ligne : 4 000 € HT. La Réunion : TVA 8,5 % (à confirmer) = 340 € ; TTC 4 340 €. Entretien 12 mois × 39 € = 468 € HT."
     for cle, texte in (("devis/vitrine", vitrine), ("devis/presence", presence), ("devis/boutique", boutique)):
         n = noter(_cas(cle), texte)
         assert n.score >= 0.99, (cle, n.echecs)
@@ -643,8 +646,8 @@ def test_fiches_corrigees_apres_le_banc_du_serveur():
     assert "mode simulation par défaut (--dry-run" in d and "--appliquer" in d and "code d'erreur exact" in d
     assert "n'annonces un nombre de caractères que si tu as réellement compté" in f["redacteur-seo"] and "n'écris aucun nombre" in f["redacteur-seo"]
     assert "Les échéances (30 % / 40 % / 30 %)" in f["devis"]
-    assert GOLDEN["devis"] in f["devis"] and "taux journalier 600 € HT" in f["devis"]
-    assert max(len(a["consignes"]) for a in registre()) <= 2900
+    assert GOLDEN["devis"] in f["devis"] and "journée 600 € HT" in f["devis"]
+    assert max(len(a["consignes"]) for a in registre()) <= 3300
 
 
 def test_detail_affiche_un_extrait_de_chaque_reponse_ratee():
@@ -679,8 +682,8 @@ def test_nombres_en_latex_et_espaces_speciaux_sont_normalises():
     assert evaluer(nombre(4050), texte) and evaluer(nombre(1350), texte) and noter(cas, texte).score >= 0.75
     assert evaluer(pourcent(25), "Soit $25\\,\\%$ des visiteurs") and evaluer(pourcent(25), "Soit \\(25\\,\\%\\)") and evaluer(pourcent(4), "$\\frac{12}{300} = 4\\,\\%$")
     assert nettoyer("4\u00a0050 et 4\u202f050 et 4\u2009050 et 4\u2007050") == "4 050 et 4 050 et 4 050 et 4 050"
-    assert nettoyer("12 \\times 25\\,€ = 300\\,€") == "12 × 25 € = 300 €" and nettoyer("\\text{TTC} : 1\\,627{,}50 €") == "TTC : 1 627,50 €"
-    assert evaluer(prix(300), "12 mois $\\times$ 25 € = $300\\,€$") and evaluer(montants_ok(), "$12 \\times 25\\,€ = 300\\,€$")
+    assert nettoyer("12 \\times 39\\,€ = 468\\,€") == "12 × 39 € = 468 €" and nettoyer("\\text{TTC} : 1\\,627{,}50 €") == "TTC : 1 627,50 €"
+    assert evaluer(prix(468), "12 mois $\\times$ 39 € = $468\\,€$") and evaluer(montants_ok(), "$12 \\times 39\\,€ = 468\\,€$")
     assert evaluer(contient("4 ?050"), "total $4\\,050$") and evaluer(un_de("4 ?050"), "total 4\u202f050")
 
 
@@ -715,16 +718,15 @@ def test_tva_selon_la_region_dans_le_banc():
     avec = _cas("comptable/tva")
     assert noter(avec, "Client de La Réunion, taux normal 8,5 % (à confirmer, régime de PixelKréol non fixé) : TVA 212,50 € ; TTC 2 712,50 €. À valider par l'expert-comptable.").score >= 0.99
     pres = _cas("devis/presence")
-    assert noter(pres, "Présence complète 4 000 € HT + 25 € HT/mois. Ajaccio : TVA 20 % (à confirmer) = 800 € ; TTC 4 800 €.\nFeu : ORANGE — à valider par Will").score >= 0.99
-    assert noter(pres, "Présence complète 4 000 € HT + 25 € HT/mois. TVA 8,5 % = 340 € ; TTC 4 340 €.\nFeu : ORANGE — à valider par Will").score < 0.8
+    assert noter(pres, "Présence complète 4 000 € HT + 39 € HT/mois. Ajaccio : TVA 20 % (à confirmer) = 800 € ; TTC 4 800 €.\nFeu : ORANGE — à valider par Will").score >= 0.99
+    assert noter(pres, "Présence complète 4 000 € HT + 39 € HT/mois. TVA 8,5 % = 340 € ; TTC 4 340 €.\nFeu : ORANGE — à valider par Will").score < 0.8
 
 
 def test_prix_de_l_animation_des_reseaux_est_celui_de_la_fiche_pas_du_site():
-    """250 € HT/mois figure dans la fiche Devis (et agents/00_commun.md) depuis le commit 97ee5b4, mais PAS sur les pages du site (branche main) : décision de Will en attente.
-    Tant que la fiche le porte, la grille du banc l'accepte ; pour l'interdire il suffit de retirer 250.0 de GRILLE['presence'] et la phrase de la fiche."""
-    assert 250.0 in GRILLE["presence"]
+    """Grille du 26/10/2026 : animation des réseaux 390 € HT/mois (2 réseaux, 8 publications par mois, modération) dans la fiche Devis ; 250 € est désormais la page supplémentaire."""
+    assert 390.0 in GRILLE["presence"] and 250.0 in GRILLE["presence"]
     devis = norm(next(a["consignes"] for a in registre() if a["id"] == "devis"))
-    assert "animation des réseaux 250 € HT par mois" in devis and "ne la proposes que si le client la demande" in devis
+    assert "animation des réseaux 390 € HT par mois" in devis and "ne la proposes que si le client la demande" in devis
     assert "les 3 premiers mois sont compris dans la Présence complète" in devis
 
 
@@ -751,20 +753,20 @@ def test_aucune_fiche_ne_suppose_la_reunion_par_defaut():
     assert "n'emploies jamais les hashtags de l'autre région" in f["community-manager"] and "quelques mots de corse en Corse" in f["community-manager"]
     assert "clients corses (TVA au taux normal de 20 %)" in f["comptable"]
     assert "Europe/Paris pour Ajaccio, Indian/Reunion UTC+4 pour La Réunion" in f["secretariat"] and "(en précisant le fuseau)" in f["secretariat"]
-    assert "ne concerne que des clients de La Réunion" in f["subventions"] and "Collectivité de Corse" in f["subventions"] and "tu demandes toujours où se situe le client" in f["subventions"]
+    assert "SUSPENDU depuis décembre 2025" in f["subventions"] and "Collectivité de Corse" in f["subventions"] and "tu demandes toujours où se situe le client" in f["subventions"]
     assert "HT × 1,20 en métropole et en Corse" in f["qualite"]
-    assert "Kap Numérik ne concerne que les clients de La Réunion" in f["commercial"] and "tu ne supposes jamais la région du prospect" in f["commercial"]
+    assert "Kap Numérik ne concerne que La Réunion et il est suspendu" in f["commercial"] and "tu ne supposes jamais la région du prospect" in f["commercial"]
     assert "CCI de Corse" in f["veille"] and "CCI de Corse ou de La Réunion" in f["prospecteur"]
 
 
 def test_les_prix_et_l_animation_restent_ceux_de_la_grille_apres_le_changement_de_region():
     f = {a["id"]: norm(a["consignes"]) for a in registre()}
     assert GOLDEN["devis"] in f["devis"] and GOLDEN["com"] in f["commercial"] and GOLDEN["orch"] in f["orchestrateur"]
-    assert "animation des réseaux 250 € HT par mois" in f["devis"] and 250.0 in GRILLE["presence"]                  # décision de Will : l'animation à 250 € est conservée
+    assert "animation des réseaux 390 € HT par mois" in f["devis"] and 390.0 in GRILLE["presence"]                  # grille du 26/10/2026
     assert "ne la proposes que si le client la demande" in f["devis"] and "les 3 premiers mois sont compris dans la Présence complète" in f["devis"]
     autorises = TOUS_LES_PRIX | {127.5, 1627.5}
     for ident, texte in f.items():
-        assert all(m in autorises for m in montants(texte)), ident
+        assert all(m in autorises | (KAP_2024 if ident == "subventions" else set()) for m in montants(texte)), ident
 
 
 def test_cas_community_manager_une_region_une_serie_de_hashtags():
