@@ -36,7 +36,7 @@
      → 100% fonctionnel et responsive
 
   5. secteurs-improved.html (58 KB)
-     → 38 packs sectorialisés (11 secteurs métier)
+     → 36 packs sectorialisés (11 secteurs métier)
      → Tous les tarifs à jour
      → Dual CTA : Rendez-vous + Voir agents
      → Grille complète avec cas d'usage
@@ -165,7 +165,7 @@ OPTION C : HOSTINGER / HOSTING CLASSIQUE
 ──────────────────────────────────────────────────────────────────────────────
 
 Pages      : 5 pages HTML complètes
-Packs      : 4 packs principaux + 38 packs sectorialisés
+Packs      : 4 packs principaux + 36 packs sectorialisés
 Agents     : 9 agents IA détaillés
 Services   : 7 services premium au choix
 Secteurs   : 11 secteurs d'activité couverts

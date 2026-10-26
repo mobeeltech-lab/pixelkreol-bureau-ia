@@ -36,7 +36,7 @@
   - ✓ 100% responsive
 
 - [x] **secteurs-improved.html** (58 KB)
-  - ✓ 38 packs sectorialisés
+  - ✓ 36 packs sectorialisés
   - ✓ 11 secteurs d'activité
   - ✓ Tous tarifs à jour
   - ✓ Dual CTA par pack

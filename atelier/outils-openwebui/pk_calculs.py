@@ -20,6 +20,7 @@ class Tools:
         KAP_PLAFOND_0_9: float = Field(default=3200.0, description="Kap Numérik : plafond d'aide 0-9 salariés (€).")
         KAP_TAUX_10_19: float = Field(default=50.0, description="Kap Numérik : taux 10-19 salariés (%).")
         KAP_PLAFOND_10_19: float = Field(default=2000.0, description="Kap Numérik : plafond d'aide 10-19 salariés (€).")
+        KAP_OUVERT: bool = Field(default=False, description="Kap Numérik suspendu depuis décembre 2025 : laisser à false. Mettre true seulement si la Région rouvre le dispositif (réactive la simulation, taux et plafonds à revérifier).")
 
     def __init__(self):
         self.valves = self.Valves()
@@ -77,8 +78,11 @@ class Tools:
         Estime l'aide Kap Numérik (Région Réunion) et le reste à charge pour un projet numérique.
         :param montant_ht: Montant HT du projet (devis PixelKréol).
         :param effectif: Nombre de salariés de l'entreprise cliente.
-        :return: Aide estimée, reste à charge et conditions.
+        :return: Aide estimée, reste à charge et conditions (ou, tant que le dispositif est suspendu, un rappel sans montant).
         """
+        if not self.valves.KAP_OUVERT:
+            return ("Kap Numérik suspendu depuis décembre 2025, à vérifier auprès de la Région. "
+                    "Aucune estimation d'aide n'est donnée et aucun financement ne doit être promis.")
         if effectif <= 9:
             taux, plafond = self.valves.KAP_TAUX_0_9, self.valves.KAP_PLAFOND_0_9
         elif effectif <= 19:

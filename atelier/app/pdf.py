@@ -8,7 +8,7 @@ import markdown as md
 from weasyprint import HTML, CSS
 from weasyprint.text.fonts import FontConfiguration
 
-from . import config, store, facturx_xml
+from . import config, store, facturx_xml, kap
 
 FONTS = Path(__file__).resolve().parent.parent / "fonts"
 FC = FontConfiguration()
@@ -125,9 +125,9 @@ def _html_piece(p: dict, avert: list) -> str:
     L.append(f'<table style="width:48%;margin-left:52%">{"".join(rows)}</table>')
     if config.FRANCHISE_TVA:
         L.append('<p class="small"><b>TVA non applicable, art. 293 B du CGI.</b></p>')
-    if p.get("kap"):
-        L.append(f'<div class="box small" style="margin-top:8px"><b>Financement Kap Numérik (estimation) :</b> {html.escape(p["kap"])} '
-                 "— sous réserve d'acceptation du dossier par la Région Réunion.</div>")
+    bloc_kap = kap.bloc(p.get("kap"))
+    if bloc_kap:
+        L.append(bloc_kap)
     if p.get("notes"):
         L.append('<p class="small" style="margin-top:8px">' + html.escape(p["notes"]).replace(nl, "<br>") + '</p>')
     if p["type"] == "devis":

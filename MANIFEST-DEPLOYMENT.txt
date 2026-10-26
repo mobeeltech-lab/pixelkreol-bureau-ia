@@ -9,7 +9,7 @@
   • Page produit Bureau IA (4 offres)
   • Grille tarifaire complète (PDF/HTML)
   • Interaction agents IA (9 agents)
-  • 38 packs sectorialisés (11 secteurs d'activité)
+  • 36 packs sectorialisés (11 secteurs d'activité)
 
 ═══════════════════════════════════════════════════════════════════════════════
 📄 FICHIERS HTML (5 PAGES)
@@ -58,7 +58,7 @@
    └─ Exemples de tâches par agent
 
 5. secteurs-improved.html [58 KB] → RENOMMER EN secteurs.html
-   ├─ 38 packs sectorialisés
+   ├─ 36 packs sectorialisés
    ├─ 11 secteurs d'activité avec cas d'usage spécifiques
    ├─ Grille complète avec tarifs actualisés
    ├─ Dual CTA par pack : Rendez-vous + Voir agents

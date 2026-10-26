@@ -41,3 +41,9 @@ def test_les_prix_de_la_grille_sont_sur_les_pages_tarifaires():
     assert "6 900€" in tarif and "13 900€" in tarif and "1 990€" in tarif
     index = texte("index-improved.html")
     assert "1 500 € HT · page supplémentaire 250 € HT · entretien 39 € HT/mois" in index and "390 € HT / mois" in index and "6 900 € HT" in index
+
+
+def test_le_site_annonce_36_packs():
+    for page in PAGES:
+        assert not re.search(r"38 packs|trente-huit", texte(page), re.I), page
+    assert "36 packs" in texte("secteurs-improved.html") and "Trente-six packs" in texte("pixelkreol-bureau-ia-improved.html")
