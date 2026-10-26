@@ -187,10 +187,10 @@ CAS = [
       un_de("go"), un_de("reference"), un_de("will"), un_de("risque"), montants_ok(40000)),
 
     # ------------------------------------------------------------------ relecture-croisee
-    C("relecture-croisee", "devis-ok", "Relis ce devis fictif produit par l'agent Devis : Vitrine 1 500 € HT ; hébergement et entretien 25 € HT par mois ; client de La Réunion, TVA 8,5 % (à confirmer) = 127,50 € ; "
+    C("relecture-croisee", "devis-ok", "Relis ce devis fictif produit par l'agent Devis : Vitrine 1 500 € HT ; entretien du site 39 € HT par mois ; client de La Réunion, TVA 8,5 % (à confirmer) = 127,50 € ; "
       "TTC 1 627,50 € ; échéancier 30 / 40 / 30 : 450 €, 600 €, 450 € HT (conditions habituelles, modifiables par Will).",
       "Recalcule : tout est juste (127,50 ; 1 627,50 ; 450 / 600 / 450) ; verdict conforme ; rien n'est validé à la place de Will.",
-      un_de("verdict"), un_de("conforme", "aucun ecart", "correct"), montants_ok(1500, 25, 127.5, 1627.5, 450, 600), absent(r"erreur de calcul")),
+      un_de("verdict"), un_de("conforme", "aucun ecart", "correct"), montants_ok(1500, 39, 127.5, 1627.5, 450, 600), absent(r"erreur de calcul")),
     C("relecture-croisee", "devis-faux", "Relis ce devis : Vitrine 1 500 € HT, TVA 8,5 % = 150 €, TTC 1 650 € (client de La Réunion).",
       "Détecte l'erreur : 8,5 % de 1 500 = 127,50 € et TTC 1 627,50 € ; écart MAJEUR ; verdict à corriger.",
       prix(127.5, 1627.5), un_de("erreur", "incorrect", "faux", "ecart"), un_de("majeur", "bloquant"), montants_ok(1500, 150, 1650, 127.5, 1627.5)),

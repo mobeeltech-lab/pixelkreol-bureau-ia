@@ -15,9 +15,9 @@ from pathlib import Path
 
 # Grille de référence PixelKréol (agents/socle.txt, consignes Commercial et Devis) : jamais modifiée par le banc.
 GRILLE = {
-    "bureau_ia": {1990.0, 5500.0, 13900.0, 18000.0, 49.0, 300.0, 500.0},
-    "presence": {1500.0, 2500.0, 4000.0, 25.0, 250.0},
-    "devis": {600.0},                      # taux journalier par défaut de l'agent Devis (€ HT par jour)
+    "bureau_ia": {1990.0, 6900.0, 13900.0, 18000.0, 49.0, 300.0, 500.0},
+    "presence": {1500.0, 2500.0, 4000.0, 250.0, 39.0, 390.0},   # 250 = page supplémentaire ; 39 = entretien ; 390 = animation des réseaux
+    "devis": {600.0, 480.0},               # journée de l'agent Devis (€ HT) : 600 IA et agents, 480 web
 }
 TOUS_LES_PRIX = GRILLE["bureau_ia"] | GRILLE["presence"] | GRILLE["devis"]
 
@@ -117,10 +117,10 @@ TAUX_TVA = (0.085, 0.20)                # DOM (Guadeloupe, Martinique, Réunion)
 @lru_cache(maxsize=1)
 def montants_derives() -> frozenset:
     """Montants qui découlent d'une opération simple sur la grille (conditions habituelles du Devis), et rien de plus :
-    * totaux : un prix de la grille ; la somme de deux prix de la grille ; une mensualité × un nombre de mois usuel (25 € ou 250 € × 1, 2, 3, 4, 5, 6, 9, 12, 18, 24 ou 36) ; le taux journalier 600 € × 1 à 60 jours ;
+    * totaux : un prix de la grille ; la somme de deux prix de la grille ; une mensualité × un nombre de mois usuel (39 € ou 390 € × 1, 2, 3, 4, 5, 6, 9, 12, 18, 24 ou 36) ; la journée 600 € (IA, agents) ou 480 € (web) × 1 à 60 jours ;
     * puis, pour chaque total : la TVA (8,5 % ou 20 %), le TTC, et les échéances 30 % / 40 % du total HT et du TTC."""
-    base = [1500.0, 2500.0, 4000.0, 25.0, 250.0]
-    totaux = set(base) | {a + b for a, b in itertools.combinations(base, 2)} | {m * n for m in (25.0, 250.0) for n in MOIS_USUELS} | {600.0 * n for n in range(1, 61)}
+    base = [1500.0, 2500.0, 4000.0, 39.0, 390.0, 250.0]
+    totaux = set(base) | {a + b for a, b in itertools.combinations(base, 2)} | {m * n for m in (39.0, 390.0) for n in MOIS_USUELS} | {j * n for j in (600.0, 480.0) for n in range(1, 61)}
     sortie = set()
     for x in totaux:
         ys = {x} | {x * tva for tva in TAUX_TVA} | {x * (1 + tva) for tva in TAUX_TVA}
@@ -179,7 +179,7 @@ def prix(*euros: float, poids: float = 1.0) -> Verif:
 
 def montants_ok(*extra: float, poids: float = 1.0) -> Verif:
     """Aucun montant inventé : tout montant cité est dans la grille, dans cette liste (montants donnés ou calculés pour la question) ou DÉRIVÉ de la grille par une
-    opération simple (mensualité × mois, TJ 600 € × jours, TVA 8,5 % / 20 %, TTC, échéances 30 / 40 %). Un montant qui coïncide par hasard avec une dérivation n'est pas
+    opération simple (mensualité × mois, journée 600 € ou 480 € × jours, TVA 8,5 % / 20 %, TTC, échéances 30 / 40 %). Un montant qui coïncide par hasard avec une dérivation n'est pas
     détecté par cette règle seule : prix() reste le garde-fou des prix clés."""
     return Verif("montants_derives", frozenset(float(e) for e in extra), "aucun montant inventé (montants dérivés de la grille acceptés)", poids)
 

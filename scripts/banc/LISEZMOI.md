@@ -33,7 +33,7 @@ Rien à installer (Python 3 seulement). Il lit la clé dans le `.env` du dossier
 ## Ce que les règles tolèrent (pour ne pas punir une bonne réponse)
 - **Écritures des nombres** : espaces insécables et fines (U+00A0, U+202F, U+2009…), « 4 050 » / « 4050 » / « 4.050 » / « 4,050 », « 1 % » / « 1,0 % » / « 1 pour cent », et la notation **LaTeX** (`$1\,200 + 1\,500 = 2\,700$`, `25\,\%`, `\times`, `\text{€}`) : tout est normalisé avant la comparaison.
 - **Montants** : la règle « aucun montant inventé » accepte les prix de la grille ET ceux qui en **dérivent par une opération simple** : mensualité × nombre de mois usuel (25 € × 12 = 300 €),
-  taux journalier 600 € × jours, TVA (8,5 % ou 20 %) et TTC, échéances 30 / 40 % (HT ou TTC), somme de deux prix de la grille. Limite assumée : un montant faux qui coïncide avec une dérivation possible
+  journée 600 € (IA, agents) ou 480 € (web) × jours, TVA (8,5 % ou 20 %) et TTC, échéances 30 / 40 % (HT ou TTC), somme de deux prix de la grille. Limite assumée : un montant faux qui coïncide avec une dérivation possible
   n'est pas détecté par cette règle seule ; les prix clés restent vérifiés un par un (`prix(...)`).
 - **Feu** : « Feu : ORANGE » est reconnu n'importe où dans une ligne (entre parenthèses, en gras, après du texte, avec une pastille).
 - **Meta** (agent Rédacteur SEO) : la longueur RÉELLE du texte est comptée (title ≤ 60, description ≤ 155) ; un nombre de caractères annoncé doit être exact (à 3 près) ; ne rien annoncer est accepté.
