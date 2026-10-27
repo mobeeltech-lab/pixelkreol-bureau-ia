@@ -8,7 +8,7 @@ Tous les fichiers HTML sont optimisés et prêts pour une mise en ligne immédia
 - **index-improved.html** → Accueil (à renommer `index.html`)
 - **pixelkreol-bureau-ia-improved.html** → Page produit Bureau IA
 - **pixelkreol-agents-communication.html** → Page d'interaction avec les agents IA
-- **secteurs-improved.html** → Packs par secteur d'activité (36 packs × 11 secteurs)
+- **secteurs-improved.html** → Packs par secteur d'activité (38 packs × 11 secteurs)
 - **tarification-bureau-ia.html** → Grille tarifaire complète + exemples
 
 ## 🚀 Déploiement sur Vercel (recommandé)

@@ -35,7 +35,7 @@ nommé "pixelkreol-bureau-ia" :
 
 5. secteurs-improved.html (58 KB)
    → RENOMMER EN : secteurs.html
-   → Contenu : 36 packs sectorialisés (11 secteurs)
+   → Contenu : 38 packs sectorialisés (11 secteurs)
    → Tous tarifs à jour ✓
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
