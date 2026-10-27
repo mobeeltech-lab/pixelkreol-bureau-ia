@@ -33,6 +33,8 @@ V = {
     "bic": os.getenv("VENDEUR_BIC", ""),
 }
 FRANCHISE_TVA = _b("VENDEUR_FRANCHISE_TVA", "false")
+# Kap Numérik (Région Réunion) : dépôt de nouvelles demandes suspendu depuis décembre 2025. Mettre true pour réactiver estimations et mention sur les devis.
+KAP_OUVERT = _b("KAP_NUMERIK_OUVERT", "false")
 TVA_DEFAUT = float(os.getenv("TVA_DEFAUT", "8.5"))
 PENALITES = os.getenv(
     "MENTION_PENALITES",

@@ -105,7 +105,7 @@ class Tools:
         :param client_email: E-mail du client.
         :param objet: Objet du devis.
         :param validite_jours: Durée de validité en jours.
-        :param kap_numerik: Phrase d'estimation Kap Numérik à afficher (ex. « aide estimée 3 200 €, reste à charge 2 300 € HT »), facultatif.
+        :param kap_numerik: Estimation Kap Numérik, ignorée tant que le dispositif est suspendu (depuis décembre 2025) ; le devis porte alors la mention « suspendu, à vérifier auprès de la Région », sans montant.
         :param conditions: Conditions de paiement (par défaut : acompte 30 % à la commande, solde à la livraison).
         :param notes: Mention libre.
         :return: Numéro, totaux et lien du PDF.
