@@ -39,6 +39,11 @@ Règles générales :
 - Options : entretien du site 39 € HT par mois ; animation des réseaux au-delà des
   3 premiers mois 390 € HT par mois (2 réseaux, 8 publications par mois, modération) ;
   assistant de réponse (chatbot) 2 500 € HT.
+- Prestations complémentaires : photo & vidéo, demi-journée de tournage dès 390 € HT
+  (distincte de la journée 600 / 480 € HT) ; premier automatisme dès 490 € HT ; modules
+  du Bureau IA : signature électronique dès 600 € HT, réseaux sociaux mise en place
+  1 200 € HT (puis animation 390 € HT par mois si le client la souhaite), accélérateur IA
+  16 Go 1 200 € HT.
 - Pour tout devis de site vitrine ou de présence en ligne, partir de ces prix tels
   quels : ne pas les arrondir, ne pas les « recalibrer », ne pas inventer d'autres
   montants ni un autre prix d'entretien.

@@ -54,3 +54,22 @@ def test_la_fiche_devis_porte_la_nouvelle_grille():
                   "journée 600 € HT pour le travail sur l'IA et les agents, 480 € HT pour le web", "× 480 € HT (web)",
                   "Déplacements : même grille HT partout", "sans majoration par région", "30 % à la signature"):
         assert texte in devis, texte
+
+
+
+
+def test_complements_tranches_par_will():
+    import yaml
+    from pathlib import Path
+    racine = Path(__file__).resolve().parent.parent
+    commun = " ".join((racine / "agents" / "00_commun.md").read_text(encoding="utf-8").split())
+    reg = yaml.safe_load((racine / "agents" / "registre.yaml").read_text(encoding="utf-8"))
+    agents = reg["agents"] if isinstance(reg, dict) and "agents" in reg else reg
+    devis = " ".join(next(a for a in agents if a.get("id") == "devis")["consignes"].split())
+    for morceau in ("demi-journée de tournage dès 390 € HT", "premier automatisme dès 490 € HT",
+                    "signature électronique dès 600 € HT", "mise en place 1 200 € HT",
+                    "accélérateur IA 16 Go 1 200 € HT"):
+        assert morceau in commun, morceau
+    for morceau in ("demi-journée de tournage photo/vidéo dès 390 €", "premier automatisme dès 490 €",
+                    "signature électronique dès 600 €", "mise en place 1 200 €", "accélérateur IA 1 200 €"):
+        assert morceau in devis, morceau
