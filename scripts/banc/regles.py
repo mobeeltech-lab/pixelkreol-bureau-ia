@@ -18,8 +18,9 @@ GRILLE = {
     "bureau_ia": {1990.0, 6900.0, 13900.0, 18000.0, 49.0, 300.0, 500.0},
     "presence": {1500.0, 2500.0, 4000.0, 250.0, 39.0, 390.0},   # 250 = page supplémentaire ; 39 = entretien ; 390 = animation des réseaux
     "devis": {600.0, 480.0},               # journée de l'agent Devis (€ HT) : 600 IA et agents, 480 web
+    "complements": {490.0, 1200.0},        # premier automatisme dès 490 ; réseaux sociaux (mise en place) et accélérateur IA 1 200 ; demi-journée de tournage 390 et signature 600 sont déjà ci-dessus
 }
-TOUS_LES_PRIX = GRILLE["bureau_ia"] | GRILLE["presence"] | GRILLE["devis"]
+TOUS_LES_PRIX = GRILLE["bureau_ia"] | GRILLE["presence"] | GRILLE["devis"] | GRILLE["complements"]
 
 
 def sans_accents(t: str) -> str:
@@ -120,7 +121,7 @@ def montants_derives() -> frozenset:
     * totaux : un prix de la grille ; la somme de deux prix de la grille ; une mensualité × un nombre de mois usuel (39 € ou 390 € × 1, 2, 3, 4, 5, 6, 9, 12, 18, 24 ou 36) ; la journée 600 € (IA, agents) ou 480 € (web) × 1 à 60 jours ;
     * puis, pour chaque total : la TVA (8,5 % ou 20 %), le TTC, et les échéances 30 % / 40 % du total HT et du TTC."""
     base = [1500.0, 2500.0, 4000.0, 39.0, 390.0, 250.0]
-    totaux = set(base) | {a + b for a, b in itertools.combinations(base, 2)} | {m * n for m in (39.0, 390.0) for n in MOIS_USUELS} | {j * n for j in (600.0, 480.0) for n in range(1, 61)}
+    totaux = set(base) | GRILLE["complements"] | {a + b for a, b in itertools.combinations(base, 2)} | {m * n for m in (39.0, 390.0) for n in MOIS_USUELS} | {j * n for j in (600.0, 480.0) for n in range(1, 61)}
     sortie = set()
     for x in totaux:
         ys = {x} | {x * tva for tva in TAUX_TVA} | {x * (1 + tva) for tva in TAUX_TVA}

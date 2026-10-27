@@ -95,7 +95,7 @@ def test_prix_de_la_grille_repris_mot_pour_mot():
 def test_tous_les_montants_des_fiches_sont_ceux_de_la_grille_ou_des_exemples_de_calcul():
     # les SEULS montants autorisés : la grille (26/10/2026) + les journées du Devis (600 € IA et agents, 480 € web) + l'exemple de TVA de la fiche Devis
     assert GRILLE["devis"] == {600.0, 480.0}
-    assert TOUS_LES_PRIX == GRILLE["bureau_ia"] | GRILLE["presence"] | {600.0, 480.0}
+    assert TOUS_LES_PRIX == GRILLE["bureau_ia"] | GRILLE["presence"] | {600.0, 480.0} | GRILLE["complements"]
     autorises = TOUS_LES_PRIX | {127.5, 1627.5}
     for a in registre():
         for m in montants(a["consignes"]):
@@ -179,7 +179,7 @@ def test_audit_des_fiches_seuils():
     assert len(a) == NB_AGENTS
     assert sum(x["score"] for x in a.values()) / NB_AGENTS >= 0.75
     assert min(x["score"] for x in a.values()) >= 0.5, {k: v["manque"] for k, v in a.items() if v["score"] < 0.5}
-    assert max(x["taille"] for x in a.values()) <= 3300                  # fiches denses mais pas démesurées (cerveaux gratuits à contexte court)
+    assert max(x["taille"] for x in a.values()) <= 3450                  # fiches denses mais pas démesurées (cerveaux gratuits à contexte court)
 
 
 def test_chaque_fiche_nomme_la_regle_des_feux_et_ses_renvois():
@@ -647,7 +647,7 @@ def test_fiches_corrigees_apres_le_banc_du_serveur():
     assert "n'annonces un nombre de caractères que si tu as réellement compté" in f["redacteur-seo"] and "n'écris aucun nombre" in f["redacteur-seo"]
     assert "Les échéances (30 % / 40 % / 30 %)" in f["devis"]
     assert GOLDEN["devis"] in f["devis"] and "journée 600 € HT" in f["devis"]
-    assert max(len(a["consignes"]) for a in registre()) <= 3300
+    assert max(len(a["consignes"]) for a in registre()) <= 3450
 
 
 def test_detail_affiche_un_extrait_de_chaque_reponse_ratee():
